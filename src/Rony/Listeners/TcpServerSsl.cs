@@ -1,9 +1,7 @@
-using Rony.Interfaces;
-using Rony.Models;
-using Rony.Wrappers;
 using System;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography;
@@ -12,27 +10,21 @@ using System.Threading.Tasks;
 
 namespace Rony.Listeners
 {
-    public class TcpServerSsl : IListener
+    public class TcpServerSsl : TcpServerBase
     {
-        private readonly TcpListenerWrapper _listener;
         private readonly Lazy<X509Certificate> _certificate;
         private readonly SslProtocols _protocol;
 
-        public IPAddress Address { get; set; }
-        public int Port { get; set; }
-        public bool Active => _listener.Active;
-
         /// <summary>
         /// Creates an SSL/TLS server which uses the given certificate. The certificate must contain a private key.
+        /// Use port 0 to let the operating system pick a free port.
         /// </summary>
         public TcpServerSsl(IPAddress address, int port, X509Certificate certificate, SslProtocols protocol)
+            : base(address, port)
         {
             if (certificate == null) throw new ArgumentNullException(nameof(certificate));
             _certificate = new Lazy<X509Certificate>(() => certificate);
             _protocol = protocol;
-            _listener = new TcpListenerWrapper(address, port);
-            Address = address;
-            Port = port;
         }
 
         public TcpServerSsl(int port, X509Certificate certificate, SslProtocols protocol)
@@ -50,12 +42,10 @@ namespace Rony.Listeners
         /// in the CurrentUser and LocalMachine "My" stores. You need read permission on its private key.
         /// </summary>
         public TcpServerSsl(IPAddress address, int port, string certificateName, SslProtocols protocol)
+            : base(address, port)
         {
             _certificate = new Lazy<X509Certificate>(() => FindCertificate(certificateName));
             _protocol = protocol;
-            _listener = new TcpListenerWrapper(address, port);
-            Address = address;
-            Port = port;
         }
 
         public TcpServerSsl(int port, string certificateName, SslProtocols protocol)
@@ -68,54 +58,19 @@ namespace Rony.Listeners
         {
         }
 
-        public async Task<Message> ReceiveAsync()
+        protected override async Task<Stream> OpenStreamAsync(TcpClient client)
         {
-            var client = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
-            SslStream sslStream = null;
+            var sslStream = new SslStream(client.GetStream(), false);
             try
             {
-                sslStream = new SslStream(client.GetStream(), false);
                 await sslStream.AuthenticateAsServerAsync(_certificate.Value, false, _protocol, false).ConfigureAwait(false);
-                var buffer = new byte[client.ReceiveBufferSize];
-                var readBytes = await sslStream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-                using var body = new MemoryStream();
-                body.Write(buffer, 0, readBytes);
-
-                return new Message(body.ToArray(), sslStream);
+                return sslStream;
             }
             catch
             {
-                sslStream?.Dispose();
-                client.Dispose();
+                sslStream.Dispose();
                 throw;
             }
-        }
-
-        public async Task ReplyAsync(string response, object sender)
-        {
-            await ReplyAsync(response.GetBytes(), sender).ConfigureAwait(false);
-        }
-
-        public async Task ReplyAsync(byte[] response, object sender)
-        {
-            using var sslStream = (SslStream)sender;
-            if (response.Length > 0)
-                await sslStream.WriteAsync(response, 0, response.Length).ConfigureAwait(false);
-        }
-
-        public void Start()
-        {
-            _listener.Start();
-        }
-
-        public void Stop()
-        {
-            _listener.Stop();
-        }
-
-        public void Dispose()
-        {
-            _listener.Stop();
         }
 
         private static X509Certificate FindCertificate(string subjectName)

@@ -1,30 +1,49 @@
 using System;
+using System.Collections.Generic;
 
 namespace Rony.Models
 {
+    /// <summary>
+    /// The configured responses for one request. With several responses (see <c>Then(...)</c>) they are used
+    /// in order, and the last one keeps being used once the sequence is exhausted.
+    /// </summary>
     public class Config
     {
-        private readonly byte[] _response;
-        private readonly Func<string, string> _stringFunc;
-        private readonly Func<byte[], byte[]> _byteFunc;
+        private readonly object _syncRoot = new object();
+        private readonly List<ResponseStep> _steps = new List<ResponseStep>();
+        private int _callCount;
 
-        public Config(string response) : this((response ?? string.Empty).GetBytes())
+        public Config(string response) : this(ResponseStep.Reply(response))
         {
         }
 
-        public Config(byte[] response)
+        public Config(byte[] response) : this(ResponseStep.Reply(response))
         {
-            _response = response ?? new byte[0];
         }
 
-        public Config(Func<string, string> stringFunc)
+        public Config(Func<string, string> stringFunc) : this(ResponseStep.Reply(stringFunc))
         {
-            _stringFunc = stringFunc ?? throw new ArgumentNullException(nameof(stringFunc));
         }
 
-        public Config(Func<byte[], byte[]> byteFunc)
+        public Config(Func<byte[], byte[]> byteFunc) : this(ResponseStep.Reply(byteFunc))
         {
-            _byteFunc = byteFunc ?? throw new ArgumentNullException(nameof(byteFunc));
+        }
+
+        internal Config(ResponseStep step)
+        {
+            _steps.Add(step);
+        }
+
+        /// <summary>
+        /// How many times this config has been used to answer a request.
+        /// </summary>
+        public int CallCount
+        {
+            get
+            {
+                lock (_syncRoot)
+                    return _callCount;
+            }
         }
 
         public byte[] GetResponse(string request)
@@ -33,19 +52,35 @@ namespace Rony.Models
         }
 
         /// <summary>
-        /// Builds the response for a request. If a configured function throws, an empty response is returned.
+        /// Builds the next response for a request. If a configured function throws, an empty response is returned.
         /// </summary>
         public byte[] GetResponse(byte[] request)
         {
-            try
+            return NextStep().Produce(request);
+        }
+
+        internal ResponseStep LastStep
+        {
+            get
             {
-                if (_stringFunc != null) return (_stringFunc(request.GetString()) ?? string.Empty).GetBytes();
-                if (_byteFunc != null) return _byteFunc(request) ?? new byte[0];
-                return _response;
+                lock (_syncRoot)
+                    return _steps[_steps.Count - 1];
             }
-            catch (Exception)
+        }
+
+        internal void AddStep(ResponseStep step)
+        {
+            lock (_syncRoot)
+                _steps.Add(step);
+        }
+
+        internal ResponseStep NextStep()
+        {
+            lock (_syncRoot)
             {
-                return new byte[0];
+                var step = _steps[Math.Min(_callCount, _steps.Count - 1)];
+                _callCount++;
+                return step;
             }
         }
     }

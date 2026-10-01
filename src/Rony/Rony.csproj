@@ -4,7 +4,7 @@
     <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <PackageId>Rony.Net</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Mojtaba Kiani</Authors>
     <Product>Rony.Net</Product>
     <Description>A simple TCP/UDP mock server for using in test projects which test .NET based projects.</Description>
@@ -13,7 +13,7 @@
     <RepositoryUrl>https://github.com/archofthings/Rony.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>csharp;mock;mock-server;tcp-mock-server;udp-mock-server;ssl;tcp;udp;xunit;unit-testing;functional-testing;clean-code;clean-architecture</PackageTags>
-    <PackageReleaseNotes>Requests are matched on raw bytes (binary payloads no longer get corrupted), the server keeps running when a client misbehaves, TcpServerSsl accepts an X509Certificate directly, mock configuration is thread-safe, and the package targets netstandard2.1 and net8.0.</PackageReleaseNotes>
+    <PackageReleaseNotes>TCP connections stay open across requests (fixes #1), message framing (delimiter / length prefix), port 0 support, pattern and predicate matching, response sequences, delays, disconnects and silent responses, plus request recording, Verify(...) and WaitForRequestAsync(...). See CHANGELOG.md for breaking changes.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
