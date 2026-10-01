@@ -54,8 +54,8 @@ Wait for the last request you expect, then verify the rest:
 
 ```csharp
 await server.Mock.WaitForRequestAsync("COMMIT");
-server.Mock.Verify("BEGIN", Times.Once());
-server.Mock.Verify(r => r.BodyString.StartsWith("INSERT"), Times.Exactly(3));
+server.Should().HaveReceived("BEGIN", Times.Once());
+server.Should().HaveReceived(r => r.BodyString.StartsWith("INSERT"), Times.Exactly(3));
 ```
 
 Runnable code: [`VerificationSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/VerificationSamples.cs)

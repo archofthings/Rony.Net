@@ -11,7 +11,7 @@ server.Start();
 
 // ... run the code under test against 127.0.0.1:server.Port ...
 
-server.Mock.Verify("PING", Times.Once());
+server.Should().HaveReceived("PING", Times.Once());
 ```
 
 ## Why use it
@@ -53,7 +53,7 @@ It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional 
 
 | Check your client | |
 |---|---|
-| [Verifying Requests](Verifying-Requests) | `Verify`, `Times`, order, strict mode, fluent assertions, inspecting requests |
+| [Verifying Requests](Verifying-Requests) | `server.Should()` assertions, `Times`, order, strict mode, inspecting requests |
 | [Waiting for Requests](Waiting-for-Requests) | `WaitForRequestAsync` instead of `Thread.Sleep` |
 | [Logging and Diagnostics](Logging-and-Diagnostics) | See what the server received and did, and why |
 | [Test Framework Integration](Test-Framework-Integration) | Base classes for xUnit, NUnit and MSTest |

@@ -70,7 +70,7 @@ Every [`ReceivedRequest`](Verifying-Requests#inspecting-requests) has a `Connect
 await client.SendAndReceiveAsync("one");
 await client.SendAndReceiveAsync("two");
 
-server.VerifyConnections(Times.Once());
+server.Should().HaveAcceptedConnections(Times.Once());
 ```
 
 **Does it close its connection?** The server notices a closed connection a moment after the client closes it,
@@ -83,7 +83,7 @@ Assert.Empty(server.OpenConnections);
 
 | Member | |
 |---|---|
-| `server.VerifyConnections(Times times)` | How many connections were accepted. Throws `MockVerificationException`. |
+| `server.Should().HaveAcceptedConnections(Times times)` | How many connections were accepted. Throws `MockVerificationException`. (Classic: `server.VerifyConnections(times)`.) |
 | `server.WaitForConnectionAsync(timeout)` | Waits for the first connection |
 | `server.WaitForConnectionsAsync(count, timeout)` | Waits until `count` connections were accepted |
 | `connection.WaitForCloseAsync(timeout)` | Waits until the connection is closed |

@@ -33,7 +33,7 @@ public class UnmatchedRequestSamples
         Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));   // still connected
 
         Assert.Single(server.Mock.UnmatchedRequests);                     // still reported
-        Assert.Throws<MockVerificationException>(() => server.Mock.VerifyAllRequestsMatched());
+        Assert.Throws<MockVerificationException>(() => server.Should().HaveNoUnmatchedRequests());
     }
 
     [Fact]

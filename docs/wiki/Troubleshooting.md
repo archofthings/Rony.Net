@@ -15,7 +15,7 @@ will wait forever. Either:
 - The client may send a line ending or terminator, such as `"PING\r\n"`. Configure
   [framing](Connections-and-Framing) (`MessageFraming.Delimiter("\r\n")`) so it is removed before matching,
   or match on the full text.
-- Check what actually arrived: `server.ReceivedRequests` or a failing `Verify(...)` lists every request. Binary data is shown as hex.
+- Check what actually arrived: `server.ReceivedRequests` or a failing `server.Should().HaveReceived(...)` lists every request. Binary data is shown as hex.
 - Two requests sent quickly can arrive together and be treated as one. Use framing so they are split correctly.
 
 ### Two responses come back as one
@@ -47,7 +47,7 @@ The lambda fits both the text and the byte overloads. Give it a type: `Receive((
 ### `Times` is ambiguous with Moq
 Both libraries define `Times`. Use `Rony.Net.Times.Once()`, or add `using Times = Rony.Net.Times;` in files that only verify Rony.Net requests.
 
-### `Verify` fails, but the client did send the request
+### An assertion fails, but the client did send the request
 The request may still be on its way, for example when your code sends in the background. Use
 [`await server.Mock.WaitForRequestAsync(...)`](Waiting-for-Requests) before verifying.
 

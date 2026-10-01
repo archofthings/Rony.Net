@@ -91,7 +91,7 @@ public class QuoteClientTests : IDisposable
         var price = await CreateClient().GetPriceAsync("ACME");
 
         Assert.Equal(101.25m, price);
-        _server.Mock.Verify("PRICE ACME", Times.Once());
+        _server.Should().HaveReceived("PRICE ACME", Times.Once());
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class QuoteClientTests : IDisposable
         var price = await CreateClient().GetPriceAsync("ACME");
 
         Assert.Equal(99.5m, price);
-        _server.Mock.Verify("PRICE ACME", Times.Exactly(2));
+        _server.Should().HaveReceived("PRICE ACME", Times.Exactly(2));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class QuoteClientTests : IDisposable
 
         await Assert.ThrowsAsync<TimeoutException>(() => CreateClient().GetPriceAsync("ACME"));
 
-        _server.Mock.Verify("PRICE ACME", Times.Exactly(3));
+        _server.Should().HaveReceived("PRICE ACME", Times.Exactly(3));
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class QuoteClientTests : IDisposable
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateClient().GetPriceAsync("NOPE"));
 
         Assert.Equal("ERR unknown symbol", error.Message);
-        _server.Mock.Verify("PRICE NOPE", Times.Once());
+        _server.Should().HaveReceived("PRICE NOPE", Times.Once());
     }
 
     [Fact]

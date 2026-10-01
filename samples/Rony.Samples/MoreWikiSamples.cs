@@ -83,8 +83,8 @@ public class MoreWikiSamples
         await server.Mock.WaitForRequestAsync(r => r.Body.Length > 5);
         await server.Mock.WaitForRequestAsync("COMMIT", TimeSpan.FromSeconds(1), cancellation.Token);
 
-        server.Mock.Verify("BEGIN", Times.Once());
-        server.Mock.Verify(r => r.BodyString.StartsWith("INSERT"), Times.Exactly(3));
+        server.Should().HaveReceived("BEGIN", Times.Once());
+        server.Should().HaveReceived(r => r.BodyString.StartsWith("INSERT"), Times.Exactly(3));
     }
 
     [Fact]

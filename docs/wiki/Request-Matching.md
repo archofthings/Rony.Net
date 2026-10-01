@@ -110,7 +110,7 @@ for a [state](Stateful-Scenarios) aren't included. Each `Config` has a `CallCoun
 Assert.Equal(2, server.Mock.Configs["LIST".GetBytes()].CallCount);
 ```
 
-To check how often a request arrived, [`Verify`](Verifying-Requests) is usually clearer.
+To check how often a request arrived, [`server.Should().HaveReceived(...)`](Verifying-Requests) is usually clearer.
 
 Runnable code: [`ResponseSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/ResponseSamples.cs),
 [`UnmatchedRequestSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/UnmatchedRequestSamples.cs)

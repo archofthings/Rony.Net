@@ -79,7 +79,7 @@ public class ConnectionAndPushSamples
         await client.SendAndReceiveAsync("one");
         await client.SendAndReceiveAsync("two");
 
-        server.VerifyConnections(Times.Once());
+        server.Should().HaveAcceptedConnections(Times.Once());
     }
 
     [Fact]

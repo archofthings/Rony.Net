@@ -105,7 +105,7 @@ server.Mock.Send("ping").Receive("pong");
 server.Start();
 
 Assert.Equal("pong", await listener.SendAsync("ping"));
-server.Mock.Verify("ping", Times.Once());
+server.Should().HaveReceived("ping", Times.Once());
 ```
 
 ## Connections, greetings and pushed messages

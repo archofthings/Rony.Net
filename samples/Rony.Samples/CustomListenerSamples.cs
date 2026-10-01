@@ -85,6 +85,6 @@ public class CustomListenerSamples
         server.Start();
 
         Assert.Equal("pong", await listener.SendAsync("ping"));
-        server.Mock.Verify("ping", Times.Once());
+        server.Should().HaveReceived("ping", Times.Once());
     }
 }

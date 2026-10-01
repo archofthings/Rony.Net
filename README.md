@@ -18,7 +18,7 @@ server.Start();
 
 // ... run the code under test against 127.0.0.1:server.Port ...
 
-server.Mock.Verify("PING", Times.Once());
+server.Should().HaveReceived("PING", Times.Once());
 ```
 
 📖 **Full documentation, with an example for every feature, is in the [wiki](https://github.com/archofthings/Rony.Net/wiki).**
@@ -32,7 +32,7 @@ server.Mock.Verify("PING", Times.Once());
 - **Server-initiated messages.** Greetings on connect, pushed messages and broadcasts. → [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
 - **Stateful scenarios.** "`LIST` only works after `LOGIN`", for the whole server or per connection. → [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
 - **Failure testing.** Delays, dropped connections, silence and flaky servers. → [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
-- **Assertions on your client.** `Verify` with `Times`, order, strict or fail-fast mode, connection checks, fluent assertions, and waiting for a request without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
+- **Assertions on your client.** Fluent `server.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, and waiting for a request without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
 - **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
 - **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
@@ -67,7 +67,7 @@ public async Task Client_gets_pong()
     var read = await stream.ReadAsync(buffer);
 
     Assert.Equal("PONG", buffer[..read].GetString());
-    server.Mock.Verify("PING", Times.Once());
+    server.Should().HaveReceived("PING", Times.Once());
 }
 ```
 More in [Getting Started](https://github.com/archofthings/Rony.Net/wiki/Getting-Started).
@@ -147,25 +147,24 @@ server.Mock.OnConnect().Receive("220 mail.test ready\r\n");     // greet every c
 await server.Connections[0].SendAsync("NOTIFY price-changed");   // push to one client
 await server.BroadcastAsync("SHUTDOWN in 5 minutes");            // or to all of them
 
-server.VerifyConnections(Times.Once());                          // the client reused its connection
+server.Should().HaveAcceptedConnections(Times.Once());           // the client reused its connection
 await server.Connections[0].WaitForCloseAsync();                 // and closed it
 ```
 Details: [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
 
 ## Checking what your client sent
 ```csharp
-server.Mock.Verify("LIST", Times.Exactly(2));
-server.Mock.Verify(r => r.BodyString.StartsWith("LOGIN"), Times.Once());
-server.Mock.VerifyInOrder("LOGIN", "LIST", "QUIT");            // order (others may be in between)
-server.Mock.VerifyAllRequestsMatched();                         // strict mode
+server.Should().HaveReceived("LIST", Times.Exactly(2))
+    .And.HaveReceived(r => r.BodyString.StartsWith("LOGIN"), Times.Once())
+    .And.NotHaveReceived("DELETE")
+    .And.HaveReceivedInOrder("LOGIN", "LIST", "QUIT")   // order (others may be in between)
+    .And.HaveNoUnmatchedRequests();                     // strict mode
 
-await server.Mock.WaitForRequestAsync("HEARTBEAT");            // instead of Thread.Sleep
-var requests = server.ReceivedRequests;                         // body, sender, time, matched
+await server.Mock.WaitForRequestAsync("HEARTBEAT");     // instead of Thread.Sleep
+var requests = server.ReceivedRequests;                 // body, sender, time, matched
 ```
-A failed check lists every request the server received. Prefer a fluent style?
-```csharp
-server.Should().HaveReceived("LOGIN", Times.Once()).And.HaveReceivedInOrder("LOGIN", "LIST").And.HaveNoUnmatchedRequests();
-```
+A failed check lists every request the server received. The same checks are also available as
+`server.Mock.Verify(...)` methods.
 Details: [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests) · [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
 
 ## Logging
