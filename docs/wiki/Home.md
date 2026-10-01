@@ -1,0 +1,64 @@
+# Rony.Net
+
+**Rony.Net** is a mock server for testing .NET code that talks over the network.
+Start a real TCP, TCP + SSL/TLS or UDP server inside your test, tell it how to answer, point your client at it,
+and then check what your client sent.
+
+```csharp
+using var server = new MockServer(new TcpServer(0));   // 0 = any free port
+server.Mock.Send("PING").Receive("PONG");
+server.Start();
+
+// ... run the code under test against 127.0.0.1:server.Port ...
+
+server.Mock.Verify("PING", Times.Once());
+```
+
+## Why use it
+- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams.
+- **Any protocol.** Text or binary, one request per connection or many, delimited or length-prefixed messages.
+- **Failure testing.** Slow responses, dropped connections, silence, and responses that change over time.
+- **Assertions on the client.** Check which requests were sent and how often, or wait until one arrives.
+- **Test-friendly.** Free ports for parallel tests, thread-safe configuration, clear failure messages.
+
+## Install
+```console
+dotnet add package Rony.Net
+```
+Works with .NET Core 3.x, .NET 5 and every later version (the package targets `netstandard2.1` and `net8.0`).
+It works with any test framework: xUnit, NUnit, MSTest or none at all.
+
+## Documentation
+
+| Start here | |
+|---|---|
+| [Getting Started](Getting-Started) | Install, first test, the namespaces you need |
+| [Servers](Servers) | TCP and UDP servers, addresses and properties |
+| [SSL and TLS](SSL-and-TLS) | Secure servers, certificates for tests |
+| [Ports and Lifecycle](Ports-and-Lifecycle) | Free ports, start/stop/restart, parallel tests |
+| [Connections and Framing](Connections-and-Framing) | Persistent connections, delimiters, length prefixes, custom framing |
+
+| Configure responses | |
+|---|---|
+| [Configuring Responses](Configuring-Responses) | Text, bytes, computed responses, a default response |
+| [Request Matching](Request-Matching) | Exact, regex and predicate matching, and precedence |
+| [Response Sequences](Response-Sequences) | A different response each time |
+| [Simulating Failures](Simulating-Failures) | Delays, disconnects, silence, flaky servers |
+
+| Check your client | |
+|---|---|
+| [Verifying Requests](Verifying-Requests) | `Verify`, `Times`, strict mode, inspecting requests |
+| [Waiting for Requests](Waiting-for-Requests) | `WaitForRequestAsync` instead of `Thread.Sleep` |
+
+| More | |
+|---|---|
+| [Recipes](Recipes) | Testing a real client class, retries, timeouts, sharing a server between tests |
+| [Custom Listeners](Custom-Listeners) | Plug in your own transport |
+| [API Reference](API-Reference) | Every public type and member |
+| [Troubleshooting](Troubleshooting) | Common problems and answers |
+| [Upgrading to 1.0](Upgrading-to-1.0) | Changes from 0.x |
+
+## Runnable examples
+Every example in this wiki is a passing test in the
+[samples project](https://github.com/archofthings/Rony.Net/tree/main/samples/Rony.Samples).
+Clone the repository and run `dotnet test samples/Rony.Samples` to try them.

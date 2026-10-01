@@ -7,6 +7,10 @@ using System.Threading.Tasks;
 
 namespace Rony.Listeners
 {
+    /// <summary>
+    /// A UDP server. Every datagram is one request, and responses are sent back to the datagram's sender.
+    /// The socket is bound when the server is created.
+    /// </summary>
     public class UdpServer : IListener
     {
         private IPEndPoint _endPoint;
@@ -18,6 +22,7 @@ namespace Rony.Listeners
         public int Port { get; set; }
         public bool Active => _active;
 
+        /// <summary>Binds to the given endpoint. Use port 0 to let the operating system pick a free port.</summary>
         public UdpServer(IPEndPoint localEp)
         {
             if (localEp == null) throw new ArgumentNullException(nameof(localEp));
@@ -29,10 +34,12 @@ namespace Rony.Listeners
             Port = _endPoint.Port;
         }
 
+        /// <summary>Binds to all interfaces (0.0.0.0) on the given port.</summary>
         public UdpServer(int port = 3000) : this(new IPEndPoint(IPAddress.Any, port))
         {
         }
 
+        /// <summary>Binds to the given IP address and port.</summary>
         public UdpServer(string address, int port = 3000) : this(new IPEndPoint(IPAddress.Parse(address), port))
         {
         }

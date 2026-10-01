@@ -20,11 +20,13 @@ namespace Rony.Models
         /// <summary>The request bytes, after framing was removed.</summary>
         public byte[] Body { get; }
 
+        /// <summary>The request decoded as UTF-8 text.</summary>
         public string BodyString => Body.GetString();
 
         /// <summary>The client's address, when known.</summary>
         public EndPoint RemoteEndPoint { get; }
 
+        /// <summary>When the server received the request.</summary>
         public DateTimeOffset Timestamp { get; }
 
         /// <summary>Whether a configured response (including the "any request" one) handled this request.</summary>

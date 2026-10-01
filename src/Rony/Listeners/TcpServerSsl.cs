@@ -10,6 +10,9 @@ using System.Threading.Tasks;
 
 namespace Rony.Listeners
 {
+    /// <summary>
+    /// A TCP server secured with SSL/TLS. Clients must complete a TLS handshake before sending requests.
+    /// </summary>
     public class TcpServerSsl : TcpServerBase
     {
         private readonly Lazy<X509Certificate> _certificate;
@@ -27,11 +30,13 @@ namespace Rony.Listeners
             _protocol = protocol;
         }
 
+        /// <summary>Listens on 127.0.0.1 with the given certificate.</summary>
         public TcpServerSsl(int port, X509Certificate certificate, SslProtocols protocol)
             : this(IPAddress.Loopback, port, certificate, protocol)
         {
         }
 
+        /// <summary>Listens on the given IP address with the given certificate.</summary>
         public TcpServerSsl(string address, int port, X509Certificate certificate, SslProtocols protocol)
             : this(IPAddress.Parse(address), port, certificate, protocol)
         {
@@ -48,16 +53,19 @@ namespace Rony.Listeners
             _protocol = protocol;
         }
 
+        /// <summary>Listens on 127.0.0.1 with an installed certificate, looked up by subject name.</summary>
         public TcpServerSsl(int port, string certificateName, SslProtocols protocol)
             : this(IPAddress.Loopback, port, certificateName, protocol)
         {
         }
 
+        /// <summary>Listens on the given IP address with an installed certificate, looked up by subject name.</summary>
         public TcpServerSsl(string address, int port, string certificateName, SslProtocols protocol)
             : this(IPAddress.Parse(address), port, certificateName, protocol)
         {
         }
 
+        /// <inheritdoc />
         protected override async Task<Stream> OpenStreamAsync(TcpClient client)
         {
             var sslStream = new SslStream(client.GetStream(), false);

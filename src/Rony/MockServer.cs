@@ -9,6 +9,19 @@ using System.Threading.Tasks;
 
 namespace Rony.Net
 {
+    /// <summary>
+    /// A mock network server for tests. Wraps a listener (<see cref="Rony.Listeners.TcpServer"/>,
+    /// <see cref="Rony.Listeners.TcpServerSsl"/> or <see cref="Rony.Listeners.UdpServer"/>) and answers
+    /// requests with the responses configured on <see cref="Mock"/>.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// using var server = new MockServer(new TcpServer(0));
+    /// server.Mock.Send("PING").Receive("PONG");
+    /// server.Start();
+    /// // connect a client to 127.0.0.1:server.Port
+    /// </code>
+    /// </example>
     public class MockServer : IDisposable
     {
         private readonly IListener _listener;
@@ -16,6 +29,7 @@ namespace Rony.Net
         private readonly Dictionary<object, Task> _conversations = new Dictionary<object, Task>();
         private CancellationTokenSource _cancellation;
 
+        /// <summary>The address the server listens on.</summary>
         public IPAddress Address => _listener.Address;
 
         /// <summary>
@@ -24,18 +38,25 @@ namespace Rony.Net
         /// </summary>
         public int Port => _listener.Port;
 
+        /// <summary>Whether the server is started and listening.</summary>
         public bool Active => _listener.Active;
+
+        /// <summary>
+        /// Configures responses (<c>Send(...).Receive(...)</c>), and records and verifies requests.
+        /// </summary>
         public RequestHandler Mock { get; set; }
 
         /// <summary>Every request received so far, oldest first. Shortcut for <c>Mock.ReceivedRequests</c>.</summary>
         public IReadOnlyList<ReceivedRequest> ReceivedRequests => Mock.ReceivedRequests;
 
+        /// <summary>Creates a mock server on top of <paramref name="listener"/>. Call <see cref="Start"/> to begin listening.</summary>
         public MockServer(IListener listener)
         {
             _listener = listener ?? throw new ArgumentNullException(nameof(listener));
             Mock = new RequestHandler();
         }
 
+        /// <summary>Starts listening. Calling it again while started does nothing; a stopped server can be started again.</summary>
         public void Start()
         {
             CancellationToken cancellationToken;
@@ -50,6 +71,7 @@ namespace Rony.Net
             Task.Run(() => ListenAsync(cancellationToken));
         }
 
+        /// <summary>Stops listening, closes open connections and cancels pending delayed responses. Safe to call repeatedly.</summary>
         public void Stop()
         {
             lock (_syncRoot)
@@ -61,6 +83,7 @@ namespace Rony.Net
             }
         }
 
+        /// <summary>Stops the server and releases the listener.</summary>
         public void Dispose()
         {
             Stop();

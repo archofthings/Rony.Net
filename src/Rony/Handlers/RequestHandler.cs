@@ -12,6 +12,11 @@ using System.Threading.Tasks;
 
 namespace Rony.Handlers
 {
+    /// <summary>
+    /// Holds the configured responses of a <see cref="MockServer"/> and records the requests it receives.
+    /// Start a configuration with <c>Send(...)</c> or <c>SendMatching(...)</c>, then finish it with
+    /// <c>Receive(...)</c>, <see cref="Disconnect"/> or <see cref="NoReply"/>.
+    /// </summary>
     public class RequestHandler
     {
         private static readonly byte[] AnyRequest = new byte[0];
@@ -28,6 +33,7 @@ namespace Rony.Handlers
         /// </summary>
         public IReadOnlyDictionary<byte[], Config> Configs => _configs;
 
+        /// <summary>Creates an empty handler.</summary>
         public RequestHandler()
         {
             _configs = new ConcurrentDictionary<byte[], Config>(ByteArrayComparer.Instance);
@@ -73,12 +79,16 @@ namespace Rony.Handlers
             return this;
         }
 
+        /// <summary>Responds with this text.</summary>
         public ResponseBuilder Receive(string response) => Add(ResponseStep.Reply(response));
 
+        /// <summary>Responds with these bytes.</summary>
         public ResponseBuilder Receive(byte[] response) => Add(ResponseStep.Reply(response));
 
+        /// <summary>Responds with the result of <paramref name="func"/>, called with the request text. If it throws, the response is empty.</summary>
         public ResponseBuilder Receive(Func<string, string> func) => Add(ResponseStep.Reply(func));
 
+        /// <summary>Responds with the result of <paramref name="func"/>, called with the request bytes. If it throws, the response is empty.</summary>
         public ResponseBuilder Receive(Func<byte[], byte[]> func) => Add(ResponseStep.Reply(func));
 
         /// <summary>Closes the connection without replying (TCP). For UDP this behaves like <see cref="NoReply"/>.</summary>
@@ -101,6 +111,7 @@ namespace Rony.Handlers
 
         #region Matching
 
+        /// <summary>Finds the response for a text request, as the server would. See <see cref="Match(byte[])"/>.</summary>
         public byte[] Match(string request)
         {
             return Match((request ?? string.Empty).GetBytes());
@@ -150,16 +161,19 @@ namespace Rony.Handlers
         /// <summary>Received requests that no configured response handled.</summary>
         public IReadOnlyList<ReceivedRequest> UnmatchedRequests => _journal.Snapshot().Where(r => !r.Matched).ToArray();
 
+        /// <summary>Forgets every recorded request. Configured responses are kept.</summary>
         public void ClearReceivedRequests() => _journal.Clear();
 
         /// <summary>Verifies the request was received at least once.</summary>
         public void Verify(string request) => Verify(request, Times.AtLeastOnce());
 
+        /// <summary>Verifies how many times this exact request was received. Throws <see cref="MockVerificationException"/> otherwise.</summary>
         public void Verify(string request, Times times) => Verify((request ?? string.Empty).GetBytes(), times);
 
         /// <inheritdoc cref="Verify(string)"/>
         public void Verify(byte[] request) => Verify(request, Times.AtLeastOnce());
 
+        /// <inheritdoc cref="Verify(string, Times)"/>
         public void Verify(byte[] request, Times times)
         {
             var expected = request ?? AnyRequest;
@@ -169,6 +183,7 @@ namespace Rony.Handlers
         /// <summary>Verifies a request satisfying <paramref name="predicate"/> was received at least once.</summary>
         public void Verify(Func<ReceivedRequest, bool> predicate) => Verify(predicate, Times.AtLeastOnce());
 
+        /// <summary>Verifies how many received requests satisfy <paramref name="predicate"/>. Throws <see cref="MockVerificationException"/> otherwise.</summary>
         public void Verify(Func<ReceivedRequest, bool> predicate, Times times) =>
             Verify(predicate ?? throw new ArgumentNullException(nameof(predicate)), times, "a request matching the predicate");
 

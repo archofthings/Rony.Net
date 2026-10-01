@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.3.0
+Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
+
+## 1.0.0
+
+First stable release. The public API follows [semantic versioning](https://semver.org) from here on.
 
 ### Added
 - **Persistent TCP connections.** A client can send many requests over one connection, for TCP and TCP + SSL/TLS
@@ -15,8 +19,11 @@
 - **Simulating failures:** `.After(delay)`, `Disconnect()`, `NoReply()`, `.AndDisconnect()`, `ThenDisconnect()`, `ThenNoReply()`.
 - **Request recording and verification:** `ReceivedRequests`, `UnmatchedRequests`, `Verify(...)` with `Times`,
   `VerifyAllRequestsMatched()`, `WaitForRequestAsync(...)`, `WaitForRequestsAsync(count)`, `ClearReceivedRequests()` and `Reset()`.
+- **IntelliSense documentation** ships with the package, and Source Link plus a symbols package (`.snupkg`)
+  let you step into the library while debugging.
+- A runnable [samples project](samples/Rony.Samples) with every example from the wiki.
 
-### Changed (breaking)
+### Changed (breaking, compared to 0.2.0)
 - TCP connections are no longer closed after each response. Clients that read until the server closes the connection
   should set `KeepAlive = false` on the server, or use `.AndDisconnect()` on the response.
 - `IListener` has a new `CloseAsync(object sender)` method. Custom listeners need to implement it.

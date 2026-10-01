@@ -24,11 +24,13 @@ namespace Rony.Listeners
         private CancellationTokenSource _cancellation;
         private AsyncQueue<Message> _messages;
 
+        /// <summary>The address the server listens on.</summary>
         public IPAddress Address { get; set; }
 
         /// <inheritdoc />
         public int Port { get; set; }
 
+        /// <summary>Whether the server is started.</summary>
         public bool Active
         {
             get
@@ -49,6 +51,7 @@ namespace Rony.Listeners
         /// </summary>
         public bool KeepAlive { get; set; } = true;
 
+        /// <summary>Creates a server for the given address and port (0 picks a free port on start).</summary>
         protected TcpServerBase(IPAddress address, int port)
         {
             Address = address ?? throw new ArgumentNullException(nameof(address));
