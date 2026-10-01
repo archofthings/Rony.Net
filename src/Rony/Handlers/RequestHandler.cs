@@ -1,59 +1,81 @@
-﻿using Rony.Models;
+using Rony.Helpers;
+using Rony.Models;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Rony.Handlers
 {
     public class RequestHandler
     {
-        private string _receiveData;
-        public Dictionary<string, Config> Configs { get; set; }
+        private static readonly byte[] AnyRequest = new byte[0];
+
+        private readonly ConcurrentDictionary<byte[], Config> _configs;
+        private byte[] _receiveData;
+
+        /// <summary>
+        /// Configured responses, keyed by the raw request bytes. An empty key matches any request.
+        /// </summary>
+        public IReadOnlyDictionary<byte[], Config> Configs => _configs;
 
         public RequestHandler()
         {
-            Configs = new Dictionary<string, Config>();
+            _configs = new ConcurrentDictionary<byte[], Config>(ByteArrayComparer.Instance);
         }
 
         public RequestHandler Send(string receiveData)
         {
-            _receiveData = receiveData;
-            return this;
+            return Send((receiveData ?? string.Empty).GetBytes());
         }
 
         public RequestHandler Send(byte[] receiveData)
         {
-            return Send(receiveData.GetString());
+            _receiveData = receiveData ?? AnyRequest;
+            return this;
         }
 
         public void Receive(string response)
         {
-            Configs.Add(_receiveData, new Config(response));
+            Add(new Config(response));
         }
 
         public void Receive(byte[] response)
         {
-            Configs.Add(_receiveData, new Config(response.GetString()));
+            Add(new Config(response));
         }
 
         public void Receive(Func<string, string> func)
         {
-            Configs.Add(_receiveData, new Config(func));
+            Add(new Config(func));
         }
 
         public void Receive(Func<byte[], byte[]> func)
         {
-            Configs.Add(_receiveData, new Config(func));
-
+            Add(new Config(func));
         }
 
         public byte[] Match(string request)
         {
-            var config = Configs.FirstOrDefault(x => x.Key == request);
-            if (config.Equals(new KeyValuePair<string, Config>()))
-                config = Configs.FirstOrDefault(x => x.Key == "");
-            if (config.Equals(new KeyValuePair<string, Config>())) return new byte[] { };
-            return config.Value.GetResponse(request);
+            return Match((request ?? string.Empty).GetBytes());
+        }
+
+        public byte[] Match(byte[] request)
+        {
+            request ??= AnyRequest;
+            if (_configs.TryGetValue(request, out var config) || _configs.TryGetValue(AnyRequest, out config))
+                return config.GetResponse(request);
+            return new byte[0];
+        }
+
+        private void Add(Config config)
+        {
+            if (_receiveData == null)
+                throw new InvalidOperationException($"Call {nameof(Send)}() before {nameof(Receive)}().");
+
+            var request = _receiveData;
+            _receiveData = null;
+            if (!_configs.TryAdd(request, config))
+                throw new ArgumentException($"A response is already configured for request '{request.GetString()}'.");
         }
     }
 }

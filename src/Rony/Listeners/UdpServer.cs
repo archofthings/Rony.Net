@@ -1,6 +1,7 @@
-﻿using Rony.Interfaces;
+using Rony.Interfaces;
 using Rony.Models;
 using Rony.Wrappers;
+using System;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -8,16 +9,19 @@ namespace Rony.Listeners
 {
     public class UdpServer : IListener
     {
-        private UdpClientWrapper _listener;
         private readonly IPEndPoint _endPoint;
+        private readonly object _syncRoot = new object();
+        private UdpClientWrapper _listener;
+        private bool _active;
 
         public IPAddress Address { get; set; }
         public int Port { get; set; }
-        public bool Active => _listener.Active;
+        public bool Active => _active;
 
         public UdpServer(IPEndPoint localEp)
         {
-            _endPoint = localEp;
+            _endPoint = localEp ?? throw new ArgumentNullException(nameof(localEp));
+            // Bind right away so port conflicts surface here, like they always have.
             _listener = new UdpClientWrapper(_endPoint);
             Address = localEp.Address;
             Port = localEp.Port;
@@ -33,32 +37,49 @@ namespace Rony.Listeners
 
         public async Task<Message> ReceiveAsync()
         {
-            var request = await _listener.ReceiveAsync();
+            var request = await GetListener().ReceiveAsync().ConfigureAwait(false);
             return new Message(request.Buffer, request.RemoteEndPoint);
         }
 
         public async Task ReplyAsync(string response, object sender)
         {
-            await ReplyAsync(response.GetBytes(), sender);
+            await ReplyAsync(response.GetBytes(), sender).ConfigureAwait(false);
         }
 
         public async Task ReplyAsync(byte[] response, object sender)
         {
             var endPoint = (IPEndPoint)sender;
-            await _listener.SendAsync(response, response.Length, endPoint);
+            await GetListener().SendAsync(response, response.Length, endPoint).ConfigureAwait(false);
         }
+
         public void Start()
         {
+            lock (_syncRoot)
+            {
+                // The socket is released on Stop(), so re-bind when the server is restarted.
+                _listener ??= new UdpClientWrapper(_endPoint);
+                _active = true;
+            }
         }
 
         public void Stop()
         {
-            _listener.Dispose();
+            lock (_syncRoot)
+            {
+                _active = false;
+                _listener?.Dispose();
+                _listener = null;
+            }
         }
 
         public void Dispose()
         {
-            _listener.Dispose();
+            Stop();
+        }
+
+        private UdpClientWrapper GetListener()
+        {
+            return _listener ?? throw new ObjectDisposedException(nameof(UdpServer));
         }
     }
 }
