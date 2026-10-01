@@ -1,0 +1,161 @@
+using Rony.Listeners;
+using Rony.Models;
+using Rony.Net;
+using Xunit;
+
+namespace Rony.Samples;
+
+// Wiki: Verifying-Requests, Waiting-for-Requests
+public class VerificationSamples
+{
+    [Fact]
+    public async Task Verify_what_the_client_sent()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("LOGIN alice").Receive("OK");
+        server.Mock.Send("LIST").Receive("a,b,c");
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+        {
+            await client.SendAndReceiveAsync("LOGIN alice");
+            await client.SendAndReceiveAsync("LIST");
+            await client.SendAndReceiveAsync("LIST");
+        }
+
+        server.Mock.Verify("LOGIN alice");                       // at least once
+        server.Mock.Verify("LIST", Times.Exactly(2));
+        server.Mock.Verify("LOGOUT", Times.Never());
+        server.Mock.Verify(r => r.BodyString.StartsWith("LOGIN"), Times.Once());
+    }
+
+    [Fact]
+    public void All_the_Times_options()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Match("x");
+        server.Mock.Match("x");
+
+        server.Mock.Verify("x", Times.Exactly(2));
+        server.Mock.Verify("x", Times.AtLeast(1));
+        server.Mock.Verify("x", Times.AtMost(3));
+        server.Mock.Verify("x", Times.Between(1, 2));
+        server.Mock.Verify("x", Times.AtLeastOnce());
+        server.Mock.Verify("y", Times.Never());
+    }
+
+    [Fact]
+    public void A_failed_verification_explains_itself()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("PING").Receive("PONG");
+        server.Mock.Match("PING");
+        server.Mock.Match("PNIG");
+
+        var error = Assert.Throws<MockVerificationException>(() => server.Mock.Verify("PING", Times.Exactly(2)));
+
+        // Expected request "PING" exactly 2 times, but it was received 1 time.
+        // Received requests:
+        //   1. "PING"
+        //   2. "PNIG" (unmatched)
+        Assert.Contains("\"PNIG\" (unmatched)", error.Message);
+    }
+
+    [Fact]
+    public async Task Strict_mode()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("PING").Receive("PONG");
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+            await client.SendAndReceiveAsync("PING");
+
+        // Passes: every request had a configured response.
+        server.Mock.VerifyAllRequestsMatched();
+    }
+
+    [Fact]
+    public async Task Inspect_received_requests()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("").Receive("ok");
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+        {
+            await client.SendAndReceiveAsync("first");
+            await client.SendAndReceiveAsync("second");
+        }
+
+        IReadOnlyList<ReceivedRequest> requests = server.ReceivedRequests;
+        Assert.Equal(new[] { "first", "second" }, requests.Select(r => r.BodyString));
+        Assert.All(requests, r => Assert.True(r.Matched));
+        Assert.All(requests, r => Assert.NotNull(r.RemoteEndPoint));
+        Assert.True(requests[0].Timestamp <= requests[1].Timestamp);
+    }
+
+    [Fact]
+    public async Task Wait_for_a_fire_and_forget_message()
+    {
+        using var server = new MockServer(new UdpServer("127.0.0.1", 0));
+        server.Mock.Send("").NoReply();
+        server.Start();
+
+        // Imagine this is your code sending a heartbeat in the background.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(200);
+            using var udp = new System.Net.Sockets.UdpClient();
+            var data = "HEARTBEAT".GetBytes();
+            await udp.SendAsync(data, data.Length, new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, server.Port));
+        });
+
+        var request = await server.Mock.WaitForRequestAsync("HEARTBEAT", TimeSpan.FromSeconds(5));
+
+        Assert.Equal("HEARTBEAT", request.BodyString);
+    }
+
+    [Fact]
+    public async Task Wait_for_several_requests()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("").Receive("ok");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        foreach (var command in new[] { "a", "b", "c" })
+            await client.SendAndReceiveAsync(command);
+
+        var requests = await server.Mock.WaitForRequestsAsync(count: 3);
+        var second = await server.Mock.WaitForRequestAsync(r => r.BodyString == "b");
+
+        Assert.Equal(3, requests.Count);
+        Assert.Equal("b", second.BodyString);
+    }
+
+    [Fact]
+    public async Task Waiting_times_out_with_details()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Match("something else");
+
+        var error = await Assert.ThrowsAsync<TimeoutException>(
+            () => server.Mock.WaitForRequestAsync("expected", TimeSpan.FromMilliseconds(200)));
+
+        Assert.Contains("\"something else\"", error.Message);
+    }
+
+    [Fact]
+    public void Start_over_between_steps()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("ping").Receive("pong");
+        server.Mock.Match("ping");
+
+        server.Mock.ClearReceivedRequests();
+
+        server.Mock.Verify("ping", Times.Never());
+        Assert.Single(server.Mock.Configs);   // responses are kept
+    }
+}

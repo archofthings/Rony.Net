@@ -4,18 +4,29 @@
     <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <PackageId>Rony.Net</PackageId>
-    <Version>0.2.0</Version>
+    <Version>1.0.0</Version>
     <Authors>Mojtaba Kiani</Authors>
     <Product>Rony.Net</Product>
-    <Description>A simple TCP/UDP mock server for using in test projects which test .NET based projects.</Description>
+    <Description>A TCP, TCP + SSL/TLS and UDP mock server for .NET tests. Configure request/response pairs, simulate delays and failures, and verify what your client sent.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/archofthings/Rony.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/archofthings/Rony.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>csharp;mock;mock-server;tcp-mock-server;udp-mock-server;ssl;tcp;udp;xunit;unit-testing;functional-testing;clean-code;clean-architecture</PackageTags>
-    <PackageReleaseNotes>Requests are matched on raw bytes (binary payloads no longer get corrupted), the server keeps running when a client misbehaves, TcpServerSsl accepts an X509Certificate directly, mock configuration is thread-safe, and the package targets netstandard2.1 and net8.0.</PackageReleaseNotes>
+    <PackageTags>mock;mock-server;tcp;udp;ssl;tls;socket;testing;unit-testing;integration-testing;functional-testing;xunit;nunit;mstest</PackageTags>
+    <PackageReleaseNotes>First stable release. Persistent TCP connections, message framing, automatic ports, pattern matching, response sequences, failure simulation, request verification and waiting. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <NeutralLanguage>en</NeutralLanguage>
+
+    <!-- IntelliSense documentation for package users; not every member has a doc comment yet -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Source Link (built into the .NET 8 SDK) and a symbols package, so users can step into the library -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,6 +1,3 @@
-using Rony.Interfaces;
-using Rony.Models;
-using Rony.Wrappers;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -8,78 +5,31 @@ using System.Threading.Tasks;
 
 namespace Rony.Listeners
 {
-    public class TcpServer : IListener
+    /// <summary>
+    /// A plain TCP server. Connections stay open across requests unless <see cref="TcpServerBase.KeepAlive"/> is false.
+    /// </summary>
+    public class TcpServer : TcpServerBase
     {
-        private readonly TcpListenerWrapper _listener;
-
-        public IPAddress Address { get; set; }
-        public int Port { get; set; }
-        public bool Active => _listener.Active;
-
-        public TcpServer(IPAddress address, int port = 3000)
+        /// <param name="address">Address to listen on.</param>
+        /// <param name="port">Port to listen on. Use 0 to let the operating system pick a free port; read it from <see cref="TcpServerBase.Port"/> after starting.</param>
+        public TcpServer(IPAddress address, int port = 3000) : base(address, port)
         {
-            _listener = new TcpListenerWrapper(address, port);
-            Address = address;
-            Port = port;
         }
 
+        /// <summary>Listens on 127.0.0.1. Use port 0 to let the operating system pick a free port.</summary>
         public TcpServer(int port = 3000) : this(IPAddress.Loopback, port)
         {
         }
 
+        /// <summary>Listens on the given IP address, for example "0.0.0.0" for all interfaces.</summary>
         public TcpServer(string address, int port = 3000) : this(IPAddress.Parse(address), port)
         {
         }
 
-        public async Task<Message> ReceiveAsync()
+        /// <inheritdoc />
+        protected override Task<Stream> OpenStreamAsync(TcpClient client)
         {
-            var client = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
-            try
-            {
-                var stream = client.GetStream();
-                var buffer = new byte[client.ReceiveBufferSize];
-                using var body = new MemoryStream();
-                do
-                {
-                    var readBytes = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-                    if (readBytes == 0) break;
-                    body.Write(buffer, 0, readBytes);
-                } while (stream.DataAvailable);
-
-                return new Message(body.ToArray(), stream);
-            }
-            catch
-            {
-                client.Dispose();
-                throw;
-            }
-        }
-
-        public async Task ReplyAsync(string response, object sender)
-        {
-            await ReplyAsync(response.GetBytes(), sender).ConfigureAwait(false);
-        }
-
-        public async Task ReplyAsync(byte[] response, object sender)
-        {
-            using var stream = (NetworkStream)sender;
-            if (response.Length > 0)
-                await stream.WriteAsync(response, 0, response.Length).ConfigureAwait(false);
-        }
-
-        public void Start()
-        {
-            _listener.Start();
-        }
-
-        public void Stop()
-        {
-            _listener.Stop();
-        }
-
-        public void Dispose()
-        {
-            _listener.Stop();
+            return Task.FromResult<Stream>(client.GetStream());
         }
     }
 }

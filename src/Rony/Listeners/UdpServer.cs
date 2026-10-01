@@ -7,9 +7,13 @@ using System.Threading.Tasks;
 
 namespace Rony.Listeners
 {
+    /// <summary>
+    /// A UDP server. Every datagram is one request, and responses are sent back to the datagram's sender.
+    /// The socket is bound when the server is created.
+    /// </summary>
     public class UdpServer : IListener
     {
-        private readonly IPEndPoint _endPoint;
+        private IPEndPoint _endPoint;
         private readonly object _syncRoot = new object();
         private UdpClientWrapper _listener;
         private bool _active;
@@ -18,19 +22,24 @@ namespace Rony.Listeners
         public int Port { get; set; }
         public bool Active => _active;
 
+        /// <summary>Binds to the given endpoint. Use port 0 to let the operating system pick a free port.</summary>
         public UdpServer(IPEndPoint localEp)
         {
-            _endPoint = localEp ?? throw new ArgumentNullException(nameof(localEp));
+            if (localEp == null) throw new ArgumentNullException(nameof(localEp));
             // Bind right away so port conflicts surface here, like they always have.
-            _listener = new UdpClientWrapper(_endPoint);
-            Address = localEp.Address;
-            Port = localEp.Port;
+            _listener = new UdpClientWrapper(localEp);
+            // With port 0 the OS picks a free port; keep it so a restart binds the same port again.
+            _endPoint = new IPEndPoint(localEp.Address, ((IPEndPoint)_listener.Client.LocalEndPoint).Port);
+            Address = _endPoint.Address;
+            Port = _endPoint.Port;
         }
 
+        /// <summary>Binds to all interfaces (0.0.0.0) on the given port.</summary>
         public UdpServer(int port = 3000) : this(new IPEndPoint(IPAddress.Any, port))
         {
         }
 
+        /// <summary>Binds to the given IP address and port.</summary>
         public UdpServer(string address, int port = 3000) : this(new IPEndPoint(IPAddress.Parse(address), port))
         {
         }
@@ -38,7 +47,7 @@ namespace Rony.Listeners
         public async Task<Message> ReceiveAsync()
         {
             var request = await GetListener().ReceiveAsync().ConfigureAwait(false);
-            return new Message(request.Buffer, request.RemoteEndPoint);
+            return new Message(request.Buffer, request.RemoteEndPoint, request.RemoteEndPoint);
         }
 
         public async Task ReplyAsync(string response, object sender)
@@ -50,6 +59,12 @@ namespace Rony.Listeners
         {
             var endPoint = (IPEndPoint)sender;
             await GetListener().SendAsync(response, response.Length, endPoint).ConfigureAwait(false);
+        }
+
+        public Task CloseAsync(object sender)
+        {
+            // UDP has no connection to close.
+            return Task.CompletedTask;
         }
 
         public void Start()
