@@ -59,6 +59,9 @@ namespace Rony.Models
             return NextStep().Produce(request);
         }
 
+        /// <summary>How the request is described in logs and messages, for example <c>"PING"</c> or <c>/^LOGIN/</c>.</summary>
+        internal string Description { get; set; }
+
         internal ResponseStep LastStep
         {
             get
