@@ -84,8 +84,73 @@ Rony.Net.MockVerificationException:
   "DELETE everything"
 ```
 
-A good habit is to call it at the end of a test, or in your test class's `Dispose`.
+A good habit is to call it at the end of a test, or in your test class's `Dispose`. The
+[test framework packages](Test-Framework-Integration) do that for you with `VerifyAllRequestsMatchedAfterTest = true`.
 A `Send("")` default response matches everything, so with one configured, strict mode always passes.
+Requests answered by [`OnUnmatched()`](Request-Matching#unmatched-requests) still count as unmatched.
+
+## Fail fast on unexpected requests
+Strict mode reports unexpected requests at the end of the test. With `FailOnUnmatched`, the test fails as soon as
+the server receives one: every following `Verify...` call throws, and so does every `WaitFor...` call, including one
+that is already waiting. A typo then fails the test right away instead of after a long wait:
+
+```csharp
+server.Mock.FailOnUnmatched = true;
+server.Mock.Send("HEARTBEAT").NoReply();
+server.Start();
+
+using var client = await TcpTestClient.ConnectAsync(server.Port);
+await client.SendAsync("HEARTBAET");   // the bug under test
+
+// Fails as soon as the typo arrives, instead of after 30 seconds.
+var error = await Assert.ThrowsAsync<MockVerificationException>(
+    () => server.Mock.WaitForRequestAsync("HEARTBEAT", TimeSpan.FromSeconds(30)));
+```
+
+## Order
+`VerifyInOrder` checks that requests arrived in a given order. Other requests may come before, after or in between:
+
+```csharp
+// The client sent LOGIN bob, NOOP, LIST, QUIT
+server.Mock.VerifyInOrder("LOGIN bob", "LIST", "QUIT");
+server.Mock.VerifyInOrder(r => r.BodyString.StartsWith("LOGIN"), r => r.BodyString == "QUIT");
+```
+
+It takes text, bytes or predicates. When the order is wrong, the message says which request is missing:
+
+```
+Rony.Net.MockVerificationException:
+Expected requests in order: "LOGIN bob", "LIST", but "LIST" was not received after "LOGIN bob".
+Received requests:
+  1. "LIST" (unmatched)
+  2. "LOGIN bob" (unmatched)
+```
+
+To check the order on one connection only, look at that connection's
+[`ReceivedRequests`](Connections-and-Push#inspecting-connections).
+
+## Fluent assertions
+`server.Should()` offers the same checks in a chain. Each one checks right away and throws `MockVerificationException`:
+
+```csharp
+server.Should().HaveReceived("LOGIN bob", Times.Once())
+    .And.HaveReceived("LIST")
+    .And.NotHaveReceived("DELETE")
+    .And.HaveReceivedInOrder("LOGIN bob", "LIST")
+    .And.HaveNoUnmatchedRequests()
+    .And.HaveAcceptedConnections(Times.Once());
+```
+
+| Assertion | Same as |
+|---|---|
+| `HaveReceived(request or predicate[, times])` | `Verify(...)`; at least once without `times` |
+| `NotHaveReceived(request or predicate)` | `Verify(..., Times.Never())` |
+| `HaveReceivedInOrder(...)` | `VerifyInOrder(...)` |
+| `HaveNoUnmatchedRequests()` | `VerifyAllRequestsMatched()` |
+| `HaveAcceptedConnections(times)` | `server.VerifyConnections(times)` ([TCP](Connections-and-Push)) |
+| `BeInState(state)` | `Assert.Equal(state, server.Mock.State)` ([scenarios](Stateful-Scenarios)) |
+
+`Should()` is a method of `MockServer`, so it works next to FluentAssertions or Shouldly without conflicts.
 
 ## Inspecting requests
 `server.ReceivedRequests`, or `server.Mock.ReceivedRequests`, lists every request, oldest first:
@@ -105,6 +170,7 @@ Assert.True(requests[0].Timestamp <= requests[1].Timestamp);
 | `RemoteEndPoint` | The client's address and port |
 | `Timestamp` | When the server received it |
 | `Matched` | Whether a configured response handled it |
+| `ConnectionId` | The [connection](Connections-and-Push) it arrived on (TCP); `null` for UDP and `Match(...)` |
 
 `server.Mock.UnmatchedRequests` lists only the requests that had no response.
 

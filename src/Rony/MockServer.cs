@@ -350,15 +350,16 @@ namespace Rony.Net
                 var result = Mock.Handle(body, received.RemoteEndPoint, connection?.Id,
                     (object)connection ?? received.RemoteEndPoint,
                     (exception, source) => Trace($"error: {source} threw {Describe(exception)}"));
+                var showState = result.State != RequestHandler.InitialState && !(result.Matched && result.RuleHasState);
                 Trace($"{label} received {ByteFormatter.Describe(body)} " +
                       (result.Matched ? $"(matched {result.Rule}" : "(unmatched") +
-                      (result.State != RequestHandler.InitialState ? $", in state \"{result.State}\")" : ")"));
+                      (showState ? $", state \"{result.State}\")" : ")"));
                 LogStateChange(label, result);
 
                 if (result.Step == null)
                 {
                     // Nothing configured: reply empty (UDP gets an empty datagram) and end the conversation.
-                    Trace($"{label} no response configured: closing the connection");
+                    Trace($"{label} no response configured: " + (connection != null ? "closing the connection" : "sending an empty response"));
                     await _listener.ReplyAsync(Empty, received.Sender).ConfigureAwait(false);
                     await _listener.CloseAsync(received.Sender).ConfigureAwait(false);
                     return;

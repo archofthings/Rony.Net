@@ -265,7 +265,7 @@ namespace Rony.Handlers
             var step = config?.NextStep();
             if (step?.NextState != null)
                 SetStateCore(stateKey, step.NextState);
-            return new MatchResult(step, config?.Description, matched, state, step?.NextState);
+            return new MatchResult(step, config?.Description, config?.State != null, matched, state, step?.NextState);
         }
 
         private string GetStateCore(object stateKey)
@@ -516,7 +516,7 @@ namespace Rony.Handlers
             _pending = null;
 
             var description = pending.State == null ? pending.Description : $"{pending.Description} in state \"{pending.State}\"";
-            var config = new Config(step) { Description = description };
+            var config = new Config(step) { Description = description, State = pending.State };
             if (pending.Kind != RuleKind.Request)
             {
                 lock (_matchLock)

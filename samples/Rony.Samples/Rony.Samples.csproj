@@ -19,8 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- In your own project: <PackageReference Include="Rony.Net" Version="1.0.0" /> -->
+    <!-- In your own project: <PackageReference Include="Rony.Net" Version="1.1.0" /> -->
     <ProjectReference Include="..\..\src\Rony\Rony.csproj" />
+    <!-- In your own project: <PackageReference Include="Rony.Net.Xunit" Version="1.1.0" /> -->
+    <ProjectReference Include="..\..\src\Rony.Net.Xunit\Rony.Net.Xunit.csproj" />
   </ItemGroup>
 
 </Project>

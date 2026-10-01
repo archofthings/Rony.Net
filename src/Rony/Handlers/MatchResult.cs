@@ -5,10 +5,11 @@ namespace Rony.Handlers
     /// <summary>What the handler decided for one request or connection.</summary>
     internal sealed class MatchResult
     {
-        public MatchResult(ResponseStep step, string rule, bool matched, string state, string nextState)
+        public MatchResult(ResponseStep step, string rule, bool ruleHasState, bool matched, string state, string nextState)
         {
             Step = step;
             Rule = rule;
+            RuleHasState = ruleHasState;
             Matched = matched;
             State = state;
             NextState = nextState;
@@ -19,6 +20,9 @@ namespace Rony.Handlers
 
         /// <summary>Description of the rule that was used, for logs.</summary>
         public string Rule { get; }
+
+        /// <summary>Whether the rule only applies in one state, so its description already names the state.</summary>
+        public bool RuleHasState { get; }
 
         public bool Matched { get; }
 

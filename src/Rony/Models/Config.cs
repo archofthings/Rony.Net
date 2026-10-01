@@ -62,6 +62,9 @@ namespace Rony.Models
         /// <summary>How the request is described in logs and messages, for example <c>"PING"</c> or <c>/^LOGIN/</c>.</summary>
         internal string Description { get; set; }
 
+        /// <summary>The scenario state the rule is limited to (<c>InState(...)</c>); null for every state.</summary>
+        internal string State { get; set; }
+
         internal ResponseStep LastStep
         {
             get

@@ -29,15 +29,21 @@ server.Mock.Verify("PING", Times.Once());
 - **Any protocol.** Text or binary; persistent connections; delimited, length-prefixed or custom messages. → [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
 - **Flexible matching.** Exact requests, regular expressions, predicates and a default response. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
 - **Scripted responses.** Fixed, computed from the request, or a different one each time. → [Configuring Responses](https://github.com/archofthings/Rony.Net/wiki/Configuring-Responses), [Response Sequences](https://github.com/archofthings/Rony.Net/wiki/Response-Sequences)
+- **Server-initiated messages.** Greetings on connect, pushed messages and broadcasts. → [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
+- **Stateful scenarios.** "`LIST` only works after `LOGIN`", for the whole server or per connection. → [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
 - **Failure testing.** Delays, dropped connections, silence and flaky servers. → [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
-- **Assertions on your client.** `Verify` with `Times`, strict mode, and waiting for a request without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
-- **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit, NUnit or MSTest, on Windows, Linux and macOS.
+- **Assertions on your client.** `Verify` with `Times`, order, strict or fail-fast mode, connection checks, fluent assertions, and waiting for a request without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
+- **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
+- **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
 ## Install
 ```console
 dotnet add package Rony.Net
 ```
 Or in the Package Manager Console: `Install-Package Rony.Net`.
+
+Optional, for less setup code: `Rony.Net.Xunit`, `Rony.Net.NUnit` or `Rony.Net.MSTest`
+([Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)).
 
 ## Quick start
 ```csharp
@@ -119,17 +125,76 @@ server.Mock.Send("QUIT").Receive("BYE").AndDisconnect();                     // 
 ```
 Details: [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
 
+### Unmatched requests
+```csharp
+server.Mock.OnUnmatched().Receive(text => $"ERR unknown command '{text}'");   // answer, keep the connection
+server.Mock.FailOnUnmatched = true;                                           // fail Verify/WaitFor right away
+```
+Details: [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching#unmatched-requests)
+
+### Stateful scenarios
+```csharp
+server.Mock.Send("LOGIN bob").Receive("OK").GoTo("loggedIn");
+server.Mock.InState("loggedIn").Send("LIST").Receive("a,b,c");
+server.Mock.Send("LIST").Receive("ERR not logged in");
+server.Mock.StateScope = StateScope.Connection;                  // optional: a session per connection
+```
+Details: [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
+
+## Connections and pushed messages
+```csharp
+server.Mock.OnConnect().Receive("220 mail.test ready\r\n");     // greet every client first
+await server.Connections[0].SendAsync("NOTIFY price-changed");   // push to one client
+await server.BroadcastAsync("SHUTDOWN in 5 minutes");            // or to all of them
+
+server.VerifyConnections(Times.Once());                          // the client reused its connection
+await server.Connections[0].WaitForCloseAsync();                 // and closed it
+```
+Details: [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
+
 ## Checking what your client sent
 ```csharp
 server.Mock.Verify("LIST", Times.Exactly(2));
 server.Mock.Verify(r => r.BodyString.StartsWith("LOGIN"), Times.Once());
+server.Mock.VerifyInOrder("LOGIN", "LIST", "QUIT");            // order (others may be in between)
 server.Mock.VerifyAllRequestsMatched();                         // strict mode
 
 await server.Mock.WaitForRequestAsync("HEARTBEAT");            // instead of Thread.Sleep
 var requests = server.ReceivedRequests;                         // body, sender, time, matched
 ```
-A failed check lists every request the server received.
+A failed check lists every request the server received. Prefer a fluent style?
+```csharp
+server.Should().HaveReceived("LOGIN", Times.Once()).And.HaveReceivedInOrder("LOGIN", "LIST").And.HaveNoUnmatchedRequests();
+```
 Details: [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests) · [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
+
+## Logging
+```csharp
+server.Log = output.WriteLine;   // xUnit's ITestOutputHelper, Console.WriteLine, ...
+```
+```
+[Rony 10:15:02.097] #1 connected from 127.0.0.1:50124
+[Rony 10:15:02.102] #1 received "PING" (matched "PING")
+[Rony 10:15:02.103] #1 sent "PONG"
+```
+Errors that are otherwise silent, such as an exception in a `Receive(...)` function or a failed TLS handshake, are logged too.
+Details: [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
+
+## Test framework packages
+```csharp
+public class PingTests : MockServerTest          // Rony.Net.Xunit; also Rony.Net.NUnit and Rony.Net.MSTest
+{
+    public PingTests(ITestOutputHelper output) : base(output) { }
+
+    [Fact]
+    public async Task Client_gets_pong()
+    {
+        Server.Mock.Send("PING").Receive("PONG");   // a started server per test, logging to the test output
+        // ...
+    }
+}
+```
+Details: [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
 ## More
 - [Recipes](https://github.com/archofthings/Rony.Net/wiki/Recipes): testing a real client class with retries and timeouts; xUnit, NUnit and MSTest setup.

@@ -146,6 +146,10 @@ Some points to note:
 - `MessageFraming.Delimiter("\n")` matches the protocol, so the `"\n"` is added to every response automatically.
 - Short timeouts (300 ms) keep the failure tests fast.
 
+## Less setup with the test framework packages
+`Rony.Net.Xunit`, `Rony.Net.NUnit` and `Rony.Net.MSTest` have a `MockServerTest` base class that creates, starts,
+logs and disposes a server for every test. See [Test Framework Integration](Test-Framework-Integration).
+
 ## Share one server between tests
 A server per test is simplest, and starting one is cheap. To share one across a test class, reset it at the start of each test.
 

@@ -358,11 +358,14 @@ namespace Rony.FunctionalTests
                 s.Log = log.Enqueue;
                 s.Mock.OnConnect().Receive("hi");
                 s.Mock.Send("PING").Receive("PONG").GoTo("pinged");
+                s.Mock.InState("pinged").Send("PONG?").Receive("yes");
                 s.Mock.Send("BOOM").Receive(new Func<string, string>(_ => throw new InvalidOperationException("kaput")));
             });
             var client = await LineClient.ConnectAsync(server.Port);
             await client.ReadLineAsync();
             await client.SendAsync("PING");
+            await client.ReadLineAsync();
+            await client.SendAsync("PONG?");
             await client.ReadLineAsync();
             await client.SendAsync("BOOM");
             await client.SendAsync("NOPE");
@@ -381,8 +384,10 @@ namespace Rony.FunctionalTests
             Assert.Contains("#1 received \"PING\" (matched \"PING\")", lines);
             Assert.Contains("#1 sent \"PONG\"", lines);
             Assert.Contains("#1 state \"initial\" -> \"pinged\"", lines);
+            Assert.Contains("#1 received \"PONG?\" (matched \"PONG?\" in state \"pinged\")", lines);
+            Assert.Contains("#1 received \"BOOM\" (matched \"BOOM\", state \"pinged\")", lines);
             Assert.Contains("InvalidOperationException: kaput", lines);
-            Assert.Contains("#1 received \"NOPE\" (unmatched, in state \"pinged\")", lines);
+            Assert.Contains("#1 received \"NOPE\" (unmatched, state \"pinged\")", lines);
             Assert.Contains("#1 disconnected", lines);
         }
 

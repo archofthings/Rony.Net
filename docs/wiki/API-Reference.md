@@ -1,6 +1,6 @@
 # API Reference
 
-Every public type in Rony.Net 1.0. The package includes XML documentation, so IntelliSense shows the same descriptions in your editor.
+Every public type in Rony.Net 1.1. The package includes XML documentation, so IntelliSense shows the same descriptions in your editor.
 
 ## `Rony.Net.MockServer`
 The mock server. Wraps a listener and answers requests with the responses configured on `Mock`.
@@ -16,6 +16,21 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `int Port` | The listening port (the assigned one when created with port `0`) |
 | `RequestHandler Mock` | Configuration, recording and verification |
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | Shortcut for `Mock.ReceivedRequests` |
+| `Action<string> Log` | Receives a [log](Logging-and-Diagnostics) line for everything the server does |
+| `MockServerAssertions Should()` | [Fluent assertions](Verifying-Requests#fluent-assertions) |
+
+**Connections** (TCP; on other listeners `Connections` is empty and the methods throw `NotSupportedException`). See [Connections and Push](Connections-and-Push).
+
+| Member | Description |
+|---|---|
+| `IReadOnlyList<ClientConnection> Connections` | Every accepted connection, open or closed, oldest first |
+| `IReadOnlyList<ClientConnection> OpenConnections` | The connections still open |
+| `event EventHandler<ClientConnection> ConnectionOpened` | A client connected |
+| `event EventHandler<ClientConnection> ConnectionClosed` | A connection closed, by either side |
+| `Task<int> BroadcastAsync(string or byte[] message)` | Pushes a message to every open connection; returns how many it reached |
+| `Task<ClientConnection> WaitForConnectionAsync(TimeSpan? timeout)` | Waits for the first connection |
+| `Task<IReadOnlyList<ClientConnection>> WaitForConnectionsAsync(int count, TimeSpan? timeout)` | Waits until `count` connections were accepted |
+| `void VerifyConnections(Times times)` | How many connections were accepted |
 
 ## `Rony.Handlers.RequestHandler`
 Available as `server.Mock`.
@@ -29,6 +44,9 @@ Available as `server.Mock`.
 | `Send(Regex pattern)` | Requests whose text matches the pattern |
 | `SendMatching(Func<string, bool> predicate)` | Requests whose text satisfies the predicate |
 | `SendMatchingBytes(Func<byte[], bool> predicate)` | Requests whose bytes satisfy the predicate |
+| `InState(string state).Send...(...)` | Any of the above, only in that [scenario state](Stateful-Scenarios) |
+| `OnConnect()` | A new TCP connection: the response is a [greeting](Connections-and-Push#greetings-talk-first) |
+| `OnUnmatched()` | Requests no other rule matches; they stay [unmatched](Request-Matching#unmatched-requests) |
 
 **Choosing the response** (each returns a `ResponseBuilder`)
 
@@ -46,8 +64,11 @@ Available as `server.Mock`.
 | Member | Description |
 |---|---|
 | `byte[] Match(string or byte[] request)` | Runs the server's lookup and returns the response (also records the request) |
-| `IReadOnlyDictionary<byte[], Config> Configs` | Exact-request configurations, keyed by request bytes |
-| `void Reset()` | Removes every configuration and recorded request |
+| `IReadOnlyDictionary<byte[], Config> Configs` | Exact-request configurations without a state, keyed by request bytes |
+| `string State` | The server-wide [scenario state](Stateful-Scenarios); settable |
+| `StateScope StateScope` | `Server` (default): one state; `Connection`: a state per connection (UDP: per client address) |
+| `const string InitialState` | `"initial"`, the state before any `GoTo(...)` |
+| `void Reset()` | Removes every configuration and recorded request, and returns to `InitialState` |
 
 **Verification**
 
@@ -59,6 +80,8 @@ Available as `server.Mock`.
 | `void Verify(string or byte[] request, Times times)` | The given number of times |
 | `void Verify(Func<ReceivedRequest, bool> predicate[, Times times])` | Requests satisfying the predicate |
 | `void VerifyAllRequestsMatched()` | Every request had a configured response |
+| `void VerifyInOrder(params string[] / byte[][] / Func<ReceivedRequest, bool>[])` | The requests arrived in this order; others may be in between |
+| `bool FailOnUnmatched` | Once an unmatched request arrives, every `Verify...` and `WaitFor...` throws |
 | `void ClearReceivedRequests()` | Forgets recorded requests and keeps the configuration |
 
 **Waiting** (the timeout defaults to 5 seconds; each method also takes an optional `CancellationToken`)
@@ -82,6 +105,7 @@ Returned by `Receive(...)`, `Disconnect()` and `NoReply()`.
 | `ThenNoReply()` | Next time: no reply |
 | `After(TimeSpan delay)` | Delays the previous response |
 | `AndDisconnect()` | Closes the connection after the previous response |
+| `GoTo(string state)` | Moves the [scenario](Stateful-Scenarios) to `state` once the previous response is used |
 
 The last response in a sequence repeats once the sequence ends.
 
@@ -116,13 +140,43 @@ The last response in a sequence repeats once the sequence ends.
 `Never()`, `Once()`, `AtLeastOnce()`, `Exactly(n)`, `AtLeast(n)`, `AtMost(n)`, `Between(min, max)`, plus `Matches(count)`, `Min` and `Max`.
 
 ## `Rony.Models.ReceivedRequest`
-`Body` (bytes), `BodyString` (UTF-8 text), `RemoteEndPoint`, `Timestamp`, `Matched`.
+`Body` (bytes), `BodyString` (UTF-8 text), `RemoteEndPoint`, `Timestamp`, `Matched`, `ConnectionId` (TCP).
+
+## `Rony.Models.ClientConnection`
+A TCP connection the server accepted; see [Connections and Push](Connections-and-Push).
+
+| Member | Description |
+|---|---|
+| `int Id` | 1, 2, ... in the order connections were accepted |
+| `EndPoint RemoteEndPoint` | The client's address |
+| `DateTimeOffset ConnectedAt`, `DateTimeOffset? ClosedAt` | When it was accepted and closed |
+| `bool IsOpen` | Whether it is still open |
+| `string State` | Its scenario state (`StateScope.Connection`), or the server-wide state |
+| `IReadOnlyList<ReceivedRequest> ReceivedRequests` | The requests received on it |
+| `Task SendAsync(string or byte[] message)` | Pushes a message, framed like a response |
+| `Task CloseAsync()` | Closes it from the server side |
+| `Task WaitForCloseAsync(TimeSpan? timeout)` | Waits until it is closed |
+
+## `Rony.Net.MockServerAssertions`
+Returned by `server.Should()`; every method returns the assertions again, and `And` reads well between them.
+`HaveReceived(request or predicate[, Times])`, `NotHaveReceived(...)`, `HaveReceivedInOrder(...)`,
+`HaveNoUnmatchedRequests()`, `HaveAcceptedConnections(Times)`, `BeInState(string)`.
+See [Fluent assertions](Verifying-Requests#fluent-assertions).
+
+## `Rony.Net.StateScope`
+`Server` (one scenario state for the server) or `Connection` (one per connection).
 
 ## `Rony.Models.Config`
 One exact-request configuration: `CallCount`, and `GetResponse(string or byte[])`, which returns the next response and moves the sequence forward.
 
-## `Rony.Interfaces.IListener`
-The transport contract; see [Custom Listeners](Custom-Listeners).
+## `Rony.Interfaces.IListener`, `Rony.Interfaces.IConnectionListener`
+The transport contract, and its extension for transports with connections; see [Custom Listeners](Custom-Listeners).
+`TcpServer` and `TcpServerSsl` implement `IConnectionListener`.
+
+## Test framework packages
+`Rony.Net.Xunit`, `Rony.Net.NUnit` and `Rony.Net.MSTest`: a `MockServerTest` base class (`Server`,
+`VerifyAllRequestsMatchedAfterTest`, `CreateListener()`) and `LogTo(...)` / `LogToTestContext()` extensions.
+See [Test Framework Integration](Test-Framework-Integration).
 
 ## `Rony.Models.Message`
 A request as delivered by a listener: `Body`, `BodyString`, `Sender`, `RemoteEndPoint`.
@@ -134,8 +188,9 @@ UTF-8 extension methods: `string.GetBytes()` and `byte[].GetString()`.
 
 | Exception | Thrown by |
 |---|---|
-| `MockVerificationException` | `Verify(...)`, `VerifyAllRequestsMatched()` |
-| `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)` |
-| `ArgumentException` | Configuring the same exact request twice; an empty delimiter |
-| `InvalidOperationException` | `Receive(...)` without `Send(...)`; a response too long for its length prefix |
+| `MockVerificationException` | `Verify...(...)`, `VerifyInOrder(...)`, `VerifyAllRequestsMatched()`, `VerifyConnections(...)`, `Should()` assertions; waits with `FailOnUnmatched` |
+| `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)`, `WaitForConnection(s)Async(...)`, `WaitForCloseAsync(...)` |
+| `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter |
+| `InvalidOperationException` | `Receive(...)` without `Send(...)`; a response too long for its length prefix; pushing to a closed connection |
+| `NotSupportedException` | Connection members on a listener without connections, such as `UdpServer` |
 | `ArgumentOutOfRangeException` | A negative delay or count; a length prefix other than 1, 2 or 4 |

@@ -158,4 +158,59 @@ public class VerificationSamples
         server.Mock.Verify("ping", Times.Never());
         Assert.Single(server.Mock.Configs);   // responses are kept
     }
+
+    [Fact]
+    public async Task Verify_the_order()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("").Receive("OK");
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+        {
+            foreach (var command in new[] { "LOGIN bob", "NOOP", "LIST", "QUIT" })
+                await client.SendAndReceiveAsync(command);
+        }
+
+        server.Mock.VerifyInOrder("LOGIN bob", "LIST", "QUIT");   // NOOP in between is fine
+        server.Mock.VerifyInOrder(r => r.BodyString.StartsWith("LOGIN"), r => r.BodyString == "QUIT");
+    }
+
+    [Fact]
+    public void A_wrong_order_explains_itself()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Match("LIST");
+        server.Mock.Match("LOGIN bob");
+
+        var error = Assert.Throws<MockVerificationException>(() => server.Mock.VerifyInOrder("LOGIN bob", "LIST"));
+
+        // Expected requests in order: "LOGIN bob", "LIST", but "LIST" was not received after "LOGIN bob".
+        // Received requests:
+        //   1. "LIST" (unmatched)
+        //   2. "LOGIN bob" (unmatched)
+        Assert.Contains("\"LIST\" was not received after \"LOGIN bob\"", error.Message);
+    }
+
+    [Fact]
+    public async Task Fluent_assertions()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("LOGIN bob").Receive("OK");
+        server.Mock.Send("LIST").Receive("a,b,c");
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+        {
+            await client.SendAndReceiveAsync("LOGIN bob");
+            await client.SendAndReceiveAsync("LIST");
+        }
+
+        server.Should().HaveReceived("LOGIN bob", Times.Once())
+            .And.HaveReceived("LIST")
+            .And.NotHaveReceived("DELETE")
+            .And.HaveReceivedInOrder("LOGIN bob", "LIST")
+            .And.HaveNoUnmatchedRequests()
+            .And.HaveAcceptedConnections(Times.Once());
+    }
 }

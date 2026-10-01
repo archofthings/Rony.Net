@@ -23,12 +23,16 @@ TCP doesn't keep message boundaries, so the client may receive two responses in 
 and read by message on the client: up to the delimiter, or by length.
 
 ### My client never gets a response
+- **Turn on the log first:** `server.Log = output.WriteLine;` (or `Console.WriteLine`). It shows every request, the
+  rule it matched, the response and any error. See [Logging and Diagnostics](Logging-and-Diagnostics).
 - Is the request matched? `server.Mock.UnmatchedRequests` lists requests without a response. Over TCP, an unmatched request closes the connection.
-- Did a `Receive(...)` function throw? The response is then empty, and over TCP nothing is sent.
+- Did a `Receive(...)` function throw? The response is then empty, and over TCP nothing is sent. The log shows the exception.
+- Is the request matched in the right [state](Stateful-Scenarios)? The log shows the state of every request.
 - Is a delimiter expected? With `MessageFraming.Delimiter`, it is appended to responses for you. Without framing, include it in the response yourself.
 - Was the server started? Call `server.Start()`.
 
 ### The TLS handshake fails
+The [log](Logging-and-Diagnostics) shows the server-side error, for example `connection from 127.0.0.1:50125 failed: AuthenticationException: ...`.
 - When you pass a certificate object, it must have a private key (`certificate.HasPrivateKey`). Certificates created
   in code need the export/re-import step shown in [SSL and TLS](SSL-and-TLS), especially on Windows.
 - When you pass a certificate *name*, a certificate with that subject name and a readable private key must exist in the
