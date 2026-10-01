@@ -22,19 +22,22 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Check the tag matches the package version
+      - name: Check the tag matches every package version
         run: |
-          version=$(grep -oP '(?<=<Version>)[^<]+' src/Rony/Rony.csproj)
-          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match package version $version" >&2
-            exit 1
-          fi
+          for project in src/*/*.csproj; do
+            version=$(grep -oP '(?<=<Version>)[^<]+' "$project")
+            if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match version $version of $project" >&2
+              exit 1
+            fi
+          done
 
       - name: Test
         run: dotnet test --configuration Release
 
       - name: Pack
-        run: dotnet pack src/Rony/Rony.csproj --configuration Release --output artifacts
+        # Rony.Net, Rony.Net.Xunit, Rony.Net.NUnit and Rony.Net.MSTest; test and sample projects are not packable
+        run: dotnet pack --configuration Release --output artifacts
 
       - name: Log in to NuGet (Trusted Publishing)
         id: nuget-login

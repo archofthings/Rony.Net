@@ -31,7 +31,7 @@ jobs:
 
       - name: Pack
         if: matrix.os == 'ubuntu-latest'
-        run: dotnet pack src/Rony/Rony.csproj --no-build --configuration Release --output artifacts
+        run: dotnet pack --no-build --configuration Release --output artifacts
 
       - uses: actions/upload-artifact@v4
         if: matrix.os == 'ubuntu-latest'
