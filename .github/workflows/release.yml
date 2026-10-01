@@ -1,13 +1,16 @@
 name: Release
 
 # Publishes to NuGet and creates a GitHub release when a version tag (for example v1.0.0) is pushed.
-# Requires a repository secret named NUGET_API_KEY.
+# Uses NuGet Trusted Publishing: no long-lived API key is stored. It needs
+#   - a Trusted Publishing policy on nuget.org for archofthings/Rony.Net and this file (release.yml)
+#   - a repository secret named NUGET_USER holding the nuget.org profile name (not the email address)
 on:
   push:
     tags: [ 'v*' ]
 
 permissions:
-  contents: write
+  contents: write   # create the GitHub release
+  id-token: write   # let NuGet/login exchange a GitHub OIDC token for a short-lived NuGet API key
 
 jobs:
   release:
@@ -33,8 +36,14 @@ jobs:
       - name: Pack
         run: dotnet pack src/Rony/Rony.csproj --configuration Release --output artifacts
 
+      - name: Log in to NuGet (Trusted Publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Publish to NuGet
-        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
