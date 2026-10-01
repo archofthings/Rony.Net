@@ -1,4 +1,4 @@
-﻿using Rony.Listeners;
+using Rony.Listeners;
 using Rony.Net;
 using System;
 using Xunit;
@@ -43,7 +43,7 @@ namespace Rony.Tests
         public void Server_Should_Be_Stop_After_Dispose()
         {
             //Arrange
-            using var server = new MockServer(new TcpServer(5001));
+            using var server = new MockServer(new TcpServer(5002));
 
             //Act
             server.Start();
@@ -63,14 +63,57 @@ namespace Rony.Tests
         public void Server_Should_Return_Error_On_Adding_Duplicate_Request()
         {
             //Arrange
-            var server = new MockServer(new TcpServer(3000));
+            using var server = new MockServer(new TcpServer(5003));
             var request = new byte[] { 1, 2, 3 };
 
             //Act
             server.Mock.Send(request).Receive(new byte[] { 3, 4, 5 });
             
             //Assert
-            Assert.Throws<ArgumentException>(()=>server.Mock.Send(request).Receive("test"));
+            Assert.Throws<ArgumentException>(() => server.Mock.Send(request).Receive("test"));
+        }
+
+        [Fact]
+        public void Server_Should_Ignore_Duplicate_Start_And_Stop()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(5004));
+
+            //Act
+            server.Start();
+            server.Start();
+
+            //Assert
+            Assert.True(server.Active);
+
+            //Act
+            server.Stop();
+            server.Stop();
+
+            //Assert
+            Assert.False(server.Active);
+        }
+
+        [Fact]
+        public void Server_Should_Be_Restartable()
+        {
+            //Arrange
+            using var server = new MockServer(new UdpServer(5005));
+
+            //Act
+            server.Start();
+            server.Stop();
+            server.Start();
+
+            //Assert
+            Assert.True(server.Active);
+        }
+
+        [Fact]
+        public void Constructor_Should_Throw_On_Null_Listener()
+        {
+            //Assert
+            Assert.Throws<ArgumentNullException>(() => new MockServer(null));
         }
     }
 }

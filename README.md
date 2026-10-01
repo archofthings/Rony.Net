@@ -9,12 +9,14 @@ When I was working on [Cimon.Net](https://github.com/MojtabaKiani/Cimon.Net) pro
 ## Install
 You can install `Rony.Net` with [NuGet Package Manager Console](https://www.nuget.org/packages/Rony.Net):
 ```console
-Install-Package Rony.Net -Version 0.1.2
+Install-Package Rony.Net
 ```
-Or via the .NET Core command-line interface:
+Or via the .NET command-line interface:
 ```console
-dotnet add package Rony.Net --version 0.1.2
-```    
+dotnet add package Rony.Net
+```
+The package targets `netstandard2.1` and `net8.0`, so it works with .NET Core 3.x and every later .NET version.
+
 ## Usage
 With Rony.Net you can create 3 types of Server :
 * TCP Server
@@ -24,17 +26,20 @@ With Rony.Net you can create 3 types of Server :
 You can create and run mock servers as below. Port, IP and other settings are configurable via constructors :
 ```csharp
 using var tcpServer = new MockServer(new TcpServer(3000));
-tcpSever.Start();
+tcpServer.Start();
 ```
 ```csharp
-using var tcpSslServer = new MockServer(new TcpServerSsl(4000, certificateName, SslProtocols.None));
+using var tcpSslServer = new MockServer(new TcpServerSsl(4000, certificate, SslProtocols.None));
 tcpSslServer.Start();
 ```
-*You must address a valid and installed `certificate` which you have read permission on its private key, and also you can set `SslProtocol` based on your requirements.*
+*`certificate` is an `X509Certificate` with a private key, for example one you load from a `.pfx` file or create on the fly
+(see `tests/Rony.FunctionalTests/TestCertificate.cs`). You can also pass the subject name of an installed certificate instead;
+it is looked up in the `CurrentUser` and `LocalMachine` "My" stores, and you need read permission on its private key.
+You can set `SslProtocols` based on your requirements; `SslProtocols.None` lets the operating system choose.*
 ```csharp
 using var udpServer = new MockServer(new UdpServer(5000));
+udpServer.Start();
 ```
-*Please pay attention that UDP server does not need to start, because of its nature.*
 
 Then you can use a normal client to connect and sending request to them, just like below :
 ```csharp
@@ -42,7 +47,7 @@ using var client = new TcpClient();
 await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), 3000);
 ```
 ```csharp
-var client = new UdpClient();
+using var client = new UdpClient();
 client.Connect(IPAddress.Parse("127.0.0.1"), 5000);
 ```
 
@@ -50,17 +55,30 @@ You can use `mockServer.Mock` to manage Send/Receive data, then server will retu
 ```csharp
 mockServer.Mock.Send("Test String").Receive("Test Response");
 mockServer.Mock.Send(new byte[] { 1, 2, 3 }).Receive(new byte[] { 3, 2, 1 });
-mockServer.Mock.Send("abcd").Receive(x=> x.ToUpper());
+mockServer.Mock.Send("abcd").Receive(x => x.ToUpper());
+mockServer.Mock.Send(new byte[] { 0xFF, 0x01 }).Receive(x => x.Reverse().ToArray());
 ```
-An important option in using `mockServer.Mock` is adding `Any` request to it, then it will reply to any unconfigured request base on this config (verion 0.1.1 and later), you can config
-server for this option by using an empty string in `Send()` method, just like below :
+Requests are matched on their exact bytes, so binary protocols work as well as text ones.
+
+An important option in using `mockServer.Mock` is adding `Any` request to it, then it will reply to any unconfigured request based on this config. You can configure
+the server for this option by using an empty string in `Send()` method, just like below :
 ```csharp
 mockServer.Mock.Send("").Receive("Test Response");
 ```
-You can use `mockServer.Mock` either before or after `mockServer.Run()`. For more details please check Test projects.
+A request with an exact match always wins over the `Any` config. If nothing matches, the server sends an empty response
+(TCP connections are closed without data). The same happens when a `Receive(...)` function throws.
+
+You can use `mockServer.Mock` either before or after `mockServer.Start()`, and from multiple threads. For more details please check Test projects.
 
 ## Compile
-You need at least Visual Studio 2019 (you can download the Community Edition for free).
+You need the [.NET 8 SDK](https://dotnet.microsoft.com/download) or later. Any editor works; Visual Studio 2022, Rider and VS Code are all fine.
+```console
+dotnet build
+```
 
 ## Running the tests
-All tests uses Xunit, for running TCP server with SSL/TLS, you should change `_certificateName` field to a certificate name on your machine. Please pay attention that you must have read permission on private key of certificate.
+All tests use xUnit:
+```console
+dotnet test
+```
+The SSL/TLS tests create a self-signed `localhost` certificate at runtime, so no certificate needs to be installed.

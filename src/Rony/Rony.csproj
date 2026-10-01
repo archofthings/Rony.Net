@@ -1,20 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
     <PackageId>Rony.Net</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <Authors>Mojtaba Kiani</Authors>
     <Product>Rony.Net</Product>
-    <Description>A simple TCP/UDP server for using in test projects which test .net core based projects.</Description>
+    <Description>A simple TCP/UDP mock server for using in test projects which test .NET based projects.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/MojtabaKiani/Rony.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/MojtabaKiani/Rony.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>csharp;mock;mock-server;tcp-mock-server;udp-mock-server;ssl;tcp;udp;xunit;unit-testing;functional-testing;clean-code;clean-architecture</PackageTags>
-    <PackageReleaseNotes>Changed server loginc for adding any request feature to it, and solve some minor bugs</PackageReleaseNotes>
+    <PackageReleaseNotes>Requests are matched on raw bytes (binary payloads no longer get corrupted), the server keeps running when a client misbehaves, TcpServerSsl accepts an X509Certificate directly, mock configuration is thread-safe, and the package targets netstandard2.1 and net8.0.</PackageReleaseNotes>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <NeutralLanguage>en</NeutralLanguage>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

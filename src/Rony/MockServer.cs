@@ -1,5 +1,6 @@
-﻿using Rony.Handlers;
+using Rony.Handlers;
 using Rony.Interfaces;
+using Rony.Models;
 using System;
 using System.Net;
 using System.Threading.Tasks;
@@ -9,8 +10,8 @@ namespace Rony.Net
     public class MockServer : IDisposable
     {
         private readonly IListener _listener;
-        private bool _listening = false;
-        private readonly object _syncRoot;
+        private readonly object _syncRoot = new object();
+        private volatile bool _listening;
 
         public IPAddress Address => _listener.Address;
         public int Port => _listener.Port;
@@ -19,33 +20,27 @@ namespace Rony.Net
 
         public MockServer(IListener listener)
         {
-            _syncRoot = new object();
+            _listener = listener ?? throw new ArgumentNullException(nameof(listener));
             Mock = new RequestHandler();
-            _listener = listener;
         }
+
         public void Start()
         {
             lock (_syncRoot)
             {
+                if (_listening) return;
                 _listener.Start();
                 _listening = true;
             }
 
-            Task.Factory.StartNew(async () =>
-            {
-                while (_listening)
-                {
-                    var received = await _listener.ReceiveAsync();
-                    var response = Mock.Match(received.BodyString);
-                    await _listener.ReplyAsync(response, received.Sender);
-                }
-            });
+            Task.Run(ListenAsync);
         }
+
         public void Stop()
         {
-            if (!_listening) return;
             lock (_syncRoot)
             {
+                if (!_listening) return;
                 _listening = false;
                 _listener.Stop();
             }
@@ -54,6 +49,44 @@ namespace Rony.Net
         public void Dispose()
         {
             Stop();
+            _listener.Dispose();
+        }
+
+        private async Task ListenAsync()
+        {
+            while (_listening)
+            {
+                Message received;
+                try
+                {
+                    received = await _listener.ReceiveAsync().ConfigureAwait(false);
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+                catch (Exception)
+                {
+                    // A single misbehaving client (aborted connection, failed TLS handshake, ...)
+                    // must not take the whole server down.
+                    continue;
+                }
+
+                _ = ReplyAsync(received);
+            }
+        }
+
+        private async Task ReplyAsync(Message received)
+        {
+            try
+            {
+                var response = Mock.Match(received.Body);
+                await _listener.ReplyAsync(response, received.Sender).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // The client may already be gone; nothing to do.
+            }
         }
     }
 }

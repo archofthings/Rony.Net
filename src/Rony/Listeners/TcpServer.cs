@@ -1,9 +1,9 @@
-﻿using Rony.Interfaces;
+using Rony.Interfaces;
 using Rony.Models;
 using Rony.Wrappers;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Rony.Listeners
@@ -23,7 +23,7 @@ namespace Rony.Listeners
             Port = port;
         }
 
-        public TcpServer(int port = 3000) : this(IPAddress.Parse("127.0.0.1"), port)
+        public TcpServer(int port = 3000) : this(IPAddress.Loopback, port)
         {
         }
 
@@ -33,32 +33,38 @@ namespace Rony.Listeners
 
         public async Task<Message> ReceiveAsync()
         {
-            var client = await _listener.AcceptTcpClientAsync();
-            var stream = client.GetStream();
-            if (!stream.CanRead) client.Close();
-            var buffer = new byte[client.ReceiveBufferSize];
-            var sb = new StringBuilder();
-            do
+            var client = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
+            try
             {
-                var readBytes = await stream.ReadAsync(buffer, 0, buffer.Length);
-                sb.Append(Encoding.UTF8.GetString(buffer, 0, readBytes));
-            } while (stream.DataAvailable); // Until stream data is available
+                var stream = client.GetStream();
+                var buffer = new byte[client.ReceiveBufferSize];
+                using var body = new MemoryStream();
+                do
+                {
+                    var readBytes = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    if (readBytes == 0) break;
+                    body.Write(buffer, 0, readBytes);
+                } while (stream.DataAvailable);
 
-            return new Message(sb.ToString(), stream);
+                return new Message(body.ToArray(), stream);
+            }
+            catch
+            {
+                client.Dispose();
+                throw;
+            }
         }
 
         public async Task ReplyAsync(string response, object sender)
         {
-            await ReplyAsync(response.GetBytes(), sender);
+            await ReplyAsync(response.GetBytes(), sender).ConfigureAwait(false);
         }
 
         public async Task ReplyAsync(byte[] response, object sender)
         {
-            var stream = (NetworkStream)sender;
+            using var stream = (NetworkStream)sender;
             if (response.Length > 0)
-                await stream.WriteAsync(response, 0, response.Length);
-            stream.Close();
-            stream.Dispose();
+                await stream.WriteAsync(response, 0, response.Length).ConfigureAwait(false);
         }
 
         public void Start()

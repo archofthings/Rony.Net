@@ -1,4 +1,4 @@
-﻿using Rony.Listeners;
+using Rony.Listeners;
 using System.Net;
 using Xunit;
 
@@ -46,7 +46,19 @@ namespace Rony.Tests.Listeners
         public void Active_Property_Should_Set_Correctly()
         {
             //Arrange
-            using var listener = new UdpServer(5000);
+            using var listener = new UdpServer(5012);
+
+            //Assert
+            Assert.False(listener.Active);
+
+            //Act
+            listener.Start();
+
+            //Assert
+            Assert.True(listener.Active);
+
+            //Act
+            listener.Stop();
 
             //Assert
             Assert.False(listener.Active);

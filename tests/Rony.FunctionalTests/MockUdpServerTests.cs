@@ -1,10 +1,11 @@
-﻿using Rony.Net;
+using Rony.Net;
 using Rony.Listeners;
 using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Rony.FunctionalTests
@@ -12,7 +13,7 @@ namespace Rony.FunctionalTests
     public class MockUdpServerTests
     {
         [Fact]
-        public async void Server_Should_Return_Correct_Response()
+        public async Task Server_Should_Return_Correct_Response()
         {
             //Arrange
             const int port = 3100;
@@ -38,7 +39,7 @@ namespace Rony.FunctionalTests
         [InlineData("12345")]
         [InlineData("****@#")]
         [InlineData("Match me too")]
-        public async void Server_Should_Return_Response_To_Any_Request_When_An_Empty_Request_Exists(string request)
+        public async Task Server_Should_Return_Response_To_Any_Request_When_An_Empty_Request_Exists(string request)
         {
             //Arrange
             const int port = 3101;
@@ -64,7 +65,7 @@ namespace Rony.FunctionalTests
         [InlineData("12345")]
         [InlineData("****@#")]
         [InlineData("Match me too")]
-        public async void Server_Should_Return_Nothing_When_No_Match_Exists(string request)
+        public async Task Server_Should_Return_Nothing_When_No_Match_Exists(string request)
         {
             //Arrange
             const int port = 3102;
@@ -86,7 +87,7 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
-        public async void Server_Should_Return_Correct_Response_On_Multiple_Requests()
+        public async Task Server_Should_Return_Correct_Response_On_Multiple_Requests()
         {
             //Arrange
             const int port = 3103;
@@ -109,7 +110,7 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
-        public async void Server_Should_Return_Correct_Response_On_Many_Request()
+        public async Task Server_Should_Return_Correct_Response_On_Many_Request()
         {
             //Arrange
             const int port = 3104;
@@ -135,33 +136,35 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
-        public void Server_Should_Return_Correct_Response_On_Multi_Thread_Request()
+        public async Task Server_Should_Return_Correct_Response_On_Multi_Thread_Request()
         {
-            //Arrange
-            for (int i = 0; i < 25; i++)
+            //Act
+            var tasks = new List<Task>();
+            for (int i = 0; i < 20; i++)
             {
-                ThreadPool.QueueUserWorkItem(new WaitCallback(ConnectServer), i.ToString());
+                var port = 4100 + i;
+                tasks.Add(Task.Run(() => ConnectServer(port)));
             }
 
-            //Act
-            async void ConnectServer(object input)
+            //Assert
+            await Task.WhenAll(tasks);
+
+            async Task ConnectServer(int port)
             {
-                var header = (string)input;
-                using var server = new MockServer(new UdpServer(int.Parse(header)));
-                for (int i = 0; i < 2000; i++)
+                var header = port.ToString();
+                using var server = new MockServer(new UdpServer(port));
+                for (int i = 0; i < 200; i++)
                     server.Mock.Send($"{header}-{i}").Receive($"{header}-{i + 10000}");
                 server.Start();
-                for (int i = 0; i < 2000; i++)
+                for (int i = 0; i < 200; i++)
                 {
-                    var client = new UdpClient();
-                    var endPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), int.Parse(header));
-                    var request = $"{header}-{i}".ToString().GetBytes();
-                    await client.SendAsync(request, request.Length, endPoint);
-                    var response = await client.ReceiveAsync();
-                    client.Close();
+                    using var client = new UdpClient();
+                    var request = $"{header}-{i}".GetBytes();
+                    await client.SendAsync(request, request.Length, new IPEndPoint(IPAddress.Loopback, port));
+                    var response = (await client.ReceiveAsync()).Buffer.GetString();
 
                     //Assert
-                    Assert.Equal($"{header}-{i + 10000}", response.Buffer.GetString());
+                    Assert.Equal($"{header}-{i + 10000}", response);
                 }
                 server.Stop();
             }
@@ -172,7 +175,7 @@ namespace Rony.FunctionalTests
         [InlineData("0123456789", "026")]
         [InlineData("Try Me too", "Ty ")]
         [InlineData("@762Rt%", "@6%")]
-        public async void Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_Byte(string request, string expected)
+        public async Task Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_Byte(string request, string expected)
         {
             //Arrange
             const int port = 3105;
@@ -198,7 +201,7 @@ namespace Rony.FunctionalTests
         [InlineData("0123456789", "0123")]
         [InlineData("Try Me too", "TRY ")]
         [InlineData("@762Rt%", "@762")]
-        public async void Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_String(string request, string expected)
+        public async Task Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_String(string request, string expected)
         {
             //Arrange
             const int port = 3106;

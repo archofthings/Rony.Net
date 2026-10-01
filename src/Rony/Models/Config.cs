@@ -1,45 +1,52 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System;
 
 namespace Rony.Models
 {
     public class Config
     {
+        private readonly byte[] _response;
+        private readonly Func<string, string> _stringFunc;
+        private readonly Func<byte[], byte[]> _byteFunc;
 
-        public Config(string response)
+        public Config(string response) : this((response ?? string.Empty).GetBytes())
         {
-            Response = response;
         }
+
+        public Config(byte[] response)
+        {
+            _response = response ?? new byte[0];
+        }
+
         public Config(Func<string, string> stringFunc)
         {
-            StringFunc = stringFunc;
+            _stringFunc = stringFunc ?? throw new ArgumentNullException(nameof(stringFunc));
         }
 
         public Config(Func<byte[], byte[]> byteFunc)
         {
-            ByteFunc = byteFunc;
+            _byteFunc = byteFunc ?? throw new ArgumentNullException(nameof(byteFunc));
         }
-
-        private string Response { get; set; }
-        private Func<string, string> StringFunc { get; set; } = null;
-        private Func<byte[], byte[]> ByteFunc { get; set; } = null;
 
         public byte[] GetResponse(string request)
         {
+            return GetResponse((request ?? string.Empty).GetBytes());
+        }
+
+        /// <summary>
+        /// Builds the response for a request. If a configured function throws, an empty response is returned.
+        /// </summary>
+        public byte[] GetResponse(byte[] request)
+        {
             try
             {
-                if (StringFunc != null) return StringFunc(request).GetBytes();
-                if (ByteFunc != null) return ByteFunc(request.GetBytes());
-                return Response.GetBytes();
+                if (_stringFunc != null) return (_stringFunc(request.GetString()) ?? string.Empty).GetBytes();
+                if (_byteFunc != null) return _byteFunc(request) ?? new byte[0];
+                return _response;
             }
             catch (Exception)
             {
+                return new byte[0];
             }
-
-            return new byte[] { };
         }
     }
 }
