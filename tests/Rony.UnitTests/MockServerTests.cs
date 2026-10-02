@@ -24,7 +24,7 @@ namespace Rony.Tests
         public void Active_Property_Should_Set_Correctly()
         {
             //Arrange
-            using var server = new MockServer(new TcpServer(5001));
+            using var server = new MockServer(new TcpServer(0));
 
             //Act
             server.Start();
@@ -43,7 +43,7 @@ namespace Rony.Tests
         public void Server_Should_Be_Stop_After_Dispose()
         {
             //Arrange
-            using var server = new MockServer(new TcpServer(5002));
+            using var server = new MockServer(new TcpServer(0));
 
             //Act
             server.Start();
@@ -77,7 +77,7 @@ namespace Rony.Tests
         public void Server_Should_Ignore_Duplicate_Start_And_Stop()
         {
             //Arrange
-            using var server = new MockServer(new TcpServer(5004));
+            using var server = new MockServer(new TcpServer(0));
 
             //Act
             server.Start();
@@ -98,7 +98,7 @@ namespace Rony.Tests
         public void Server_Should_Be_Restartable()
         {
             //Arrange
-            using var server = new MockServer(new UdpServer(5005));
+            using var server = new MockServer(new UdpServer(0));
 
             //Act
             server.Start();

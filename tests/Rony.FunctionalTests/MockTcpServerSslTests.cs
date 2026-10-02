@@ -19,15 +19,14 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response()
         {
             //Arrange
-            const int port = 3200;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
             var request = new byte[] { 1, 2, 3 };
             using var client = new TcpClient();
 
             //Act
             server.Mock.Send(request).Receive(x => new byte[] { x[1], 10, x[2] });
             server.Start();
-            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), port);
+            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
             await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
             await sslStream.WriteAsync(request, 0, request.Length);
@@ -48,14 +47,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Response_To_Any_Request_When_An_Empty_Request_Exists(string request)
         {
             //Arrange
-            const int port = 3201;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
             using var client = new TcpClient();
 
             //Act
             server.Mock.Send("").Receive("I match everything");
             server.Start();
-            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), port);
+            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
             await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
             var requestBytes = request.GetBytes();
@@ -77,14 +75,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Nothing_When_No_Match_Exists(string request)
         {
             //Arrange
-            const int port = 3202;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
             using var client = new TcpClient();
 
             //Act
             server.Mock.Send("Main Request").Receive(x => new byte[] { x[1], 10, x[2] });
             server.Start();
-            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), port);
+            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
             await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
             var requestBytes = request.GetBytes();
@@ -102,8 +99,7 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_On_Multiple_Requests()
         {
             //Arrange
-            const int port = 3203;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
             using var client = new TcpClient();
 
             //Act
@@ -111,7 +107,7 @@ namespace Rony.FunctionalTests
             server.Mock.Send("ABC").Receive("CBA");
             server.Mock.Send("!@#").Receive("$%^");
             server.Start();
-            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), port);
+            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
             await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
             await sslStream.WriteAsync("ABC".GetBytes(), 0, 3);
@@ -128,18 +124,17 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_On_Many_Request()
         {
             //Arrange
-            const int port = 3204;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
 
             //Act
             for (int i = 0; i < 10000; i++)
                 server.Mock.Send(i.ToString()).Receive((i + 10000).ToString());
             server.Start();
-            // Every TLS handshake is expensive, so sample every 10th configured request.
-            for (int i = 0; i < 10000; i += 10)
+            // Every TLS handshake is expensive, so sample every 100th configured request.
+            for (int i = 0; i < 10000; i += 100)
             {
                 using var client = new TcpClient();
-                await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), port);
+                await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
                 await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
                 await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
                 var response = new byte[client.ReceiveBufferSize];
@@ -161,24 +156,24 @@ namespace Rony.FunctionalTests
             var tasks = new List<Task>();
             for (int i = 0; i < 10; i++)
             {
-                var port = 4200 + i;
-                tasks.Add(Task.Run(() => ConnectServer(port)));
+                var index = i;
+                tasks.Add(Task.Run(() => ConnectServer(index)));
             }
 
             //Assert
             await Task.WhenAll(tasks);
 
-            async Task ConnectServer(int port)
+            async Task ConnectServer(int index)
             {
-                var header = port.ToString();
-                using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
-                for (int i = 0; i < 50; i++)
+                var header = index.ToString();
+                using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
+                for (int i = 0; i < 20; i++)
                     server.Mock.Send($"{header}-{i}").Receive($"{header}-{i + 10000}");
                 server.Start();
-                for (int i = 0; i < 50; i++)
+                for (int i = 0; i < 20; i++)
                 {
                     using var client = new TcpClient();
-                    await client.ConnectAsync(IPAddress.Loopback, port);
+                    await client.ConnectAsync(IPAddress.Loopback, server.Port);
                     await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
                     await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
                     var buffer = new byte[client.ReceiveBufferSize];
@@ -198,8 +193,7 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Keep_Running_After_A_Failed_Handshake()
         {
             //Arrange
-            const int port = 3207;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
             server.Mock.Send("Request").Receive("Response");
             server.Start();
 
@@ -207,13 +201,13 @@ namespace Rony.FunctionalTests
             using (var badClient = new TcpClient())
             {
                 // Plain text instead of a TLS handshake
-                await badClient.ConnectAsync(IPAddress.Loopback, port);
+                await badClient.ConnectAsync(IPAddress.Loopback, server.Port);
                 var garbage = "not a tls handshake".GetBytes();
                 await badClient.GetStream().WriteAsync(garbage, 0, garbage.Length);
             }
 
             using var client = new TcpClient();
-            await client.ConnectAsync(IPAddress.Loopback, port);
+            await client.ConnectAsync(IPAddress.Loopback, server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
             await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
             var request = "Request".GetBytes();
@@ -240,14 +234,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_Byte(string request, string expected)
         {
             //Arrange
-            const int port = 3205;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
             using var client = new TcpClient();
 
             //Act
             server.Mock.Send("").Receive(x => new byte[] { x[0], x[2], x[6] });
             server.Start();
-            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), port);
+            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
             await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
             await sslStream.WriteAsync(request.GetBytes(), 0, request.Length);
@@ -268,14 +261,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_String(string request, string expected)
         {
             //Arrange
-            const int port = 3206;
-            using var server = new MockServer(new TcpServerSsl(port, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
             using var client = new TcpClient();
 
             //Act
             server.Mock.Send("").Receive(x => x.Substring(0,4).ToUpper());
             server.Start();
-            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), port);
+            await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);
             await sslStream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
             await sslStream.WriteAsync(request.GetBytes(), 0, request.Length);

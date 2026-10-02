@@ -126,7 +126,6 @@ public class VerificationSamples
         // Imagine this is your code sending a heartbeat in the background.
         _ = Task.Run(async () =>
         {
-            await Task.Delay(200);
             using var udp = new System.Net.Sockets.UdpClient();
             var data = "HEARTBEAT".GetBytes();
             await udp.SendAsync(data, data.Length, new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, server.Port));

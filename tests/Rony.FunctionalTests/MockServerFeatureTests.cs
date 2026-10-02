@@ -136,6 +136,7 @@ namespace Rony.FunctionalTests
 
             //Act
             await WriteAsync(stream, "one\ntwo\nthr");
+            // The delay is the point of this test: the framed message must arrive in two separate reads.
             await Task.Delay(50);
             await WriteAsync(stream, "ee\n");
             var responses = await ReadExactlyAsync(stream, 6);

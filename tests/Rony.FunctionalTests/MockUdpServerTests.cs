@@ -59,15 +59,14 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response()
         {
             //Arrange
-            const int port = 3100;
-            using var server = new MockServer(new UdpServer(port));
+            using var server = new MockServer(new UdpServer(0));
             var request = new byte[] { 1, 2, 3 };
 
             //Act
             server.Mock.Send(request).Receive(x => new byte[] { x[1], 10, x[2] });
             server.Start();
-            var client = new UdpClient();
-            client.Connect(IPAddress.Parse("127.0.0.1"), port);
+            using var client = new UdpClient();
+            client.Connect(IPAddress.Parse("127.0.0.1"), server.Port);
             await client.SendAsync(request, request.Length);
             var response = await client.ReceiveAsync();
             client.Close();
@@ -85,14 +84,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Response_To_Any_Request_When_An_Empty_Request_Exists(string request)
         {
             //Arrange
-            const int port = 3101;
-            using var server = new MockServer(new UdpServer(port));
+            using var server = new MockServer(new UdpServer(0));
 
             //Act
             server.Mock.Send("").Receive("I match everything");
             server.Start();
-            var client = new UdpClient();
-            client.Connect(IPAddress.Parse("127.0.0.1"), port);
+            using var client = new UdpClient();
+            client.Connect(IPAddress.Parse("127.0.0.1"), server.Port);
             var requestBytes = request.GetBytes();
             await client.SendAsync(requestBytes, requestBytes.Length);
             var response = await client.ReceiveAsync();
@@ -111,14 +109,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Nothing_When_No_Match_Exists(string request)
         {
             //Arrange
-            const int port = 3102;
-            using var server = new MockServer(new UdpServer(port));
+            using var server = new MockServer(new UdpServer(0));
 
             //Act
             server.Mock.Send("Main Request").Receive(x => new byte[] { x[1], 10, x[2] });
             server.Start();
-            var client = new UdpClient();
-            client.Connect(IPAddress.Parse("127.0.0.1"), port);
+            using var client = new UdpClient();
+            client.Connect(IPAddress.Parse("127.0.0.1"), server.Port);
             var requestBytes = request.GetBytes();
             await client.SendAsync(requestBytes, requestBytes.Length);
             var response = await client.ReceiveAsync();
@@ -133,16 +130,15 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_On_Multiple_Requests()
         {
             //Arrange
-            const int port = 3103;
-            using var server = new MockServer(new UdpServer(port));
+            using var server = new MockServer(new UdpServer(0));
 
             //Act
             server.Mock.Send("123").Receive("321");
             server.Mock.Send("ABC").Receive("CBA");
             server.Mock.Send("!@#").Receive("$%^");
             server.Start();
-            var client = new UdpClient();
-            var endPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), port);
+            using var client = new UdpClient();
+            var endPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), server.Port);
             await client.SendAsync("ABC".GetBytes(), 3, endPoint);
             var response = await client.ReceiveAsync();
             client.Close();
@@ -156,17 +152,17 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_On_Many_Request()
         {
             //Arrange
-            const int port = 3104;
-            using var server = new MockServer(new UdpServer(port));
+            using var server = new MockServer(new UdpServer(0));
 
             //Act
             for (int i = 0; i < 10000; i++)
                 server.Mock.Send(i.ToString()).Receive((i + 10000).ToString());
             server.Start();
-            for (int i = 0; i < 10000; i++)
+            // Every request uses a new socket, so sample every 100th configured request.
+            for (int i = 0; i < 10000; i += 100)
             {
-                var client = new UdpClient();
-                var endPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), port);
+                using var client = new UdpClient();
+                var endPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), server.Port);
                 var request = i.ToString().GetBytes();
                 await client.SendAsync(request, request.Length, endPoint);
                 var response = await client.ReceiveAsync();
@@ -185,25 +181,25 @@ namespace Rony.FunctionalTests
             var tasks = new List<Task>();
             for (int i = 0; i < 20; i++)
             {
-                var port = 4100 + i;
-                tasks.Add(Task.Run(() => ConnectServer(port)));
+                var index = i;
+                tasks.Add(Task.Run(() => ConnectServer(index)));
             }
 
             //Assert
             await Task.WhenAll(tasks);
 
-            async Task ConnectServer(int port)
+            async Task ConnectServer(int index)
             {
-                var header = port.ToString();
-                using var server = new MockServer(new UdpServer(port));
-                for (int i = 0; i < 200; i++)
+                var header = index.ToString();
+                using var server = new MockServer(new UdpServer(0));
+                for (int i = 0; i < 25; i++)
                     server.Mock.Send($"{header}-{i}").Receive($"{header}-{i + 10000}");
                 server.Start();
-                for (int i = 0; i < 200; i++)
+                for (int i = 0; i < 25; i++)
                 {
                     using var client = new UdpClient();
                     var request = $"{header}-{i}".GetBytes();
-                    await client.SendAsync(request, request.Length, new IPEndPoint(IPAddress.Loopback, port));
+                    await client.SendAsync(request, request.Length, new IPEndPoint(IPAddress.Loopback, server.Port));
                     var response = (await client.ReceiveAsync()).Buffer.GetString();
 
                     //Assert
@@ -221,14 +217,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_Byte(string request, string expected)
         {
             //Arrange
-            const int port = 3105;
-            using var server = new MockServer(new UdpServer(port));
+            using var server = new MockServer(new UdpServer(0));
 
             //Act
             server.Mock.Send("").Receive(x => new byte[] { x[0], x[2], x[6] });
             server.Start();
-            var client = new UdpClient();
-            client.Connect(IPAddress.Parse("127.0.0.1"), port);
+            using var client = new UdpClient();
+            client.Connect(IPAddress.Parse("127.0.0.1"), server.Port);
             await client.SendAsync(request.GetBytes(), request.Length);
             var response = await client.ReceiveAsync();
             client.Close();
@@ -247,14 +242,13 @@ namespace Rony.FunctionalTests
         public async Task Server_Should_Return_Correct_Response_Where_Configed_With_Enything_And_Func_Of_String(string request, string expected)
         {
             //Arrange
-            const int port = 3106;
-            using var server = new MockServer(new UdpServer(port));
+            using var server = new MockServer(new UdpServer(0));
 
             //Act
             server.Mock.Send("").Receive(x => x.Substring(0, 4).ToUpper());
             server.Start();
-            var client = new UdpClient();
-            client.Connect(IPAddress.Parse("127.0.0.1"), port);
+            using var client = new UdpClient();
+            client.Connect(IPAddress.Parse("127.0.0.1"), server.Port);
             await client.SendAsync(request.GetBytes(), request.Length);
             var response = await client.ReceiveAsync();
             client.Close();

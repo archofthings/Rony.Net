@@ -396,7 +396,16 @@ namespace Rony.FunctionalTests
         {
             //Arrange
             var log = new ConcurrentQueue<string>();
-            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None)) { Log = log.Enqueue };
+            var failed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None))
+            {
+                Log = line =>
+                {
+                    log.Enqueue(line);
+                    if (line.Contains("failed"))
+                        failed.TrySetResult(true);
+                }
+            };
             server.Start();
 
             //Act: speak plain text to a TLS server
@@ -407,9 +416,7 @@ namespace Rony.FunctionalTests
             }
 
             //Assert
-            var deadline = DateTime.UtcNow + Timeout;
-            while (!log.Any(l => l.Contains("failed")) && DateTime.UtcNow < deadline)
-                await Task.Delay(20);
+            await failed.Task.WaitAsync(Timeout);
             Assert.Contains(log, l => l.Contains("connection from 127.0.0.1:") && l.Contains("failed"));
         }
 
