@@ -115,8 +115,9 @@ namespace Rony.Handlers
         }
 
         /// <summary>
-        /// Sends the previous response at about <paramref name="bytesPerSecond"/>: about ten pieces a second (one byte at a time
-        /// for rates under 10 bytes per second), as with <see cref="InChunks"/>. The last call of <c>Throttled</c> or
+        /// Sends the previous response at about <paramref name="bytesPerSecond"/>: about ten pieces a second, each
+        /// <c>bytesPerSecond / 10</c> bytes rounded down (one byte at a time for rates under 10 bytes per second), so a rate that
+        /// is not a multiple of 10 comes out a little lower. Otherwise as with <see cref="InChunks"/>. The last call of <c>Throttled</c> or
         /// <c>InChunks</c> on a step wins. A listener that cannot send in chunks (UDP) sends the response whole. TCP only.
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="bytesPerSecond"/> is zero or negative.</exception>

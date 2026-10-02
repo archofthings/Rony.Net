@@ -40,7 +40,7 @@ namespace Rony.Net.Xunit.V3.Tests
         {
             //Arrange
             var output = new RecordingOutput();
-            var test = new SampleTest(output);
+            using var test = new SampleTest(output);
             test.Mock.Send("PING").Receive("PONG");
 
             //Act
@@ -50,7 +50,6 @@ namespace Rony.Net.Xunit.V3.Tests
             //Assert
             Assert.Contains(output.Lines, l => l.Contains("listening on 127.0.0.1"));
             Assert.Contains(output.Lines, l => l.Contains("received \"PING\""));
-            test.Dispose();
         }
 
         [Fact]
@@ -96,12 +95,11 @@ namespace Rony.Net.Xunit.V3.Tests
         public void CreateListener_Should_Choose_The_Transport()
         {
             //Arrange
-            var test = new UdpTest(new RecordingOutput());
+            using var test = new UdpTest(new RecordingOutput());
 
             //Act & Assert
             Assert.True(test.Exposed.Active);
             Assert.Throws<NotSupportedException>(() => test.Exposed.VerifyConnections(Times.Never()));
-            test.Dispose();
         }
 
         [Fact]

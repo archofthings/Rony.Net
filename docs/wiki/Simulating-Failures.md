@@ -54,7 +54,8 @@ A real server often sends a large response in pieces over a long time. `.InChunk
 response, **as it goes on the wire** (after [framing](Connections-and-Framing) and any `Truncated`/`Corrupted`), in
 pieces of `chunkSize` bytes (the last may be shorter) and waits `delay` between the pieces, not before the first and not
 after the last. `.Throttled(bytesPerSecond)` does the same at about that rate: ten pieces a second, or one byte at a
-time for rates under 10 bytes per second.
+time for rates under 10 bytes per second. The rate is approximate: each piece is `bytesPerSecond / 10` bytes rounded
+down, so a rate that is not a multiple of 10 comes out a little lower.
 
 ```csharp
 using var server = new MockServer(new TcpServer(0));
@@ -90,6 +91,7 @@ Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(150));
   until the last piece is written, so it never lands in the middle of the response.
 - `server.Stop()` ends a slow response at once; if the client disconnects part-way, the failure is logged like any
   failed response.
+- A connection used for a chunked response keeps `NoDelay` on afterwards, so small pieces are not held back.
 - Calling `InChunks` and `Throttled` on the same step (or one of them twice): the last call wins.
 - They work for `OnConnect()` greetings and `OnUnmatched()`, throw `ArgumentOutOfRangeException` for a chunk size or
   rate that is not positive (or a negative delay), and `InvalidOperationException` after `Disconnect()`, `NoReply()` or
@@ -217,13 +219,15 @@ send nothing. The [log](Logging-and-Diagnostics) shows what was really sent, for
 
 ## Refusing connections
 `server.RefuseConnections()` closes the listening socket: a client that tries to connect gets "connection refused".
-Connections that are already open keep working. `server.AcceptConnections()` listens again on the same port. While connections are refused the port is free, so another process could take it; then `AcceptConnections()` throws a `SocketException`.
+Connections the server has already accepted keep working; a client that has only just connected may not be accepted yet
+and is then reset, so wait with `WaitForConnectionAsync()` before refusing. `server.AcceptConnections()` listens again on the same port. While connections are refused the port is free, so another process could take it; then `AcceptConnections()` throws a `SocketException`.
 
 ```csharp
 using var server = new MockServer(new TcpServer(0));
 server.Mock.Send("ping").Receive("pong");
 server.Start();
 using var open = await TcpTestClient.ConnectAsync(server.Port);
+await server.WaitForConnectionAsync();   // the server has accepted it, so it stays open
 
 server.RefuseConnections();
 var refused = await Assert.ThrowsAsync<SocketException>(() => TcpTestClient.ConnectAsync(server.Port));

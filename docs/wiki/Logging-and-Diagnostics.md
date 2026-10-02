@@ -61,6 +61,8 @@ server.Mock.Send("PRICE ACME").Receive(text => decimal.Parse(text.Split(' ')[2])
   `ITestOutputHelper`, NUnit's `TestContext.Out`, MSTest's `TestContext` and `Console` handle that.
 - Exceptions thrown by the callback are ignored. xUnit, for example, throws when you write after the test finished,
   and that must not break the server.
+- The callback can be called while the server holds an internal lock (during `Start()`, `Stop()`, `RefuseConnections()` and
+  `AcceptConnections()`), so it must not wait for another thread that is calling one of them.
 - To keep the lines, collect them: `server.Log = line => { lock (lines) lines.Add(line); };`
 
 Runnable code: [`LoggingSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/LoggingSamples.cs)

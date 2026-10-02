@@ -136,7 +136,11 @@ namespace Rony.Listeners
                 // Never block while holding the lock, e.g. when the loop takes the last pending connection first.
                 listener.Server.Blocking = false;
                 while (listener.Pending())
-                    Track(ReadConnectionAsync(listener.AcceptTcpClient(), messages, cancellationToken), cancellationToken);
+                {
+                    // Read off the caller's stack: connection events and user callbacks must not run under the lock.
+                    var client = listener.AcceptTcpClient();
+                    Track(Task.Run(() => ReadConnectionAsync(client, messages, cancellationToken)), cancellationToken);
+                }
             }
             catch (SocketException)
             {
@@ -183,6 +187,8 @@ namespace Rony.Listeners
         public Task SendRawAsync(byte[] data, object sender, int chunkSize, TimeSpan delay, CancellationToken cancellationToken)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
+            if (chunkSize <= 0) throw new ArgumentOutOfRangeException(nameof(chunkSize), "The chunk size must be greater than zero.");
+            if (delay < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(delay), "The delay must not be negative.");
             var connection = (TcpConnection)sender;
             if (connection.IsClosed) throw new InvalidOperationException("The connection is closed.");
             return data.Length == 0 ? Task.CompletedTask : connection.WriteAsync(data, chunkSize, delay, cancellationToken);

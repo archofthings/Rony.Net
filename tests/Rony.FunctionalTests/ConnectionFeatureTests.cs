@@ -463,7 +463,7 @@ namespace Rony.FunctionalTests
             var firstConnection = await server.WaitForConnectionAsync();
             await first.SendAsync("LOGIN bob");
             await first.SendAsync("LIST");
-            var second = await LineClient.ConnectAsync(server.Port);
+            using var second = await LineClient.ConnectAsync(server.Port);
             var secondConnection = (await server.WaitForConnectionsAsync(2))[1];
             await second.SendAsync("QUIT");
             await server.Mock.WaitForRequestsAsync(3);
@@ -492,7 +492,7 @@ namespace Rony.FunctionalTests
             using var server = LineServer();
             await server.WaitForAllConnectionsClosedAsync();
             server.Should().HaveNoOpenConnections();
-            var client = await LineClient.ConnectAsync(server.Port);
+            using var client = await LineClient.ConnectAsync(server.Port);
             await server.WaitForConnectionAsync();
 
             //Act & Assert

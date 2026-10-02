@@ -151,7 +151,7 @@ public interface IFaultInjectionListener : IConnectionListener
 ```
 
 To truncate or corrupt a response, the server asks for `Frame(response)`, changes the bytes and sends them with
-`SendRawAsync`; it then finishes the request with `ReplyAsync(empty, sender)`, as for any reply. Without the interface,
+`SendRawAsync`; it then finishes the request with `ReplyAsync(empty, sender)`, as for any reply, so your `ReplyAsync` must write nothing for an empty response. Without the interface,
 a reset closes the connection like `Disconnect()`, `Truncated` and `Corrupted` send the response unmodified, `InChunks` and `Throttled` send it whole, and
 `RefuseConnections()` throws `NotSupportedException`:
 

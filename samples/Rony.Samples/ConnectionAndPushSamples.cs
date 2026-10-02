@@ -89,7 +89,7 @@ public class ConnectionAndPushSamples
         server.Mock.Send("BYE").Receive("ok");
         server.Start();
 
-        var client = await TcpTestClient.ConnectAsync(server.Port);
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
         await client.SendAndReceiveAsync("BYE");
         client.Dispose();   // the code under test should do this
 
@@ -106,7 +106,7 @@ public class ConnectionAndPushSamples
         server.Mock.Send("BYE").Receive("ok");
         server.Start();
 
-        var client = await TcpTestClient.ConnectAsync(server.Port);
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
         await client.SendAndReceiveAsync("BYE");
         client.Dispose();   // the code under test should do this
 

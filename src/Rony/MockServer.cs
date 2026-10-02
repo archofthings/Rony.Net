@@ -35,6 +35,7 @@ namespace Rony.Net
         private readonly IConnectionListener _connectionListener;
         private readonly IFaultInjectionListener _faultListener;
         private readonly object _syncRoot = new object();
+        private bool _refusingConnections;
         private readonly Dictionary<object, Task> _conversations = new Dictionary<object, Task>();
         private readonly Journal<ClientConnection> _connections = new Journal<ClientConnection>();
         private readonly ConcurrentDictionary<object, ClientConnection> _connectionsBySender = new ConcurrentDictionary<object, ClientConnection>();
@@ -137,6 +138,7 @@ namespace Rony.Net
                 if (_cancellation == null) return;
                 _cancellation.Cancel();
                 _cancellation = null;
+                _refusingConnections = false;
                 _listener.Stop();
 
                 // Logged inside the lock, so StopAsync cannot complete before this line is written.
@@ -180,8 +182,9 @@ namespace Rony.Net
         }
 
         /// <summary>
-        /// Makes new clients fail to connect ("connection refused") while the connections that are already open keep
-        /// working. <see cref="Active"/> and <see cref="Port"/> are unchanged. Does nothing when already refusing; call
+        /// Makes new clients fail to connect ("connection refused") while the connections the server has accepted keep
+        /// working. A client that has only just connected may not be accepted yet and is then reset, so wait with
+        /// <see cref="WaitForConnectionAsync"/> before refusing. <see cref="Active"/> and <see cref="Port"/> are unchanged. Does nothing when already refusing; call
         /// <see cref="AcceptConnections"/> to listen again. <see cref="Stop"/> clears it.
         /// </summary>
         /// <exception cref="InvalidOperationException">The server is not started.</exception>
@@ -192,7 +195,8 @@ namespace Rony.Net
             lock (_syncRoot)
             {
                 _faultListener.RefuseConnections();
-                Trace("refusing connections");
+                if (!_refusingConnections) Trace("refusing connections");
+                _refusingConnections = true;
             }
         }
 
@@ -207,7 +211,8 @@ namespace Rony.Net
             lock (_syncRoot)
             {
                 _faultListener.AcceptConnections();
-                Trace("accepting connections");
+                if (_refusingConnections) Trace("accepting connections");
+                _refusingConnections = false;
             }
         }
 
@@ -567,7 +572,7 @@ namespace Rony.Net
                             var chunkNote = string.Empty;
                             if (chunked)
                             {
-                                var count = (sent.Length + chunking.Size - 1) / chunking.Size;
+                                var count = ((long)sent.Length + chunking.Size - 1) / chunking.Size;
                                 chunkNote = (tags.Length > 0 ? string.Empty : $"{sent.Length} bytes ") +
                                             $"in {count} chunk{(count == 1 ? string.Empty : "s")} of {chunking.Size} byte{(chunking.Size == 1 ? string.Empty : "s")}, " +
                                             $"{chunking.Delay.TotalMilliseconds:0} ms apart" +

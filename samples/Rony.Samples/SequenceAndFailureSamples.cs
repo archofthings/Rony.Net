@@ -235,6 +235,7 @@ public class SequenceAndFailureSamples
         server.Mock.Send("ping").Receive("pong");
         server.Start();
         using var open = await TcpTestClient.ConnectAsync(server.Port);
+        await server.WaitForConnectionAsync();   // the server has accepted it, so it stays open
 
         server.RefuseConnections();
         var refused = await Assert.ThrowsAsync<SocketException>(() => TcpTestClient.ConnectAsync(server.Port));
