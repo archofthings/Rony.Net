@@ -1,3 +1,4 @@
+using Rony.Handlers;
 using Rony.Models;
 using System;
 
@@ -88,6 +89,21 @@ namespace Rony.Net
         {
             _server.VerifyConnections(times);
             return this;
+        }
+
+        /// <summary>
+        /// No accepted connection is open right now. Checks immediately: when clients may still be disconnecting,
+        /// <c>await server.WaitForAllConnectionsClosedAsync()</c> first. TCP only.
+        /// </summary>
+        public MockServerAssertions HaveNoOpenConnections()
+        {
+            _server.RequireConnections();
+            var open = _server.OpenConnections;
+            if (open.Count == 0) return this;
+            throw new MockVerificationException(
+                $"Expected no open connections, but {open.Count} {(open.Count == 1 ? "is" : "are")} open." + Environment.NewLine +
+                RequestJournal.Describe(open) + Environment.NewLine +
+                "If clients are still disconnecting, await server.WaitForAllConnectionsClosedAsync() first.");
         }
 
         /// <summary>The server-wide scenario state is <paramref name="state"/>. See <c>Mock.InState(...)</c>.</summary>

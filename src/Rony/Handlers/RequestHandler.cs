@@ -346,6 +346,17 @@ namespace Rony.Handlers
             Verify(r => ByteArrayComparer.Instance.Equals(r.Body, expected), times, $"request {ByteFormatter.Describe(expected)}");
         }
 
+        /// <summary>Like <see cref="Verify(byte[], Times)"/>, counting only the requests received on one connection.</summary>
+        internal void VerifyOnConnection(int connectionId, byte[] request, Times times)
+        {
+            var expected = request ?? AnyRequest;
+            Verify(r => ByteArrayComparer.Instance.Equals(r.Body, expected), times, $"request {ByteFormatter.Describe(expected)}", connectionId);
+        }
+
+        /// <summary>Like <see cref="Verify(Func{ReceivedRequest, bool}, Times)"/>, counting only the requests received on one connection.</summary>
+        internal void VerifyOnConnection(int connectionId, Func<ReceivedRequest, bool> predicate, Times times) =>
+            Verify(predicate ?? throw new ArgumentNullException(nameof(predicate)), times, "a request matching the predicate", connectionId);
+
         /// <summary>Verifies a request satisfying <paramref name="predicate"/> was received at least once.</summary>
         public void Verify(Func<ReceivedRequest, bool> predicate) => Verify(predicate, Times.AtLeastOnce());
 
@@ -376,10 +387,21 @@ namespace Rony.Handlers
         public void VerifyInOrder(params byte[][] requests)
         {
             if (requests == null) throw new ArgumentNullException(nameof(requests));
-            VerifyInOrder(requests
-                .Select(r => r ?? AnyRequest)
-                .Select(expected => ((Func<ReceivedRequest, bool>)(r => ByteArrayComparer.Instance.Equals(r.Body, expected)), ByteFormatter.Describe(expected)))
-                .ToArray());
+            VerifyInOrder(ExpectedBytes(requests), null);
+        }
+
+        /// <summary>Like <see cref="VerifyInOrder(byte[][])"/>, looking only at the requests received on one connection.</summary>
+        internal void VerifyInOrderOnConnection(int connectionId, byte[][] requests)
+        {
+            if (requests == null) throw new ArgumentNullException(nameof(requests));
+            VerifyInOrder(ExpectedBytes(requests), connectionId);
+        }
+
+        /// <summary>Like <see cref="VerifyInOrder(Func{ReceivedRequest, bool}[])"/>, looking only at the requests received on one connection.</summary>
+        internal void VerifyInOrderOnConnection(int connectionId, Func<ReceivedRequest, bool>[] predicates)
+        {
+            if (predicates == null) throw new ArgumentNullException(nameof(predicates));
+            VerifyInOrder(ExpectedPredicates(predicates), connectionId);
         }
 
         /// <summary>
@@ -389,14 +411,24 @@ namespace Rony.Handlers
         public void VerifyInOrder(params Func<ReceivedRequest, bool>[] predicates)
         {
             if (predicates == null) throw new ArgumentNullException(nameof(predicates));
-            VerifyInOrder(predicates
-                .Select((p, i) => (p ?? throw new ArgumentNullException(nameof(predicates)), $"<predicate {i + 1}>"))
-                .ToArray());
+            VerifyInOrder(ExpectedPredicates(predicates), null);
         }
 
-        private void VerifyInOrder((Func<ReceivedRequest, bool> Matches, string Description)[] expected)
+        private static (Func<ReceivedRequest, bool> Matches, string Description)[] ExpectedBytes(byte[][] requests) =>
+            requests
+                .Select(r => r ?? AnyRequest)
+                .Select(expected => ((Func<ReceivedRequest, bool>)(r => ByteArrayComparer.Instance.Equals(r.Body, expected)), ByteFormatter.Describe(expected)))
+                .ToArray();
+
+        private static (Func<ReceivedRequest, bool> Matches, string Description)[] ExpectedPredicates(Func<ReceivedRequest, bool>[] predicates) =>
+            predicates
+                .Select((p, i) => (p ?? throw new ArgumentNullException(nameof(predicates)), $"<predicate {i + 1}>"))
+                .ToArray();
+
+        private void VerifyInOrder((Func<ReceivedRequest, bool> Matches, string Description)[] expected, int? connectionId)
         {
-            var requests = Snapshot();
+            var requests = Snapshot(connectionId);
+            var onConnection = connectionId == null ? string.Empty : $" on connection #{connectionId}";
             var position = 0;
             for (var i = 0; i < expected.Length; i++)
             {
@@ -405,7 +437,7 @@ namespace Rony.Handlers
 
                 if (position == requests.Count)
                 {
-                    var order = string.Join(", ", expected.Select(e => e.Description));
+                    var order = string.Join(", ", expected.Select(e => e.Description)) + onConnection;
                     var detail = i == 0
                         ? $"{expected[0].Description} was not received"
                         : $"{expected[i].Description} was not received after {expected[i - 1].Description}";
@@ -417,9 +449,10 @@ namespace Rony.Handlers
             }
         }
 
-        private void Verify(Func<ReceivedRequest, bool> predicate, Times times, string description)
+        private void Verify(Func<ReceivedRequest, bool> predicate, Times times, string description, int? connectionId = null)
         {
-            var requests = Snapshot();
+            var requests = Snapshot(connectionId);
+            if (connectionId != null) description += $" on connection #{connectionId}";
             var count = requests.Count(predicate);
             if (times.Matches(count)) return;
 
@@ -429,11 +462,11 @@ namespace Rony.Handlers
         }
 
         /// <summary>The recorded requests, after the <see cref="FailOnUnmatched"/> check.</summary>
-        private IReadOnlyList<ReceivedRequest> Snapshot()
+        private IReadOnlyList<ReceivedRequest> Snapshot(int? connectionId = null)
         {
             var requests = _journal.Snapshot();
             ThrowIfFailingOnUnmatched(requests);
-            return requests;
+            return connectionId == null ? requests : requests.Where(r => r.ConnectionId == connectionId).ToArray();
         }
 
         private void ThrowIfFailingOnUnmatched(IReadOnlyList<ReceivedRequest> requests)

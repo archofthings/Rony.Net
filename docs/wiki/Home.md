@@ -30,7 +30,7 @@ dotnet add package Rony.Net
 ```
 Works with .NET Core 3.x, .NET 5 and every later version (the package targets `netstandard2.1` and `net8.0`).
 It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional packages
-(`Rony.Net.Xunit`, `Rony.Net.NUnit`, `Rony.Net.MSTest`) remove the setup code; see [Test Framework Integration](Test-Framework-Integration).
+(`Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`) remove the setup code; see [Test Framework Integration](Test-Framework-Integration).
 
 ## Documentation
 

@@ -63,15 +63,6 @@ configuration.
 ### 16. Async lifecycle
 `IAsyncDisposable`, and a `StartAsync()` that completes when the socket is listening.
 
-## Smaller follow-ups from 1.1
-- [ ] `Rony.Net.Xunit.v3` package: xUnit v3 moved `ITestOutputHelper` into the `Xunit` namespace, so the v2 package
-      does not work with it.
-- [ ] Per-connection fluent assertions: `connection.Should().HaveReceivedInOrder(...)`.
-- [ ] Possibly `server.Should().HaveNoOpenConnections()`. It needs wait semantics, otherwise tests that use it
-      become flaky.
-- [ ] Confirm that `Rony.Net.Xunit`, `Rony.Net.NUnit` and `Rony.Net.MSTest` 1.1.0 finished nuget.org validation
-      and are listed.
-
 ## Repository housekeeping
 - [ ] Bump `actions/checkout` and `actions/setup-dotnet` to v5 in the three workflows (the release log shows a
       Node 20 deprecation warning).

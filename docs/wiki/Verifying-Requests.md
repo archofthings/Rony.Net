@@ -138,8 +138,25 @@ Received requests:
   2. "LOGIN bob" (unmatched)
 ```
 
-To check the order on one connection only, look at that connection's
-[`ReceivedRequests`](Connections-and-Push#inspecting-connections).
+To check the order on one connection only, use [`connection.Should()`](#assertions-on-one-connection).
+
+## Assertions on one connection
+`connection.Should()` has the same `HaveReceived`, `NotHaveReceived` and `HaveReceivedInOrder` assertions, but only
+requests received on that connection count. Use it when several clients talk to the server at once
+([connections](Connections-and-Push) are TCP only):
+
+```csharp
+var connection = await server.WaitForConnectionAsync();
+connection.Should().HaveReceived("LOGIN bob", Times.Once())
+    .And.HaveReceivedInOrder("LOGIN bob", "LIST")
+    .And.NotHaveReceived("QUIT");
+```
+
+The failure messages name the connection ("... on connection #1") and list only its requests. `BeInState(state)`
+checks the connection's [scenario state](Stateful-Scenarios), and `BeOpen()` and `BeClosed()` check whether it is
+still open; wait with `connection.WaitForCloseAsync()` first when the client may still be disconnecting.
+With [`FailOnUnmatched`](#fail-fast-on-unexpected-requests) the check stays server-wide: an unmatched request on any
+connection makes the assertion throw.
 
 ## All assertions
 | Assertion | Classic method |
@@ -149,6 +166,7 @@ To check the order on one connection only, look at that connection's
 | `HaveReceivedInOrder(...)` | `server.Mock.VerifyInOrder(...)` |
 | `HaveNoUnmatchedRequests()` | `server.Mock.VerifyAllRequestsMatched()` |
 | `HaveAcceptedConnections(times)` | `server.VerifyConnections(times)` ([TCP](Connections-and-Push)) |
+| `HaveNoOpenConnections()` | `Assert.Empty(server.OpenConnections)` ([TCP](Connections-and-Push#waiting-for-all-connections-to-close)) |
 | `BeInState(state)` | `Assert.Equal(state, server.Mock.State)` ([scenarios](Stateful-Scenarios)) |
 
 The classic methods do the same checks with the same messages, if you prefer that style or are upgrading from 1.0.

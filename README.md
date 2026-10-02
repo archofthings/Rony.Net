@@ -42,7 +42,7 @@ dotnet add package Rony.Net
 ```
 Or in the Package Manager Console: `Install-Package Rony.Net`.
 
-Optional, for less setup code: `Rony.Net.Xunit`, `Rony.Net.NUnit` or `Rony.Net.MSTest`
+Optional, for less setup code: `Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3), `Rony.Net.NUnit` or `Rony.Net.MSTest`
 ([Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)).
 
 ## Quick start

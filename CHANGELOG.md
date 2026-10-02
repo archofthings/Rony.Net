@@ -2,6 +2,17 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.2.0 (unreleased)
+
+No breaking changes.
+
+### Added
+- **Per-connection assertions:** `connection.Should()` with `HaveReceived`, `NotHaveReceived`, `HaveReceivedInOrder`,
+  `BeInState`, `BeOpen` and `BeClosed`; only requests received on that connection count, and failure messages name it.
+- **No open connections:** `server.WaitForAllConnectionsClosedAsync()` and `server.Should().HaveNoOpenConnections()`.
+- **xUnit v3:** the `Rony.Net.Xunit.v3` package, the same `MockServerTest` and `LogTo(ITestOutputHelper)` as
+  `Rony.Net.Xunit` (which stays for xUnit v2) in the same `Rony.Net.Xunit` namespace.
+
 ## 1.1.0
 
 No breaking changes: code written for 1.0 compiles and behaves the same.

@@ -30,6 +30,27 @@ public class VerificationSamples
     }
 
     [Fact]
+    public async Task Verify_what_one_connection_sent()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("").Receive("ok");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAndReceiveAsync("LOGIN bob");
+        await client.SendAndReceiveAsync("LIST");
+        using var other = await TcpTestClient.ConnectAsync(server.Port);
+        await other.SendAndReceiveAsync("QUIT");
+
+        var connection = server.Connections[0];
+        connection.Should().HaveReceived("LOGIN bob", Times.Once())
+            .And.HaveReceivedInOrder("LOGIN bob", "LIST")
+            .And.NotHaveReceived("QUIT");
+        server.Should().HaveReceived("QUIT");   // the server-wide check still sees every connection
+        connection.Should().BeOpen();
+    }
+
+    [Fact]
     public void All_the_Times_options()
     {
         using var server = new MockServer(new TcpServer(0));

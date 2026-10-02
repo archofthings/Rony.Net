@@ -100,18 +100,33 @@ public class ConnectionAndPushSamples
     }
 
     [Fact]
+    public async Task Wait_until_every_connection_is_closed()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("BYE").Receive("ok");
+        server.Start();
+
+        var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAndReceiveAsync("BYE");
+        client.Dispose();   // the code under test should do this
+
+        await server.WaitForAllConnectionsClosedAsync();   // throws TimeoutException after 5 seconds if one stays open
+        server.Should().HaveNoOpenConnections();
+    }
+
+    [Fact]
     public async Task Connection_events()
     {
         using var server = new MockServer(new TcpServer(0));
-        var opened = new List<int>();
-        server.ConnectionOpened += (_, connection) => { lock (opened) opened.Add(connection.Id); };
+        // The events are raised on a background thread, so the test waits for the handler itself.
+        var opened = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.ConnectionOpened += (_, connection) => opened.TrySetResult(connection.Id);
         server.ConnectionClosed += (_, connection) => { /* connection.ClosedAt is set */ };
         server.Start();
 
         using var client = await TcpTestClient.ConnectAsync(server.Port);
-        await server.WaitForConnectionAsync();
 
-        lock (opened) Assert.Equal(new[] { 1 }, opened);
+        Assert.Equal(1, await opened.Task.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]

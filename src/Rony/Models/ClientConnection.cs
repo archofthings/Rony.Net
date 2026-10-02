@@ -59,6 +59,9 @@ namespace Rony.Models
         /// <summary>The requests received on this connection, oldest first.</summary>
         public IReadOnlyList<ReceivedRequest> ReceivedRequests => _server.Mock.ReceivedRequests.Where(r => r.ConnectionId == Id).ToArray();
 
+        /// <summary>Fluent assertions on this connection; only requests received on it count.</summary>
+        public ClientConnectionAssertions Should() => new ClientConnectionAssertions(_server, this);
+
         /// <summary>The listener's handle for this connection.</summary>
         internal object Sender { get; }
 

@@ -203,6 +203,27 @@ namespace Rony.Net
         }
 
         /// <summary>
+        /// Waits until no accepted connection is open, by either side; returns at once if none is open (also when
+        /// none was ever accepted). Throws <see cref="TimeoutException"/> after <paramref name="timeout"/>, which
+        /// defaults to 5 seconds. TCP only.
+        /// </summary>
+        public Task WaitForAllConnectionsClosedAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            RequireConnections();
+            var actualTimeout = timeout ?? DefaultWaitTimeout;
+            return _connections.WaitAsync(
+                connections => connections.Any(c => c.IsOpen) ? null : connections,
+                actualTimeout,
+                connections =>
+                {
+                    var open = connections.Where(c => c.IsOpen).ToArray();
+                    return $"Expected all connections to be closed within {actualTimeout}, but {open.Length} " +
+                           $"{(open.Length == 1 ? "is" : "are")} still open." + Environment.NewLine + RequestJournal.Describe(open);
+                },
+                cancellationToken);
+        }
+
+        /// <summary>
         /// Verifies how many connections the server accepted, for example to check that a client reuses its
         /// connection. Throws <see cref="MockVerificationException"/> otherwise.
         /// </summary>
@@ -231,7 +252,7 @@ namespace Rony.Net
             await _listener.CloseAsync(connection.Sender).ConfigureAwait(false);
         }
 
-        private void RequireConnections()
+        internal void RequireConnections()
         {
             if (_connectionListener == null)
                 throw new NotSupportedException($"{_listener.GetType().Name} has no connections. Connections are available for TCP servers.");

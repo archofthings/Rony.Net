@@ -30,6 +30,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `Task<int> BroadcastAsync(string or byte[] message)` | Pushes a message to every open connection; returns how many it reached |
 | `Task<ClientConnection> WaitForConnectionAsync(TimeSpan? timeout)` | Waits for the first connection |
 | `Task<IReadOnlyList<ClientConnection>> WaitForConnectionsAsync(int count, TimeSpan? timeout)` | Waits until `count` connections were accepted |
+| `Task WaitForAllConnectionsClosedAsync(TimeSpan? timeout, CancellationToken)` | Waits until no accepted connection is open (TCP only) |
 | `void VerifyConnections(Times times)` | How many connections were accepted |
 
 ## `Rony.Handlers.RequestHandler`
@@ -156,12 +157,19 @@ A TCP connection the server accepted; see [Connections and Push](Connections-and
 | `Task SendAsync(string or byte[] message)` | Pushes a message, framed like a response |
 | `Task CloseAsync()` | Closes it from the server side |
 | `Task WaitForCloseAsync(TimeSpan? timeout)` | Waits until it is closed |
+| `ClientConnectionAssertions Should()` | Fluent assertions on this connection |
 
 ## `Rony.Net.MockServerAssertions`
 Returned by `server.Should()`; every method returns the assertions again, and `And` reads well between them.
 `HaveReceived(request or predicate[, Times])`, `NotHaveReceived(...)`, `HaveReceivedInOrder(...)`,
-`HaveNoUnmatchedRequests()`, `HaveAcceptedConnections(Times)`, `BeInState(string)`.
+`HaveNoUnmatchedRequests()`, `HaveAcceptedConnections(Times)`, `HaveNoOpenConnections()`, `BeInState(string)`.
 See [Fluent assertions](Verifying-Requests#fluent-assertions).
+
+## `Rony.Net.ClientConnectionAssertions`
+Returned by `connection.Should()`; every method returns the assertions again, and `And` reads well between them.
+`HaveReceived(request or predicate[, Times])`, `NotHaveReceived(...)` and `HaveReceivedInOrder(...)` count only
+requests received on that connection; `BeInState(string)`, `BeOpen()`, `BeClosed()`.
+See [Assertions on one connection](Verifying-Requests#assertions-on-one-connection).
 
 ## `Rony.Net.StateScope`
 `Server` (one scenario state for the server) or `Connection` (one per connection).
@@ -174,7 +182,7 @@ The transport contract, and its extension for transports with connections; see [
 `TcpServer` and `TcpServerSsl` implement `IConnectionListener`.
 
 ## Test framework packages
-`Rony.Net.Xunit`, `Rony.Net.NUnit` and `Rony.Net.MSTest`: a `MockServerTest` base class (`Server`,
+`Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3, same types and namespace), `Rony.Net.NUnit` and `Rony.Net.MSTest`: a `MockServerTest` base class (`Server`,
 `VerifyAllRequestsMatchedAfterTest`, `CreateListener()`) and `LogTo(...)` / `LogToTestContext()` extensions.
 See [Test Framework Integration](Test-Framework-Integration).
 
