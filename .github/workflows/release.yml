@@ -22,15 +22,18 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Check the tag matches every package version
+      - name: Check the tag matches the package version
         run: |
-          for project in src/*/*.csproj; do
-            version=$(grep -oP '(?<=<Version>)[^<]+' "$project")
-            if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
-              echo "Tag ${GITHUB_REF_NAME} does not match version $version of $project" >&2
-              exit 1
-            fi
-          done
+          # Directory.Build.props holds the one version of all packages; a project must not override it
+          version=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match version $version in Directory.Build.props" >&2
+            exit 1
+          fi
+          if grep -l '<Version>' src/*/*.csproj; then
+            echo "The projects listed above set their own <Version>; remove it" >&2
+            exit 1
+          fi
 
       - name: Test
         run: dotnet test --configuration Release
