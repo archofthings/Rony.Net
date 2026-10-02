@@ -1,5 +1,7 @@
 using Rony.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Rony.Handlers
@@ -145,6 +147,24 @@ namespace Rony.Handlers
                 ? (1, TimeSpan.FromMilliseconds(1000.0 / bytesPerSecond), bytesPerSecond)
                 : (bytesPerSecond / 10, TimeSpan.FromMilliseconds(100), bytesPerSecond);
             return this;
+        }
+
+        /// <summary>Sends <paramref name="extra"/> payloads, framed like any response, right after the previous response (used by <c>MockServer.Replay</c>).</summary>
+        internal void AppendFrames(IReadOnlyList<byte[]> extra, Func<byte[], byte[]> frame)
+        {
+            _config.LastStep.AddModifier("replayed frames", first =>
+            {
+                var frames = extra.Select(frame).ToList();
+                var all = new byte[first.Length + frames.Sum(f => f.Length)];
+                Buffer.BlockCopy(first, 0, all, 0, first.Length);
+                var offset = first.Length;
+                foreach (var f in frames)
+                {
+                    Buffer.BlockCopy(f, 0, all, offset, f.Length);
+                    offset += f.Length;
+                }
+                return all;
+            });
         }
 
         private ResponseStep RequireReply(string method)

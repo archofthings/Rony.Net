@@ -23,6 +23,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | Shortcut for `Mock.ReceivedRequests` |
 | `Action<string> Log` | Receives a [log](Logging-and-Diagnostics) line for everything the server does |
 | `MockServerAssertions Should()` | [Fluent assertions](Verifying-Requests#fluent-assertions) |
+| `void Replay(Recording recording)` | Adds rules that answer like the recorded server; see [Record and Replay](Record-and-Replay). Throws `ArgumentException` for requests that already have a rule |
 
 **Connections** (TCP; on other listeners `Connections` is empty and the methods throw `NotSupportedException`). See [Connections and Push](Connections-and-Push).
 
@@ -204,6 +205,26 @@ A small immutable JSON value parsed by the library (no dependency), passed to `S
 `Number`, `String`, `Array`, `Object`), `Exists`, indexers `[string name]` and `[int index]` (never throw; a missing part is
 `Undefined`), `Count`, `Items`, `Properties`, `AsString()`, `AsNumber()`, `AsBoolean()` (null for another kind) and `ToString()`
 (compact JSON). See [JSON requests](Request-Matching#json-requests).
+
+## `Rony.Net.RecordingProxy`, `Rony.Models.Recording`
+A TCP/TLS relay that records the traffic between a client and a real server (no UDP); see [Record and Replay](Record-and-Replay).
+
+| Member | Description |
+|---|---|
+| `RecordingProxy(string targetHost, int targetPort, int port = 0)` | Listens on `127.0.0.1`; port `0` picks a free port on start |
+| `RecordingProxy(IPAddress address, int port, string targetHost, int targetPort)` | Listens on the given address |
+| `Address`, `Port`, `bool Active` | Where it listens (`Port` is the assigned one after `Start()`) and whether it is started |
+| `IMessageFraming Framing` | Splits both directions into recorded messages; default `MessageFraming.None`. Set before `Start()` |
+| `X509Certificate Certificate` | Speak TLS to the client with this certificate; default plain TCP |
+| `bool TargetTls`, `RemoteCertificateValidationCallback TargetCertificateValidation` | Speak TLS to the real server; optional certificate validation |
+| `Action<string> Log` | Receives a line per connection and relayed message; exceptions from it are ignored |
+| `Recording Recording` | The live recording; thread-safe to read or save at any time |
+| `void Start()`, `void Stop()`, `Task StopAsync()`, `Dispose()`, `DisposeAsync()` | Lifecycle; stopping closes every relayed connection and waits for it to end |
+| `Task WaitForConnectionsClosedAsync(TimeSpan? timeout = null, CancellationToken = default)` | Completes once a connection was relayed and all have ended; `TimeoutException` after 5 s by default |
+
+`Recording`: `new Recording()`, `IReadOnlyList<RecordedConnection> Connections`, `ToJson()`, `Parse(string)` (throws `FormatException`),
+`Save(string path)`, `Load(string path)`. `RecordedConnection`: `Id`, `IReadOnlyList<RecordedMessage> Messages`.
+`RecordedMessage`: `RecordedSource Source` (`Client` or `Server`), `Body`, `BodyString`, `Offset`, `IsClose`.
 
 ## `Rony.Net.StateScope`
 `Server` (one scenario state for the server) or `Connection` (one per connection).

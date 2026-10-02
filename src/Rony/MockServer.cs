@@ -130,6 +130,22 @@ namespace Rony.Net
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Adds rules to <see cref="Mock"/> that answer like the recorded server: its greeting, and for every recorded
+        /// request the replies that followed it, in recorded order (a request seen several times gets a sequence). It can be
+        /// called before or after <see cref="Start"/>. Recorded times are not replayed, and rules that already exist for the same
+        /// requests are not replaced (it throws <see cref="ArgumentException"/> for them), so call <c>Mock.Reset()</c> first to replace.
+        /// A reply of several messages needs a TCP listener.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="recording"/> is null.</exception>
+        /// <exception cref="ArgumentException">A response is already configured for a recorded request or for <c>OnConnect()</c>.</exception>
+        public void Replay(Recording recording)
+        {
+            if (recording == null) throw new ArgumentNullException(nameof(recording));
+            // Read when a response is sent, so the framing can still be changed after Replay.
+            RecordingReplay.Apply(Mock, recording, payload => _faultListener != null ? _faultListener.Frame(payload) : payload);
+        }
+
         /// <summary>Stops listening, closes open connections and cancels pending delayed responses. Safe to call repeatedly.</summary>
         public void Stop()
         {
