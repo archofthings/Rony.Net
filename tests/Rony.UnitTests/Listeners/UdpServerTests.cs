@@ -46,7 +46,7 @@ namespace Rony.Tests.Listeners
         public void Active_Property_Should_Set_Correctly()
         {
             //Arrange
-            using var listener = new UdpServer(5012);
+            using var listener = new UdpServer(0);
 
             //Assert
             Assert.False(listener.Active);

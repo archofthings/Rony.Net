@@ -10,11 +10,10 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 
 | Order | Item | Why this position |
 |---|---|---|
-| 1 | Make the old tests follow the test rules (below) | Full test runs are unreliable on macOS until then |
-| 2 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
-| 3 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
-| 4 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
-| 5 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
+| 1 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
+| 2 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
+| 3 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
+| 4 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
 
 ## Library features
 
@@ -41,10 +40,6 @@ configuration.
 - A standalone CLI and Docker image that run a mock server from such a file.
 
 ## Repository housekeeping
-- [ ] Make the old tests follow the test rules. `MockTcpServerTests`, `MockTcpServerSslTests` and
-      `MockUdpServerTests` use hard-coded ports, and two burst tests open about 15,000 connections, so two full
-      runs within 30 seconds exhaust the ephemeral ports on macOS ("Can't assign requested address").
-      `ConnectionAndFramingSamples.cs` and `VerificationSamples.cs` wait with `Task.Delay`.
 - [ ] Bump `actions/checkout` and `actions/setup-dotnet` to v5 in the three workflows (the release log shows a
       Node 20 deprecation warning).
 - [ ] Add an `.editorconfig` and make the code pass `dotnet format --verify-no-changes` (it reports 6 issues

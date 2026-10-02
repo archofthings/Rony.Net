@@ -48,7 +48,7 @@ namespace Rony.Tests.Listeners
         public void Active_Property_Should_Set_Correctly()
         {
             //Arrange
-            using var listener = new TcpServer(IPAddress.Parse("127.0.0.1"), 5011);
+            using var listener = new TcpServer(IPAddress.Parse("127.0.0.1"), 0);
 
             //Act
             listener.Start();

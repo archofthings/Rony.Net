@@ -63,7 +63,6 @@ public class ConnectionAndFramingSamples
 
         using var client = await TcpTestClient.ConnectAsync(server.Port);
         await client.SendAsync("hello ");
-        await Task.Delay(50);
         await client.SendAsync("world\n");
 
         Assert.Equal("hi\n", await client.ReceiveAsync());
