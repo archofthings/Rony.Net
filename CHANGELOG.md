@@ -2,7 +2,7 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
-## 1.2.0 (unreleased)
+## 1.2.0
 
 No breaking changes.
 

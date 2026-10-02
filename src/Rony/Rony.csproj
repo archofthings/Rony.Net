@@ -12,7 +12,7 @@
     <RepositoryUrl>https://github.com/archofthings/Rony.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>mock;mock-server;tcp;udp;ssl;tls;socket;testing;unit-testing;integration-testing;functional-testing;xunit;nunit;mstest</PackageTags>
-    <PackageReleaseNotes>Connections and server-pushed messages, greetings on connect, stateful scenarios, configurable handling of unmatched requests, logging, ordered verification and fluent assertions. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>Async lifecycle (StartAsync, StopAsync, await using), connection resets, truncated, corrupted, chunked and throttled responses, refused connections, failing TLS handshakes, per-connection assertions and more message framings. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <NeutralLanguage>en</NeutralLanguage>
 

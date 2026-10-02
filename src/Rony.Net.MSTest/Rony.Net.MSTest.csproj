@@ -12,7 +12,7 @@
     <RepositoryUrl>https://github.com/archofthings/Rony.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>mock;mock-server;tcp;udp;socket;testing;mstest;rony</PackageTags>
-    <PackageReleaseNotes>First release. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>Released together with Rony.Net 1.2.0; no changes of its own. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <NeutralLanguage>en</NeutralLanguage>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
