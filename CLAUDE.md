@@ -15,7 +15,7 @@
 - Commands, from the repo root:
   - `dotnet build` (must stay at 0 warnings)
   - `dotnet test --no-build tests/Rony.UnitTests` (one project), `--filter "FullyQualifiedName~ClassName"` (one class)
-  - `dotnet test` (full suite, 332 tests at 1.1.0)
+  - `dotnet test` (full suite, 407 tests at 1.2.0)
 - Hooks (`.claude/hooks/`, wired in `.claude/settings.json`): every edited `.cs`/`.csproj` file gets its project
   built and compiler errors or warnings are reported immediately (fix them before continuing); a `<Version>` inside
   a `src/*/*.csproj` is reported; whole-disk searches (`find /`, `find ~`, `locate`, …) are blocked.
