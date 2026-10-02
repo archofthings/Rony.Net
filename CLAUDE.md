@@ -15,7 +15,7 @@
 - Commands, from the repo root:
   - `dotnet build` (must stay at 0 warnings)
   - `dotnet test --no-build tests/Rony.UnitTests` (one project), `--filter "FullyQualifiedName~ClassName"` (one class)
-  - `dotnet test` (full suite, 407 tests at 1.2.0)
+  - `dotnet test` (full suite, 486 tests at 1.3.0)
 - Hooks (`.claude/hooks/`, wired in `.claude/settings.json`): every edited `.cs`/`.csproj` file gets its project
   built and compiler errors or warnings are reported immediately (fix them before continuing); a `<Version>` inside
   a `src/*/*.csproj` is reported; whole-disk searches (`find /`, `find ~`, `locate`, …) are blocked.
@@ -36,6 +36,8 @@ Go straight to the right file and its test. Paths are relative to `src/Rony/`; u
 | `Listeners/MessageFraming.cs`, `Interfaces/IMessageFraming.cs` | Framings: delimiter, length prefix, custom | `Listeners/MessageFramingTests.cs` |
 | `Interfaces/IListener.cs`, `IConnectionListener.cs` | Listener contracts. `IConnectionListener` is optional; plain `IListener` must keep working | functional `ConnectionFeatureTests.cs` |
 | `Models/` | `ClientConnection`, `ReceivedRequest`, `Message`, `ResponseStep`, `Config`, `StateScope` | `Models/MessageTests.cs` |
+| `RecordingProxy.cs`, `Models/Recording.cs`, `Handlers/RecordingReplay.cs` | Record and replay: standalone TCP/TLS relay that records traffic, the recording and its JSON file format, `MockServer.Replay` turning a recording into rules | `Models/RecordingTests.cs`, functional `RecordingProxyTests.cs`, `RecordingReplayTests.cs` |
+| `Models/JsonValue.cs`, `Helpers/JsonParser.cs` | Dependency-free JSON reader for `SendJson` and recording files | `Models/JsonValueTests.cs`, `Handler/RequestHandlerPartialMatchingTests.cs` |
 | `Verification/` | `Times`, `MockVerificationException`, `MockServerAssertions` (`server.Should()`) | `Verification/*Tests.cs` |
 | `Helpers/`, `Extensions/`, `Wrappers/` | `AsyncQueue`, byte comparer/formatter, `GetBytes()`, thin socket wrappers | — |
 | `../Rony.Net.{Xunit,NUnit,MSTest}/` | `MockServerTest` base class and `LogTo(...)` / `LogToTestContext()` per framework | `tests/Rony.Net.*.Tests/` |

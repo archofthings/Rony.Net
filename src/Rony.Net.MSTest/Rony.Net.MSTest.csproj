@@ -5,7 +5,7 @@
     <Description>MSTest (v4) integration for Rony.Net: a MockServerTest base class that starts a mock server for every test and writes its log to the test output, and a LogTo(TestContext) extension.</Description>
     <PackageProjectUrl>https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration</PackageProjectUrl>
     <PackageTags>mock;mock-server;tcp;udp;socket;testing;mstest;rony</PackageTags>
-    <PackageReleaseNotes>Released together with Rony.Net 1.2.0; no changes of its own. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>Released together with Rony.Net 1.3.0; no changes of its own. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
