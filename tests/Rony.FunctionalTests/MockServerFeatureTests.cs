@@ -403,6 +403,85 @@ namespace Rony.FunctionalTests
             Assert.Equal("", rest);
         }
 
+        [Fact]
+        public async Task StartAsync_Should_Listen_And_DisposeAsync_Should_Stop()
+        {
+            //Arrange
+            MockServer server;
+            await using (server = new MockServer(new TcpServer(0)))
+            {
+                server.Mock.Send("ping").Receive("pong");
+                using var cancelled = new CancellationTokenSource();
+                cancelled.Cancel();
+
+                //Act
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => server.StartAsync(cancelled.Token));
+                Assert.False(server.Active);
+                await server.StartAsync();
+                using var client = await ConnectAsync(server);
+                var response = await SendAndReadAsync(client.GetStream(), "ping");
+
+                //Assert
+                Assert.Equal("pong", response);
+            }
+
+            Assert.False(server.Active);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task StopAsync_Should_Wait_For_Work_In_Flight_And_Call_No_Callback_Afterwards(bool tls)
+        {
+            //Arrange
+            var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            await using var server = new MockServer(tls
+                ? new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None)
+                : new TcpServer(0));
+            server.Log = lines.Enqueue;
+            server.Mock.Send("slow").Receive("done").After(TimeSpan.FromSeconds(30));
+            await server.StartAsync();
+            using var client = await ConnectAsync(server);
+            Stream stream = client.GetStream();
+            if (tls) stream = await AuthenticateAsync(client);
+            await using var _ = stream;
+            await WriteAsync(stream, "slow");
+            await server.Mock.WaitForRequestAsync("slow");
+            var stopwatch = Stopwatch.StartNew();
+
+            //Act
+            await server.StopAsync();
+            var count = lines.Count;
+            await server.WaitForAllConnectionsClosedAsync();
+
+            //Assert
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"StopAsync took {stopwatch.Elapsed}");
+            Assert.Equal(count, lines.Count);
+        }
+
+        [Fact]
+        public async Task StopAsync_Should_Be_Repeatable_Work_When_Unstarted_And_Allow_Restart()
+        {
+            //Arrange
+            await using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("ping").Receive("pong");
+
+            //Act
+            await server.StopAsync();   // never started
+            await server.StartAsync();
+            var port = server.Port;
+            await server.StopAsync();
+            await server.StopAsync();
+            Assert.False(server.Active);
+            await server.StartAsync();
+            using var client = await ConnectAsync(server);
+            var response = await SendAndReadAsync(client.GetStream(), "ping");
+
+            //Assert
+            Assert.Equal(port, server.Port);
+            Assert.Equal("pong", response);
+        }
+
         private static async Task<TcpClient> ConnectAsync(MockServer server)
         {
             var client = new TcpClient();

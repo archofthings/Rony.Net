@@ -1,6 +1,7 @@
 using Rony.Handlers;
 using Rony.Helpers;
 using Rony.Interfaces;
+using Rony.Listeners;
 using Rony.Models;
 using System;
 using System.Collections.Concurrent;
@@ -25,7 +26,7 @@ namespace Rony.Net
     /// // connect a client to 127.0.0.1:server.Port
     /// </code>
     /// </example>
-    public class MockServer : IDisposable
+    public class MockServer : IDisposable, IAsyncDisposable
     {
         private static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(5);
         private static readonly byte[] Empty = new byte[0];
@@ -37,6 +38,7 @@ namespace Rony.Net
         private readonly Journal<ClientConnection> _connections = new Journal<ClientConnection>();
         private readonly ConcurrentDictionary<object, ClientConnection> _connectionsBySender = new ConcurrentDictionary<object, ClientConnection>();
         private CancellationTokenSource _cancellation;
+        private Task _listenTask;
         private int _lastConnectionId;
 
         /// <summary>The address the server listens on.</summary>
@@ -100,17 +102,29 @@ namespace Rony.Net
         /// <summary>Starts listening. Calling it again while started does nothing; a stopped server can be started again.</summary>
         public void Start()
         {
-            CancellationToken cancellationToken;
             lock (_syncRoot)
             {
                 if (_cancellation != null) return;
                 _listener.Start();
                 _cancellation = new CancellationTokenSource();
-                cancellationToken = _cancellation.Token;
-            }
+                var cancellationToken = _cancellation.Token;
 
-            Trace($"listening on {Address}:{Port}");
-            Task.Run(() => ListenAsync(cancellationToken));
+                // Logged inside the lock, so StopAsync cannot complete before this line is written.
+                Trace($"listening on {Address}:{Port}");
+                _listenTask = Task.Run(() => ListenAsync(cancellationToken));
+            }
+        }
+
+        /// <summary>
+        /// Starts listening, like <see cref="Start"/>, and completes once the server is listening: <see cref="Active"/>
+        /// is true, <see cref="Port"/> is the assigned port and a client can connect. Calling it while started does nothing.
+        /// </summary>
+        /// <param name="cancellationToken">Only checked before starting: an already cancelled token cancels the returned task and the server is not started.</param>
+        public Task StartAsync(CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested) return Task.FromCanceled(cancellationToken);
+            Start();
+            return Task.CompletedTask;
         }
 
         /// <summary>Stops listening, closes open connections and cancels pending delayed responses. Safe to call repeatedly.</summary>
@@ -122,9 +136,45 @@ namespace Rony.Net
                 _cancellation.Cancel();
                 _cancellation = null;
                 _listener.Stop();
+
+                // Logged inside the lock, so StopAsync cannot complete before this line is written.
+                Trace("stopped");
+            }
+        }
+
+        /// <summary>
+        /// Does what <see cref="Stop"/> does, then waits until the server's background work has ended: the listen loop,
+        /// every request, delayed response and greeting in flight, and (TCP) every connection still being opened.
+        /// Once the returned task has completed, the server calls no user callback any more (<see cref="Log"/>, response
+        /// functions, matcher predicates, connection event handlers) until it is started again. Failures and
+        /// cancellation inside the background work do not make it throw.
+        /// Safe to call repeatedly, on a server that was never started, and concurrently with <see cref="Stop"/>.
+        /// Do not await it from inside one of the server's own callbacks: it would wait for itself.
+        /// A custom <see cref="IListener"/> gets the guarantee only for the server's own tasks; the server cannot
+        /// wait for work the listener runs itself.
+        /// </summary>
+        public async Task StopAsync()
+        {
+            Task listenTask;
+            lock (_syncRoot)
+            {
+                Stop();
+                listenTask = _listenTask;
             }
 
-            Trace("stopped");
+            if (_listener is TcpServerBase tcpServer)
+                await tcpServer.WaitForBackgroundWorkAsync().ConfigureAwait(false);
+            if (listenTask != null)
+                await WaitQuietlyAsync(listenTask).ConfigureAwait(false);
+
+            while (true)
+            {
+                Task[] pending;
+                lock (_conversations)
+                    pending = _conversations.Values.Where(task => !task.IsCompleted).ToArray();
+                if (pending.Length == 0) break;
+                await WaitQuietlyAsync(Task.WhenAll(pending)).ConfigureAwait(false);
+            }
         }
 
         /// <summary>Stops the server and releases the listener.</summary>
@@ -138,6 +188,29 @@ namespace Rony.Net
                 _connectionListener.ConnectionFailed -= OnConnectionFailed;
             }
             _listener.Dispose();
+        }
+
+        /// <summary>
+        /// Does what <see cref="StopAsync"/> does, then releases the listener like <see cref="Dispose"/>.
+        /// Safe to call after <see cref="Dispose"/> and the other way round. Do not await it from inside one of the
+        /// server's own callbacks.
+        /// </summary>
+        public async ValueTask DisposeAsync()
+        {
+            await StopAsync().ConfigureAwait(false);
+            Dispose();
+        }
+
+        private static async Task WaitQuietlyAsync(Task task)
+        {
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Failure or cancellation of a background task is not a failure of StopAsync.
+            }
         }
 
         /// <summary>Fluent assertions on what the server received, for example <c>server.Should().HaveReceived("PING", Times.Once())</c>.</summary>

@@ -11,6 +11,9 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `void Start()` | Starts listening. Repeated calls do nothing. |
 | `void Stop()` | Stops listening, closes connections and cancels delayed responses. Repeated calls do nothing. |
 | `void Dispose()` | Stops the server and releases the listener |
+| `Task StartAsync(CancellationToken cancellationToken = default)` | Starts listening; completes once the server is listening. A cancelled token cancels the task and the server is not started. |
+| `Task StopAsync()` | Like `Stop()`, then waits until the server's background work has ended; afterwards no callback of yours runs until the next start. Do not await it from inside a callback. |
+| `ValueTask DisposeAsync()` | `StopAsync()`, then the same cleanup as `Dispose()` (`await using`) |
 | `bool Active` | Whether the server is started |
 | `IPAddress Address` | The listening address |
 | `int Port` | The listening port (the assigned one when created with port `0`) |

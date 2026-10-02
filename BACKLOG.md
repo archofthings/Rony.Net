@@ -10,8 +10,6 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 
 | Order | Item | Why this position |
 |---|---|---|
-| 1 | Small follow-ups (below) | Cheap, and they close out 1.1 |
-| 2 | 16. `IAsyncDisposable` and `StartAsync()` | Small API addition that removes a source of flaky tests |
 | 3 | 7. More failure modes | Small, and the most asked-for kind of mock behaviour |
 | 4 | 6. Chunked or slow responses | Builds on the response chain; pairs with 7 |
 | 5 | 8. More framings | Self-contained in `MessageFraming.cs` |
@@ -59,9 +57,6 @@ configuration.
 ### 15. Configuration files and a standalone server
 - Mock configuration from JSON or YAML.
 - A standalone CLI and Docker image that run a mock server from such a file.
-
-### 16. Async lifecycle
-`IAsyncDisposable`, and a `StartAsync()` that completes when the socket is listening.
 
 ## Repository housekeeping
 - [ ] Bump `actions/checkout` and `actions/setup-dotnet` to v5 in the three workflows (the release log shows a

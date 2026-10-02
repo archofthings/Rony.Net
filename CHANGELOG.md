@@ -7,6 +7,8 @@ Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wik
 No breaking changes.
 
 ### Added
+- **Async lifecycle:** `server.StartAsync()`, `server.StopAsync()` and `await using` (`DisposeAsync()`). `StopAsync()` waits
+  for requests, delayed responses and connections in flight, so no `Log` line or callback runs after it completed.
 - **Per-connection assertions:** `connection.Should()` with `HaveReceived`, `NotHaveReceived`, `HaveReceivedInOrder`,
   `BeInState`, `BeOpen` and `BeClosed`; only requests received on that connection count, and failure messages name it.
 - **No open connections:** `server.WaitForAllConnectionsClosedAsync()` and `server.Should().HaveNoOpenConnections()`.

@@ -5,6 +5,7 @@ using Rony.Wrappers;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -20,6 +21,7 @@ namespace Rony.Listeners
     {
         private readonly object _syncRoot = new object();
         private readonly ConcurrentDictionary<TcpConnection, byte> _connections = new ConcurrentDictionary<TcpConnection, byte>();
+        private readonly ConcurrentDictionary<Task, CancellationToken> _background = new ConcurrentDictionary<Task, CancellationToken>();
         private TcpListenerWrapper _listener;
         private CancellationTokenSource _cancellation;
         private AsyncQueue<Message> _messages;
@@ -91,7 +93,37 @@ namespace Rony.Listeners
                 _listener = listener;
                 _cancellation = new CancellationTokenSource();
                 _messages = new AsyncQueue<Message>();
-                _ = AcceptLoopAsync(listener, _messages, _cancellation.Token);
+                Track(AcceptLoopAsync(listener, _messages, _cancellation.Token), _cancellation.Token);
+            }
+        }
+
+        /// <summary>Remembers a background task, until it completes, so <see cref="WaitForBackgroundWorkAsync"/> can wait for it.</summary>
+        private void Track(Task task, CancellationToken cancellationToken)
+        {
+            _background[task] = cancellationToken;
+            task.ContinueWith(completed => _background.TryRemove(completed, out _), TaskScheduler.Default);
+        }
+
+        /// <summary>
+        /// Waits until the accept loop and every connection task of a stopped run (the ones whose token is cancelled)
+        /// have ended, so no connection event is raised afterwards. Call it after <see cref="Stop"/>.
+        /// </summary>
+        internal async Task WaitForBackgroundWorkAsync()
+        {
+            while (true)
+            {
+                var pending = _background.Where(entry => entry.Value.IsCancellationRequested && !entry.Key.IsCompleted)
+                    .Select(entry => entry.Key).ToArray();
+                if (pending.Length == 0) return;
+
+                try
+                {
+                    await Task.WhenAll(pending).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // A failed connection task is not a failure of the caller.
+                }
             }
         }
 
@@ -195,7 +227,7 @@ namespace Rony.Listeners
                     continue;
                 }
 
-                _ = ReadConnectionAsync(client, messages, cancellationToken);
+                Track(ReadConnectionAsync(client, messages, cancellationToken), cancellationToken);
             }
         }
 
@@ -206,7 +238,10 @@ namespace Rony.Listeners
             try
             {
                 remoteEndPoint = client.Client?.RemoteEndPoint;
-                var stream = await OpenStreamAsync(client).ConfigureAwait(false);
+                Stream stream;
+                // A client still in its handshake is not a known connection yet: abort it when the server stops.
+                using (cancellationToken.Register(() => client.Dispose()))
+                    stream = await OpenStreamAsync(client).ConfigureAwait(false);
                 connection = new TcpConnection(client, stream, OnConnectionClosed);
                 _connections.TryAdd(connection, 0);
                 if (cancellationToken.IsCancellationRequested)
