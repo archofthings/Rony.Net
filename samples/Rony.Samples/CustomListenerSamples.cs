@@ -87,4 +87,13 @@ public class CustomListenerSamples
         Assert.Equal("pong", await listener.SendAsync("ping"));
         server.Should().HaveReceived("ping", Times.Once());
     }
+
+    [Fact]
+    public void Listener_without_fault_injection()
+    {
+        using var server = new MockServer(new InMemoryListener());
+
+        // Only listeners that implement IFaultInjectionListener (TCP) can refuse connections or reset them.
+        Assert.Throws<NotSupportedException>(() => server.RefuseConnections());
+    }
 }

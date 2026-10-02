@@ -62,9 +62,30 @@ namespace Rony.Listeners
                 Close();
         }
 
-        public void Close()
+        public void Close() => Release(false);
+
+        /// <summary>Aborts the connection with a TCP RST. The socket is closed before the stream, so TLS sends no close_notify.</summary>
+        public void Reset() => Release(true);
+
+        private void Release(bool abort)
         {
             if (Interlocked.Exchange(ref _closed, 1) == 1) return;
+            if (abort)
+            {
+                try
+                {
+                    var socket = Client.Client;
+                    if (socket != null)
+                    {
+                        socket.LingerState = new LingerOption(true, 0);
+                        socket.Dispose();
+                    }
+                }
+                catch
+                {
+                    // Already broken; closing below releases the rest.
+                }
+            }
             try
             {
                 Stream.Dispose();

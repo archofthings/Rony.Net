@@ -20,6 +20,33 @@ namespace Rony.Models
         public TimeSpan Delay { get; set; }
         public bool Disconnect { get; set; }
 
+        /// <summary>Abort the connection with a TCP RST instead of closing it cleanly.</summary>
+        public bool Reset { get; set; }
+
+        private readonly object _modifierLock = new object();
+        private (string Kind, Func<byte[], byte[]> Apply)[] _modifiers = new (string, Func<byte[], byte[]>)[0];
+
+        /// <summary>Changes of the framed response (truncated, corrupted), in the order they were configured.</summary>
+        public (string Kind, Func<byte[], byte[]> Apply)[] Modifiers
+        {
+            get
+            {
+                lock (_modifierLock)
+                    return _modifiers;
+            }
+        }
+
+        public void AddModifier(string kind, Func<byte[], byte[]> apply)
+        {
+            lock (_modifierLock)
+            {
+                var copy = new (string, Func<byte[], byte[]>)[_modifiers.Length + 1];
+                Array.Copy(_modifiers, copy, _modifiers.Length);
+                copy[_modifiers.Length] = (kind, apply);
+                _modifiers = copy;
+            }
+        }
+
         /// <summary>The scenario state to move to once this step is used; null keeps the current state.</summary>
         public string NextState { get; set; }
         public bool SendsReply => Producer != null;
@@ -47,6 +74,8 @@ namespace Rony.Models
         public static ResponseStep NoReply() => new ResponseStep(null, false);
 
         public static ResponseStep CloseConnection() => new ResponseStep(null, true);
+
+        public static ResponseStep ResetConnection() => new ResponseStep(null, false) { Reset = true };
 
         /// <summary>
         /// Builds the reply for a request. If the configured function throws, <paramref name="onError"/> is told

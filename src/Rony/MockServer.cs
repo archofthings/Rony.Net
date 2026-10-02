@@ -33,6 +33,7 @@ namespace Rony.Net
 
         private readonly IListener _listener;
         private readonly IConnectionListener _connectionListener;
+        private readonly IFaultInjectionListener _faultListener;
         private readonly object _syncRoot = new object();
         private readonly Dictionary<object, Task> _conversations = new Dictionary<object, Task>();
         private readonly Journal<ClientConnection> _connections = new Journal<ClientConnection>();
@@ -91,6 +92,7 @@ namespace Rony.Net
             Mock = new RequestHandler();
 
             _connectionListener = listener as IConnectionListener;
+            _faultListener = listener as IFaultInjectionListener;
             if (_connectionListener != null)
             {
                 _connectionListener.ConnectionOpened += OnConnectionOpened;
@@ -174,6 +176,38 @@ namespace Rony.Net
                     pending = _conversations.Values.Where(task => !task.IsCompleted).ToArray();
                 if (pending.Length == 0) break;
                 await WaitQuietlyAsync(Task.WhenAll(pending)).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Makes new clients fail to connect ("connection refused") while the connections that are already open keep
+        /// working. <see cref="Active"/> and <see cref="Port"/> are unchanged. Does nothing when already refusing; call
+        /// <see cref="AcceptConnections"/> to listen again. <see cref="Stop"/> clears it.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">The server is not started.</exception>
+        /// <exception cref="NotSupportedException">The listener cannot refuse connections (UDP, or a custom listener without <see cref="IFaultInjectionListener"/>).</exception>
+        public void RefuseConnections()
+        {
+            RequireFaultInjection();
+            lock (_syncRoot)
+            {
+                _faultListener.RefuseConnections();
+                Trace("refusing connections");
+            }
+        }
+
+        /// <summary>
+        /// Listens again on the same port after <see cref="RefuseConnections"/>. Does nothing when connections are not refused.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The listener cannot refuse connections (UDP, or a custom listener without <see cref="IFaultInjectionListener"/>).</exception>
+        /// <exception cref="System.Net.Sockets.SocketException">The port could not be bound again.</exception>
+        public void AcceptConnections()
+        {
+            RequireFaultInjection();
+            lock (_syncRoot)
+            {
+                _faultListener.AcceptConnections();
+                Trace("accepting connections");
             }
         }
 
@@ -317,6 +351,19 @@ namespace Rony.Net
             if (!connection.IsOpen) throw new InvalidOperationException($"Connection {connection} is closed.");
             await _connectionListener.SendAsync(message, connection.Sender).ConfigureAwait(false);
             Trace($"{Label(connection)} pushed {ByteFormatter.Describe(message)}");
+        }
+
+        internal async Task ResetAsync(ClientConnection connection)
+        {
+            RequireFaultInjection();
+            Trace($"{Label(connection)} resetting the connection");
+            await _faultListener.ResetAsync(connection.Sender).ConfigureAwait(false);
+        }
+
+        private void RequireFaultInjection()
+        {
+            if (_faultListener == null)
+                throw new NotSupportedException($"{_listener.GetType().Name} cannot simulate this failure. It is available for TCP servers.");
         }
 
         internal async Task CloseAsync(ClientConnection connection)
@@ -485,25 +532,71 @@ namespace Rony.Net
                     await Task.Delay(step.Delay, cancellationToken).ConfigureAwait(false);
 
                 var delay = step.Delay > TimeSpan.Zero ? $" after {step.Delay.TotalMilliseconds:0} ms" : string.Empty;
+                var abort = step.Reset && _faultListener != null;
+                if (step.Reset && _faultListener == null)
+                    Trace($"{label} the listener cannot reset the connection; closing it instead");
+
                 if (step.SendsReply)
                 {
                     var response = step.Produce(request,
                         exception => Trace($"error: the response function for {label} threw {Describe(exception)}; sending an empty response"));
-                    if (kind == null)
-                        await _listener.ReplyAsync(response, sender).ConfigureAwait(false);
+                    var modifiers = step.Modifiers;
+                    if (modifiers.Length > 0 && _faultListener == null)
+                        Trace($"{label} the listener does not support truncated or corrupted responses; sending the response unmodified");
+
+                    if (_faultListener != null && ((modifiers.Length > 0 && response.Length > 0) || abort))
+                    {
+                        // Write the framed (and modified) bytes ourselves; the request is finished below, as a normal reply would.
+                        // An empty response stays empty, as with a normal reply.
+                        try
+                        {
+                            var framed = response.Length > 0 ? _faultListener.Frame(response) : Empty;
+                            var tags = string.Empty;
+                            var sent = response.Length > 0 ? Modify(modifiers, framed, label, out tags) : Empty;
+                            if (sent.Length > 0)
+                                await _faultListener.SendRawAsync(sent, sender).ConfigureAwait(false);
+                            Trace($"{label} sent {(kind == null ? string.Empty : kind + " ")}" +
+                                  (tags.Length > 0 ? $"{sent.Length} of {framed.Length} bytes ({tags}) " : string.Empty) +
+                                  $"{ByteFormatter.Describe(sent)}{delay}");
+                            if (abort)
+                            {
+                                Trace($"{label} resetting the connection");
+                                await _faultListener.ResetAsync(sender).ConfigureAwait(false);
+                            }
+                        }
+                        catch
+                        {
+                            // The reply is never completed below, so complete the request here.
+                            if (kind == null)
+                                _connectionListener?.CompleteWithoutReply(sender);
+                            throw;
+                        }
+                        if (kind == null)
+                            await _listener.ReplyAsync(Empty, sender).ConfigureAwait(false);
+                    }
                     else
-                        await _connectionListener.SendAsync(response, sender).ConfigureAwait(false);
-                    Trace($"{label} sent {(kind == null ? string.Empty : kind + " ")}{ByteFormatter.Describe(response)}{delay}");
+                    {
+                        if (kind == null)
+                            await _listener.ReplyAsync(response, sender).ConfigureAwait(false);
+                        else
+                            await _connectionListener.SendAsync(response, sender).ConfigureAwait(false);
+                        Trace($"{label} sent {(kind == null ? string.Empty : kind + " ")}{ByteFormatter.Describe(response)}{delay}");
+                    }
                 }
                 else
                 {
+                    if (abort)
+                    {
+                        Trace($"{label} resetting the connection{delay}");
+                        await _faultListener.ResetAsync(sender).ConfigureAwait(false);
+                    }
                     if (kind == null)
                         _connectionListener?.CompleteWithoutReply(sender);
-                    if (!step.Disconnect)
+                    if (!step.Disconnect && !step.Reset)
                         Trace($"{label} no reply{delay}");
                 }
 
-                if (step.Disconnect)
+                if ((step.Disconnect || step.Reset) && !abort)
                 {
                     Trace($"{label} closing the connection{(step.SendsReply ? string.Empty : delay)}");
                     await _listener.CloseAsync(sender).ConfigureAwait(false);
@@ -518,6 +611,33 @@ namespace Rony.Net
                 if (!cancellationToken.IsCancellationRequested)
                     Trace($"{label} could not send the {kind}: {Describe(exception)}");
             }
+        }
+
+        /// <summary>
+        /// Applies the modifiers (truncated, corrupted) in order to a copy of the framed response. If one throws, the
+        /// error is logged and the framed response is returned unmodified.
+        /// </summary>
+        private byte[] Modify((string Kind, Func<byte[], byte[]> Apply)[] modifiers, byte[] framed, string label, out string tags)
+        {
+            var current = framed;
+            var kinds = new List<string>();
+            foreach (var modifier in modifiers)
+            {
+                try
+                {
+                    current = modifier.Apply((byte[])current.Clone()) ?? Empty;
+                    kinds.Add(modifier.Kind);
+                }
+                catch (Exception exception)
+                {
+                    Trace($"error: the corrupt function for {label} threw {Describe(exception)}; sending the response unmodified");
+                    tags = string.Empty;
+                    return framed;
+                }
+            }
+
+            tags = string.Join(", ", kinds);
+            return current;
         }
 
         private void LogStateChange(string label, MatchResult result)

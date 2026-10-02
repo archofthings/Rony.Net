@@ -10,7 +10,6 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 
 | Order | Item | Why this position |
 |---|---|---|
-| 3 | 7. More failure modes | Small, and the most asked-for kind of mock behaviour |
 | 4 | 6. Chunked or slow responses | Builds on the response chain; pairs with 7 |
 | 5 | 8. More framings | Self-contained in `MessageFraming.cs` |
 | 6 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
@@ -23,12 +22,6 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 ### 6. Chunked or slow responses
 Send a response in pieces with delays between them, or throttle the bandwidth, so that a client's partial reads
 and buffering can be tested.
-
-### 7. More failure modes
-- Connection reset (RST, through `LingerState(true, 0)`) instead of a clean close.
-- Corrupted or truncated responses.
-- Refusing new connections while the server is running.
-- A forced TLS handshake failure.
 
 ### 8. More framings
 - Little-endian length prefix.
@@ -59,6 +52,10 @@ configuration.
 - A standalone CLI and Docker image that run a mock server from such a file.
 
 ## Repository housekeeping
+- [ ] Make the old tests follow the test rules. `MockTcpServerTests`, `MockTcpServerSslTests` and
+      `MockUdpServerTests` use hard-coded ports, and two burst tests open about 15,000 connections, so two full
+      runs within 30 seconds exhaust the ephemeral ports on macOS ("Can't assign requested address").
+      `ConnectionAndFramingSamples.cs` and `VerificationSamples.cs` wait with `Task.Delay`.
 - [ ] Bump `actions/checkout` and `actions/setup-dotnet` to v5 in the three workflows (the release log shows a
       Node 20 deprecation warning).
 - [ ] Add an `.editorconfig` and make the code pass `dotnet format --verify-no-changes` (it reports 6 issues

@@ -12,6 +12,8 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `void Stop()` | Stops listening, closes connections and cancels delayed responses. Repeated calls do nothing. |
 | `void Dispose()` | Stops the server and releases the listener |
 | `Task StartAsync(CancellationToken cancellationToken = default)` | Starts listening; completes once the server is listening. A cancelled token cancels the task and the server is not started. |
+| `void RefuseConnections()` | New clients get "connection refused"; open connections keep working. Throws `InvalidOperationException` when not started, `NotSupportedException` without `IFaultInjectionListener` |
+| `void AcceptConnections()` | Listens again on the same port; does nothing when not refusing. Throws `SocketException` if the port cannot be bound again |
 | `Task StopAsync()` | Like `Stop()`, then waits until the server's background work has ended; afterwards no callback of yours runs until the next start. Do not await it from inside a callback. |
 | `ValueTask DisposeAsync()` | `StopAsync()`, then the same cleanup as `Dispose()` (`await using`) |
 | `bool Active` | Whether the server is started |
@@ -61,6 +63,7 @@ Available as `server.Mock`.
 | `Receive(Func<string, string> func)` | Responds with `func(request text)` |
 | `Receive(Func<byte[], byte[]> func)` | Responds with `func(request bytes)` |
 | `Disconnect()` | Closes the TCP connection without replying |
+| `ResetConnection()` | Aborts the TCP connection with a reset (RST) without replying |
 | `NoReply()` | Never replies |
 
 **Matching and state**
@@ -100,7 +103,7 @@ Available as `server.Mock`.
 Verification failures throw `MockVerificationException`, and waits that time out throw `TimeoutException`.
 
 ## `Rony.Handlers.ResponseBuilder`
-Returned by `Receive(...)`, `Disconnect()` and `NoReply()`.
+Returned by `Receive(...)`, `Disconnect()`, `ResetConnection()` and `NoReply()`.
 
 | Member | Effect |
 |---|---|
@@ -109,6 +112,10 @@ Returned by `Receive(...)`, `Disconnect()` and `NoReply()`.
 | `ThenNoReply()` | Next time: no reply |
 | `After(TimeSpan delay)` | Delays the previous response |
 | `AndDisconnect()` | Closes the connection after the previous response |
+| `ThenResetConnection()` | Next time: reset the connection (RST) without replying |
+| `AndResetConnection()` | Resets the connection after the previous response was written (the client may not see it) |
+| `Truncated(int byteCount)` | Sends only the first `byteCount` bytes of the previous response, as it goes on the wire (after framing) |
+| `Corrupted(Func<byte[], byte[]> corrupt)` | Changes the bytes of the previous response, as it goes on the wire; gets a copy |
 | `GoTo(string state)` | Moves the [scenario](Stateful-Scenarios) to `state` once the previous response is used |
 
 The last response in a sequence repeats once the sequence ends.
@@ -127,6 +134,12 @@ The last response in a sequence repeats once the sequence ends.
 |---|---|
 | `IMessageFraming Framing` | How the stream is split into messages. Default: `MessageFraming.None`. Set before `Start()`. |
 | `bool KeepAlive` | Keep connections open after a response. Default: `true`. |
+| `bool FailHandshake` | (`TcpServerSsl` only) Every new TLS handshake fails. Can change while running. |
+| `void RefuseConnections()` | Stops accepting new connections (clients get "connection refused"); open connections keep working |
+| `void AcceptConnections()` | Listens again on the same port; does nothing when not refusing. Throws `SocketException` if the port cannot be bound again |
+| `byte[] Frame(byte[] message)` | Frames a message with `Framing` |
+| `Task SendRawAsync(byte[] data, object sender)` | Writes bytes to a connection as they are, without framing |
+| `Task ResetAsync(object sender)` | Aborts a connection with a TCP reset (RST) |
 | `protected abstract Task<Stream> OpenStreamAsync(TcpClient client)` | Prepares the stream for a new connection |
 | `protected virtual bool HasPendingData(Stream stream)` | Whether more data can be read right away |
 
@@ -159,6 +172,7 @@ A TCP connection the server accepted; see [Connections and Push](Connections-and
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | The requests received on it |
 | `Task SendAsync(string or byte[] message)` | Pushes a message, framed like a response |
 | `Task CloseAsync()` | Closes it from the server side |
+| `Task ResetAsync()` | Aborts it with a TCP reset (RST); throws `NotSupportedException` without `IFaultInjectionListener` |
 | `Task WaitForCloseAsync(TimeSpan? timeout)` | Waits until it is closed |
 | `ClientConnectionAssertions Should()` | Fluent assertions on this connection |
 
@@ -180,9 +194,10 @@ See [Assertions on one connection](Verifying-Requests#assertions-on-one-connecti
 ## `Rony.Models.Config`
 One exact-request configuration: `CallCount`, and `GetResponse(string or byte[])`, which returns the next response and moves the sequence forward.
 
-## `Rony.Interfaces.IListener`, `Rony.Interfaces.IConnectionListener`
-The transport contract, and its extension for transports with connections; see [Custom Listeners](Custom-Listeners).
-`TcpServer` and `TcpServerSsl` implement `IConnectionListener`.
+## `Rony.Interfaces.IListener`, `IConnectionListener`, `IFaultInjectionListener`
+The transport contract, its extension for transports with connections, and the optional extension for failure
+simulation (`ResetAsync`, `Frame`, `SendRawAsync`, `RefuseConnections`, `AcceptConnections`); see [Custom Listeners](Custom-Listeners).
+`TcpServer` and `TcpServerSsl` implement `IConnectionListener` and `IFaultInjectionListener`.
 
 ## Test framework packages
 `Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3, same types and namespace), `Rony.Net.NUnit` and `Rony.Net.MSTest`: a `MockServerTest` base class (`Server`,

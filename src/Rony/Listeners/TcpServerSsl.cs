@@ -17,6 +17,18 @@ namespace Rony.Listeners
     {
         private readonly Lazy<X509Certificate> _certificate;
         private readonly SslProtocols _protocol;
+        private volatile bool _failHandshake;
+
+        /// <summary>
+        /// When true, every new TLS handshake fails: the server answers the client's hello with a fatal
+        /// <c>handshake_failure</c> alert and closes the connection, which never shows up in
+        /// <c>MockServer.Connections</c>. Can be changed while the server runs; it applies to new connections.
+        /// </summary>
+        public bool FailHandshake
+        {
+            get => _failHandshake;
+            set => _failHandshake = value;
+        }
 
         /// <summary>
         /// Creates an SSL/TLS server which uses the given certificate. The certificate must contain a private key.
@@ -68,6 +80,28 @@ namespace Rony.Listeners
         /// <inheritdoc />
         protected override async Task<Stream> OpenStreamAsync(TcpClient client)
         {
+            if (FailHandshake)
+            {
+                // Wait for the ClientHello, then answer with a fatal alert: handshake_failure.
+                var networkStream = client.GetStream();
+                // Read the whole hello record, so closing the socket does not reset the connection and discard the alert.
+                var header = new byte[5];
+                if (await ReadFullyAsync(networkStream, header).ConfigureAwait(false))
+                    await ReadFullyAsync(networkStream, new byte[(header[3] << 8) | header[4]]).ConfigureAwait(false);
+                var alert = new byte[] { 0x15, 0x03, 0x03, 0x00, 0x02, 0x02, 0x28 };
+                await networkStream.WriteAsync(alert, 0, alert.Length).ConfigureAwait(false);
+                await networkStream.FlushAsync().ConfigureAwait(false);
+                try
+                {
+                    client.Client.Shutdown(SocketShutdown.Send);
+                }
+                catch (Exception)
+                {
+                    // The client is already gone; the alert was best effort.
+                }
+                throw new AuthenticationException("The TLS handshake was failed on purpose (FailHandshake).");
+            }
+
             var sslStream = new SslStream(client.GetStream(), false);
             try
             {
@@ -79,6 +113,20 @@ namespace Rony.Listeners
                 sslStream.Dispose();
                 throw;
             }
+        }
+
+        /// <summary>Fills <paramref name="buffer"/> from the stream; false when the stream ended first.</summary>
+        private static async Task<bool> ReadFullyAsync(Stream stream, byte[] buffer)
+        {
+            var total = 0;
+            while (total < buffer.Length)
+            {
+                var read = await stream.ReadAsync(buffer, total, buffer.Length - total).ConfigureAwait(false);
+                if (read == 0) return false;
+                total += read;
+            }
+
+            return true;
         }
 
         private static X509Certificate FindCertificate(string subjectName)

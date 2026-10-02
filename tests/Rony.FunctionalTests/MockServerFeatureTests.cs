@@ -482,6 +482,179 @@ namespace Rony.FunctionalTests
             Assert.Equal("pong", response);
         }
 
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task ResetConnection_Should_Reset_The_Client_Instead_Of_Closing_Cleanly(bool tls, bool viaConnection)
+        {
+            //Arrange
+            using var server = new MockServer(tls
+                ? new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None)
+                : new TcpServer(0));
+            server.Mock.Send("X").ResetConnection();
+            server.Start();
+            using var client = await ConnectAsync(server);
+            Stream stream = client.GetStream();
+            if (tls) stream = await AuthenticateAsync(client);
+            await using var _ = stream;
+            var connection = await server.WaitForConnectionAsync();
+
+            //Act
+            if (viaConnection)
+                await connection.ResetAsync();
+            else
+                await WriteAsync(stream, "X");
+            using var timeout = new CancellationTokenSource(ReadTimeout);
+
+            //Assert (a clean close would read 0 bytes instead of failing)
+            await Assert.ThrowsAnyAsync<IOException>(async () => await stream.ReadAsync(new byte[16], timeout.Token));
+            await connection.WaitForCloseAsync();
+        }
+
+        [Fact]
+        public async Task Truncated_Should_Send_Only_The_First_Bytes_Of_The_Framed_Response()
+        {
+            //Arrange (length prefix 0000000B announces 11 bytes, only 2 follow)
+            using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.LengthPrefix() });
+            server.Mock.Send("X").Receive("HELLO WORLD").Truncated(6).AndDisconnect();
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act
+            await stream.WriteAsync(new byte[] { 0, 0, 0, 1, (byte)'X' });
+            using var memory = new MemoryStream();
+            using var timeout = new CancellationTokenSource(ReadTimeout);
+            await stream.CopyToAsync(memory, timeout.Token);
+
+            //Assert
+            Assert.Equal(new byte[] { 0, 0, 0, 11, (byte)'H', (byte)'E' }, memory.ToArray());
+        }
+
+        [Fact]
+        public async Task Truncated_Reply_Should_Keep_The_Connection_Usable()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("X").Receive("HELLO").Truncated(2);
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act
+            var first = await SendAndReadAsync(stream, "X");
+            var second = await SendAndReadAsync(stream, "X");
+
+            //Assert
+            Assert.Equal("HE", first);
+            Assert.Equal("HE", second);
+        }
+
+        [Fact]
+        public async Task Corrupted_Should_Change_A_Copy_Of_The_Response()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("X").Receive("HELLO").Corrupted(bytes => { bytes[0] ^= 0xFF; return bytes; });
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act
+            await WriteAsync(stream, "X");
+            var first = await ReadExactlyAsync(stream, 5);
+            await WriteAsync(stream, "X");
+            var second = await ReadExactlyAsync(stream, 5);
+
+            //Assert (the configured response is untouched, so both replies are corrupted the same way)
+            Assert.Equal(new byte[] { (byte)'H' ^ 0xFF, (byte)'E', (byte)'L', (byte)'L', (byte)'O' }, first);
+            Assert.Equal(first, second);
+        }
+
+        [Fact]
+        public async Task Corrupted_Function_That_Throws_Should_Send_The_Unmodified_Response()
+        {
+            //Arrange
+            var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            using var server = new MockServer(new TcpServer(0)) { Log = log.Enqueue };
+            server.Mock.Send("X").Receive("HELLO").Corrupted(_ => throw new InvalidOperationException("boom"));
+            server.Start();
+            using var client = await ConnectAsync(server);
+
+            //Act
+            var response = await SendAndReadAsync(client.GetStream(), "X");
+
+            //Assert
+            Assert.Equal("HELLO", response);
+            Assert.Contains(log, line => line.Contains("error") && line.Contains("boom"));
+        }
+
+        [Fact]
+        public async Task RefuseConnections_Should_Refuse_New_Clients_Until_AcceptConnections()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("ping").Receive("pong");
+            server.Start();
+            var port = server.Port;
+            using var open = await ConnectAsync(server);
+            var openStream = open.GetStream();
+
+            //Act
+            server.RefuseConnections();
+            server.RefuseConnections();
+            using var refusedClient = new TcpClient();
+            var refused = await Assert.ThrowsAsync<SocketException>(() => refusedClient.ConnectAsync(IPAddress.Loopback, port));
+            var answeredWhileRefusing = await SendAndReadAsync(openStream, "ping");
+            server.AcceptConnections();
+            using var later = await ConnectAsync(server);
+            var answeredAfterwards = await SendAndReadAsync(later.GetStream(), "ping");
+
+            //Assert
+            Assert.Equal(SocketError.ConnectionRefused, refused.SocketErrorCode);
+            Assert.Equal("pong", answeredWhileRefusing);
+            Assert.Equal("pong", answeredAfterwards);
+            Assert.True(server.Active);
+            Assert.Equal(port, server.Port);
+            await server.StopAsync().WaitAsync(ReadTimeout);
+        }
+
+        [Fact]
+        public void RefuseConnections_Should_Throw_When_The_Server_Is_Not_Started()
+        {
+            using var server = new MockServer(new TcpServer(0));
+
+            Assert.Throws<InvalidOperationException>(() => server.RefuseConnections());
+        }
+
+        [Fact]
+        public async Task FailHandshake_Should_Fail_The_Client_Handshake_And_Keep_The_Connection_Out_Of_The_Server()
+        {
+            //Arrange
+            var listener = new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None) { FailHandshake = true };
+            var failed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            listener.ConnectionFailed += (_, _) => failed.TrySetResult(true);
+            using var server = new MockServer(listener);
+            server.Mock.Send("ping").Receive("pong");
+            server.Start();
+
+            //Act
+            using (var client = await ConnectAsync(server))
+                await Assert.ThrowsAnyAsync<Exception>(async () =>
+                {
+                    await using var stream = await AuthenticateAsync(client);
+                });
+            await failed.Task.WaitAsync(ReadTimeout);
+            listener.FailHandshake = false;
+            using var working = await ConnectAsync(server);
+            await using var workingStream = await AuthenticateAsync(working);
+
+            //Assert (AuthenticationException or IOException, depending on the platform; only the working client is a connection)
+            Assert.Equal("pong", await SendAndReadAsync(workingStream, "ping"));
+            Assert.Single(server.Connections);
+        }
+
         private static async Task<TcpClient> ConnectAsync(MockServer server)
         {
             var client = new TcpClient();

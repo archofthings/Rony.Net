@@ -12,6 +12,11 @@ No breaking changes.
 - **Per-connection assertions:** `connection.Should()` with `HaveReceived`, `NotHaveReceived`, `HaveReceivedInOrder`,
   `BeInState`, `BeOpen` and `BeClosed`; only requests received on that connection count, and failure messages name it.
 - **No open connections:** `server.WaitForAllConnectionsClosedAsync()` and `server.Should().HaveNoOpenConnections()`.
+- **More failure modes:** `ResetConnection()`, `ThenResetConnection()`, `AndResetConnection()` and `connection.ResetAsync()`
+  abort a TCP connection with a reset (RST); `Truncated(byteCount)` and `Corrupted(func)` change a response as it goes on
+  the wire; `server.RefuseConnections()` / `AcceptConnections()` make new clients get "connection refused" while open
+  connections keep working; `TcpServerSsl.FailHandshake` makes every TLS handshake fail. Custom listeners opt in with
+  the new `IFaultInjectionListener`.
 - **xUnit v3:** the `Rony.Net.Xunit.v3` package, the same `MockServerTest` and `LogTo(ITestOutputHelper)` as
   `Rony.Net.Xunit` (which stays for xUnit v2) in the same `Rony.Net.Xunit` namespace.
 

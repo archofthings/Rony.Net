@@ -13,6 +13,49 @@ namespace Rony.FunctionalTests
     public class MockUdpServerTests
     {
         [Fact]
+        public async Task Truncated_Should_Send_The_Full_Datagram_And_RefuseConnections_Should_Not_Be_Supported()
+        {
+            //Arrange
+            using var server = new MockServer(new UdpServer(0));
+            server.Mock.Send("X").Receive("HELLO").Truncated(2);
+            server.Start();
+            using var client = new UdpClient();
+
+            //Act
+            await client.SendAsync(new byte[] { (byte)'X' }, 1, new IPEndPoint(IPAddress.Loopback, server.Port));
+            var response = await client.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+            //Assert
+            Assert.Equal("HELLO", response.Buffer.GetString());
+            Assert.Throws<NotSupportedException>(() => server.RefuseConnections());
+        }
+
+        [Fact]
+        public async Task ResetConnection_Should_Fall_Back_To_A_Normal_Disconnect_With_A_Log_Line()
+        {
+            //Arrange (UDP has no socket to reset, so the rule falls back to closing like Disconnect, with a log line)
+            var logged = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var server = new MockServer(new UdpServer(0))
+            {
+                Log = line =>
+                {
+                    if (line.Contains("cannot reset the connection"))
+                        logged.TrySetResult(true);
+                }
+            };
+            server.Mock.Send("RESET").ResetConnection();
+            server.Start();
+            using var client = new UdpClient();
+
+            //Act
+            await client.SendAsync(new byte[] { (byte)'R', (byte)'E', (byte)'S', (byte)'E', (byte)'T' }, 5,
+                new IPEndPoint(IPAddress.Loopback, server.Port));
+
+            //Assert
+            Assert.True(await logged.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+
+        [Fact]
         public async Task Server_Should_Return_Correct_Response()
         {
             //Arrange

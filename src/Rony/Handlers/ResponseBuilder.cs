@@ -30,6 +30,9 @@ namespace Rony.Handlers
         /// <summary>Closes the connection without replying the next time the request arrives.</summary>
         public ResponseBuilder ThenDisconnect() => Add(ResponseStep.CloseConnection());
 
+        /// <summary>Aborts the connection with a TCP reset (RST) without replying the next time the request arrives. Like <see cref="ThenDisconnect"/>, but the client sees a connection reset.</summary>
+        public ResponseBuilder ThenResetConnection() => Add(ResponseStep.ResetConnection());
+
         /// <summary>Stays silent the next time the request arrives.</summary>
         public ResponseBuilder ThenNoReply() => Add(ResponseStep.NoReply());
 
@@ -46,6 +49,59 @@ namespace Rony.Handlers
         {
             _config.LastStep.Disconnect = true;
             return this;
+        }
+
+        /// <summary>
+        /// Aborts the connection with a TCP reset (RST) right after the previous response is written (TCP only; a listener
+        /// that cannot reset closes the connection instead). A reset discards data that has not been delivered yet,
+        /// so the client may not see that response.
+        /// </summary>
+        public ResponseBuilder AndResetConnection()
+        {
+            _config.LastStep.Reset = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Sends only the first <paramref name="byteCount"/> bytes of the previous response, as it goes on the wire
+        /// (after framing and earlier <c>Truncated</c>/<c>Corrupted</c> calls). Larger than the response sends all of it,
+        /// 0 sends nothing. It does not close the connection; add <see cref="AndDisconnect"/> for that. TCP only.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="byteCount"/> is negative.</exception>
+        /// <exception cref="InvalidOperationException">The previous step sends no reply.</exception>
+        public ResponseBuilder Truncated(int byteCount)
+        {
+            if (byteCount < 0) throw new ArgumentOutOfRangeException(nameof(byteCount), "The byte count can't be negative.");
+            RequireReply(nameof(Truncated)).AddModifier("truncated", bytes =>
+            {
+                if (bytes.Length <= byteCount) return bytes;
+                var cut = new byte[byteCount];
+                Buffer.BlockCopy(bytes, 0, cut, 0, byteCount);
+                return cut;
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Changes the bytes of the previous response as they go on the wire (after framing and earlier
+        /// <c>Truncated</c>/<c>Corrupted</c> calls). <paramref name="corrupt"/> gets a copy; null means empty. If it
+        /// throws, the response is sent unmodified and the error is logged. TCP only.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="corrupt"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">The previous step sends no reply.</exception>
+        public ResponseBuilder Corrupted(Func<byte[], byte[]> corrupt)
+        {
+            if (corrupt == null) throw new ArgumentNullException(nameof(corrupt));
+            RequireReply(nameof(Corrupted)).AddModifier("corrupted", corrupt);
+            return this;
+        }
+
+        private ResponseStep RequireReply(string method)
+        {
+            var step = _config.LastStep;
+            if (!step.SendsReply)
+                throw new InvalidOperationException($"{method}() changes a response, but the previous step sends no reply (Disconnect, NoReply or ResetConnection).");
+            return step;
         }
 
         /// <summary>

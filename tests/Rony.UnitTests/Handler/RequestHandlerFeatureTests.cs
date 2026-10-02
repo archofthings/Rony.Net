@@ -14,6 +14,36 @@ namespace Rony.Tests.Handler
         private readonly RequestHandler _handler = new RequestHandler();
 
         [Fact]
+        public void Truncated_And_Corrupted_Should_Validate_Their_Arguments()
+        {
+            //Arrange
+            var builder = _handler.Send("X").Receive("HELLO");
+
+            //Assert
+            Assert.Throws<ArgumentOutOfRangeException>(() => builder.Truncated(-1));
+            Assert.Throws<ArgumentNullException>(() => builder.Corrupted(null));
+        }
+
+        [Theory]
+        [InlineData("disconnect")]
+        [InlineData("noreply")]
+        [InlineData("reset")]
+        public void Truncated_And_Corrupted_Should_Throw_When_The_Previous_Step_Sends_No_Reply(string step)
+        {
+            //Arrange
+            var builder = step switch
+            {
+                "disconnect" => _handler.Send("X").Disconnect(),
+                "noreply" => _handler.Send("X").NoReply(),
+                _ => _handler.Send("X").ResetConnection()
+            };
+
+            //Assert
+            Assert.Throws<InvalidOperationException>(() => builder.Truncated(1));
+            Assert.Throws<InvalidOperationException>(() => builder.Corrupted(bytes => bytes));
+        }
+
+        [Fact]
         public void Regex_Should_Match_Request_Text()
         {
             //Act

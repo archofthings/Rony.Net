@@ -69,6 +69,23 @@ If no certificate is found, the handshake fails and the client sees the connecti
 
 Passing a certificate object is more reliable, because it works on every machine and CI agent without setup.
 
+## Failing the handshake
+To test how your client reacts to a server whose TLS handshake fails, set `FailHandshake`. The server waits for the
+client's hello, answers with a fatal `handshake_failure` alert and closes the connection:
+
+```csharp
+using var certificate = TestCertificates.CreateSelfSigned();
+using var server = new MockServer(new TcpServerSsl(0, certificate, SslProtocols.Tls12) { FailHandshake = true });
+server.Start();
+
+// AuthenticationException or IOException, depending on the platform.
+await Assert.ThrowsAnyAsync<Exception>(() => TcpTestClient.ConnectSslAsync(server.Port, certificate));
+server.Should().HaveAcceptedConnections(Times.Never());
+```
+
+The failed connection never appears in `server.Connections`; it is [logged](Logging-and-Diagnostics) as a failed
+connection. You can change `FailHandshake` while the server runs; it applies to new connections.
+
 ## Constructors
 ```csharp
 new TcpServerSsl(port, certificate, protocol)

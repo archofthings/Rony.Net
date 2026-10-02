@@ -75,6 +75,13 @@ namespace Rony.Models
         public Task CloseAsync() => _server.CloseAsync(this);
 
         /// <summary>
+        /// Aborts the connection from the server side so the client sees a connection reset (RST) instead of a clean
+        /// end of stream.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The listener does not implement <see cref="Interfaces.IFaultInjectionListener"/> (UDP has no connections at all).</exception>
+        public Task ResetAsync() => _server.ResetAsync(this);
+
+        /// <summary>
         /// Waits until the connection is closed, by either side; returns at once if it already is. Use it to check
         /// that your client closes its connections. Throws <see cref="TimeoutException"/> after
         /// <paramref name="timeout"/>, which defaults to 5 seconds.

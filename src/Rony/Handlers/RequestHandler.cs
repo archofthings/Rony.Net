@@ -182,6 +182,12 @@ namespace Rony.Handlers
         /// <summary>Closes the connection without replying (TCP). For UDP this behaves like <see cref="NoReply"/>.</summary>
         public ResponseBuilder Disconnect() => Add(ResponseStep.CloseConnection());
 
+        /// <summary>
+        /// Aborts the connection with a TCP reset (RST) without replying, so the client sees a connection reset instead
+        /// of a clean end of stream (TCP only). Like <see cref="Disconnect"/> on a listener that cannot reset.
+        /// </summary>
+        public ResponseBuilder ResetConnection() => Add(ResponseStep.ResetConnection());
+
         /// <summary>Accepts the request but never replies, to test client timeouts.</summary>
         public ResponseBuilder NoReply() => Add(ResponseStep.NoReply());
 
