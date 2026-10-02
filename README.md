@@ -24,21 +24,17 @@ server.Should().HaveReceived("PING", Times.Once());
 📖 **Full documentation, with an example for every feature, is in the [wiki](https://github.com/archofthings/Rony.Net/wiki).**
 
 ## Features
-Each line links to the wiki page with the details and examples.
-- **Real sockets.** TCP, TCP + SSL/TLS and UDP servers; your client code runs unchanged. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
-- **Free ports and a clean lifecycle.** Port `0` picks a free port, so parallel tests never collide; start, stop and restart, synchronously or with `await using`, `StartAsync()` and `StopAsync()`. → [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
-- **Any protocol.** Text or binary; persistent connections or close after every response; messages split by delimiter, length prefix (big- or little-endian, optionally counting itself), fixed length, start and end bytes (STX/ETX), or your own framing. → [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
-- **Flexible matching.** Exact requests, regular expressions, text or byte predicates, a default response, and a handler for unmatched requests. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
+- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
+- **Free ports and a clean lifecycle.** Port `0` means tests never fight over ports, even in parallel; start and stop synchronously or with `await using`. → [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
+- **Any protocol.** Text or binary; persistent connections; delimited, length-prefixed, fixed-length, STX/ETX or custom messages. → [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
+- **Flexible matching.** Exact requests, regular expressions, predicates, a default response and a handler for unmatched requests. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
 - **Scripted responses.** Fixed, computed from the request, or a different one each time. → [Configuring Responses](https://github.com/archofthings/Rony.Net/wiki/Configuring-Responses), [Response Sequences](https://github.com/archofthings/Rony.Net/wiki/Response-Sequences)
+- **Server-initiated messages.** Greetings on connect, pushed messages and broadcasts; connection list and events. → [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
 - **Stateful scenarios.** "`LIST` only works after `LOGIN`", for the whole server or per connection. → [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
-- **Server-initiated messages.** Greetings on connect, pushed messages and broadcasts; a list of connections and connection events. → [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
-- **Failure testing.** Delays, chunked and throttled responses, silence, dropped and reset connections, truncated or corrupted responses, refused connections, failing TLS handshakes and flaky servers. → [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS#failing-the-handshake)
-- **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` with `Times`, order, strict or fail-fast mode, connection counts and "no open connections"; the same checks as `Verify(...)` methods. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests)
-- **No sleeps.** Wait for a request, a connection, a connection to close, or all of them to close. → [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests), [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
+- **Failure testing.** Delays, chunked and throttled responses, dropped and reset connections, truncated or corrupted responses, refused connections, failing TLS handshakes, silence and flaky servers. → [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
+- **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, and waiting for requests and connections without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
 - **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
-- **Test framework packages.** A base class that starts a server per test and logs to the test output, for xUnit v2, xUnit v3, NUnit and MSTest. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
-- **Your own transport.** Implement `IListener`, plus optional interfaces for connections and failure simulation. → [Custom Listeners](https://github.com/archofthings/Rony.Net/wiki/Custom-Listeners)
-- **Works everywhere.** .NET Core 3.x and every later .NET, on Windows, Linux and macOS.
+- **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit v2 or v3, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
 ## Install
 ```console
@@ -76,8 +72,152 @@ public async Task Client_gets_pong()
 ```
 More in [Getting Started](https://github.com/archofthings/Rony.Net/wiki/Getting-Started).
 
+## Servers
+```csharp
+new MockServer(new TcpServer(0));                                    // TCP on 127.0.0.1
+new MockServer(new TcpServerSsl(0, certificate, SslProtocols.None)); // TCP + SSL/TLS
+new MockServer(new UdpServer("127.0.0.1", 0));                       // UDP
+
+await using var server = new MockServer(new TcpServer(0));           // async lifecycle: also StartAsync(), StopAsync()
+```
+TCP connections stay open, so a client can send many requests over one connection. Each connection is handled
+independently, and responses keep their order. `await using` and `StopAsync()` wait for the server's background work,
+so no callback or log line runs after the test.
+Details: [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers) · [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS) (including creating a test certificate in code and failing the handshake) ·
+[Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
+
+## Message framing
+TCP doesn't keep message boundaries. Tell the server where messages end, and it splits requests and frames responses for you:
+```csharp
+new TcpServer(0) { Framing = MessageFraming.Delimiter("\r\n") };   // line-based protocols
+new TcpServer(0) { Framing = MessageFraming.LengthPrefix(2) };     // binary, length-prefixed
+new TcpServer(0) { Framing = MessageFraming.LengthPrefix(4, bigEndian: false) };                       // little-endian
+new TcpServer(0) { Framing = MessageFraming.LengthPrefix(2, bigEndian: true, includesPrefix: true) };  // length counts itself
+new TcpServer(0) { Framing = MessageFraming.FixedLength(8) };      // fixed-size records
+new TcpServer(0) { Framing = MessageFraming.StxEtx };              // 0x02 ... 0x03; StartEnd(start, end) for other bytes
+new TcpServer(0) { KeepAlive = false };                            // close after every response
+```
+Details, and custom framing: [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
+
+## Configuring responses
+```csharp
+server.Mock.Send("version").Receive("1.0.0");                                  // text
+server.Mock.Send(new byte[] { 0x01, 0x02 }).Receive(new byte[] { 0x03 });      // bytes
+server.Mock.Send("hello").Receive(text => text.ToUpper());                     // computed
+server.Mock.Send("").Receive("ERROR unknown command");                         // any other request
+```
+Details: [Configuring Responses](https://github.com/archofthings/Rony.Net/wiki/Configuring-Responses)
+
+### Matching
+```csharp
+server.Mock.Send(new Regex(@"^LOGIN \w+$")).Receive("WELCOME");
+server.Mock.SendMatching(text => text.StartsWith("GET ")).Receive("200 OK");
+server.Mock.SendMatchingBytes(bytes => bytes[0] == 0x02).Receive(new byte[] { 0x06 });
+```
+An exact request wins over patterns and predicates, which win over the `Send("")` default.
+Details: [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
+
+### Sequences
+```csharp
+server.Mock.Send("status").Receive("busy").Then("busy").Then("ready");   // busy, busy, ready, ready, ...
+```
+Details: [Response Sequences](https://github.com/archofthings/Rony.Net/wiki/Response-Sequences)
+
+### Failures
+```csharp
+server.Mock.Send("report").Receive("done").After(TimeSpan.FromSeconds(2));   // slow
+server.Mock.Send("pay").Disconnect().Then("PAID");                           // drop once, then succeed
+server.Mock.Send("ping").NoReply();                                          // never answer
+server.Mock.Send("QUIT").Receive("BYE").AndDisconnect();                     // reply, then hang up
+server.Mock.Send("X").ResetConnection();                                     // TCP reset instead of a clean close
+server.Mock.Send("X").Receive("HELLO WORLD").Truncated(5).AndDisconnect();   // only the first 5 bytes
+server.Mock.Send("X").Receive("HELLO").Corrupted(bytes => { bytes[0] ^= 0xFF; return bytes; });
+server.Mock.Send("GET").Receive(body).InChunks(16, TimeSpan.FromMilliseconds(50));   // piece by piece
+server.Mock.Send("GET").Receive(body).Throttled(bytesPerSecond: 1024);               // slow link
+server.RefuseConnections();                                                  // "connection refused" until AcceptConnections()
+new TcpServerSsl(0, certificate, SslProtocols.Tls12) { FailHandshake = true };   // every TLS handshake fails
+```
+Details: [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
+
+### Unmatched requests
+```csharp
+server.Mock.OnUnmatched().Receive(text => $"ERR unknown command '{text}'");   // answer, keep the connection
+server.Mock.FailOnUnmatched = true;                                           // fail Verify/WaitFor right away
+```
+Details: [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching#unmatched-requests)
+
+### Stateful scenarios
+```csharp
+server.Mock.Send("LOGIN bob").Receive("OK").GoTo("loggedIn");
+server.Mock.InState("loggedIn").Send("LIST").Receive("a,b,c");
+server.Mock.Send("LIST").Receive("ERR not logged in");
+server.Mock.StateScope = StateScope.Connection;                  // optional: a session per connection
+```
+Details: [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
+
+## Connections and pushed messages
+```csharp
+server.Mock.OnConnect().Receive("220 mail.test ready\r\n");     // greet every client first
+await server.Connections[0].SendAsync("NOTIFY price-changed");   // push to one client
+await server.BroadcastAsync("SHUTDOWN in 5 minutes");            // or to all of them
+
+server.Should().HaveAcceptedConnections(Times.Once());           // the client reused its connection
+await server.Connections[0].WaitForCloseAsync();                 // and closed it
+await server.WaitForAllConnectionsClosedAsync();                 // or wait for all of them
+server.Should().HaveNoOpenConnections();
+```
+Details: [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
+
+## Checking what your client sent
+```csharp
+server.Should().HaveReceived("LIST", Times.Exactly(2))
+    .And.HaveReceived(r => r.BodyString.StartsWith("LOGIN"), Times.Once())
+    .And.NotHaveReceived("DELETE")
+    .And.HaveReceivedInOrder("LOGIN", "LIST", "QUIT")   // order (others may be in between)
+    .And.HaveNoUnmatchedRequests();                     // strict mode
+
+await server.Mock.WaitForRequestAsync("HEARTBEAT");     // instead of Thread.Sleep
+var requests = server.ReceivedRequests;                 // body, sender, time, matched
+
+connection.Should().HaveReceived("LOGIN bob", Times.Once())   // only what one connection sent
+    .And.HaveReceivedInOrder("LOGIN bob", "LIST")
+    .And.BeClosed();
+```
+A failed check lists every request the server received. The same checks are also available as
+`server.Mock.Verify(...)` methods.
+Details: [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests) · [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
+
+## Logging
+```csharp
+server.Log = output.WriteLine;   // xUnit's ITestOutputHelper, Console.WriteLine, ...
+```
+```
+[Rony 10:15:02.097] #1 connected from 127.0.0.1:50124
+[Rony 10:15:02.102] #1 received "PING" (matched "PING")
+[Rony 10:15:02.103] #1 sent "PONG"
+```
+Errors that are otherwise silent, such as an exception in a `Receive(...)` function or a failed TLS handshake, are logged too.
+Details: [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
+
+## Test framework packages
+```csharp
+public class PingTests : MockServerTest          // Rony.Net.Xunit or Rony.Net.Xunit.v3; also Rony.Net.NUnit and Rony.Net.MSTest
+{
+    public PingTests(ITestOutputHelper output) : base(output) { }
+
+    [Fact]
+    public async Task Client_gets_pong()
+    {
+        Server.Mock.Send("PING").Receive("PONG");   // a started server per test, logging to the test output
+        // ...
+    }
+}
+```
+Details: [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
+
 ## More
 - [Recipes](https://github.com/archofthings/Rony.Net/wiki/Recipes): testing a real client class with retries and timeouts; xUnit, NUnit and MSTest setup.
+- [Custom Listeners](https://github.com/archofthings/Rony.Net/wiki/Custom-Listeners): mock over your own transport, or with no network at all; optional interfaces add connections and failure simulation.
 - [API Reference](https://github.com/archofthings/Rony.Net/wiki/API-Reference) · [Troubleshooting](https://github.com/archofthings/Rony.Net/wiki/Troubleshooting)
 - [Runnable samples](https://github.com/archofthings/Rony.Net/tree/main/samples/Rony.Samples): every wiki example as a passing test.
 
