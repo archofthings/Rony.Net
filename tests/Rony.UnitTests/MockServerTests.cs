@@ -68,7 +68,7 @@ namespace Rony.Tests
 
             //Act
             server.Mock.Send(request).Receive(new byte[] { 3, 4, 5 });
-            
+
             //Assert
             Assert.Throws<ArgumentException>(() => server.Mock.Send(request).Receive("test"));
         }
