@@ -18,7 +18,6 @@ A feature in Rony.Net is finished only when every part below is done. Put the li
       interface. If a break seems unavoidable, stop and ask the user.
 - [ ] Behaviour stated for TCP, TLS and UDP (or "not supported on UDP" and what happens then).
 - [ ] Edge cases and error behaviour named: these become the tests.
-- [ ] The user approved the public API.
 
 ## 2. Code (`developer`)
 - [ ] Implementation in `src/Rony` (or the framework packages), building for `netstandard2.1` and `net8.0`

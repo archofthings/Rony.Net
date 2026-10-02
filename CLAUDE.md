@@ -2,7 +2,7 @@
 
 ## Project
 - Repo: `archofthings/Rony.Net` (remote `origin`), default branch `main`.
-- Packages on nuget.org: `Rony.Net` (core), `Rony.Net.Xunit`, `Rony.Net.NUnit`, `Rony.Net.MSTest`. All four share
+- Packages on nuget.org: `Rony.Net` (core), `Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`. All share
   the one `<Version>` in `Directory.Build.props`; a project file never sets its own.
 - `global.json` asks for the .NET 8 SDK or any newer one.
 - Open work: `BACKLOG.md` (proposed features and follow-ups; update it when an item is finished or added).
@@ -59,7 +59,8 @@ Documentation:
 1. Analyse the request and relevant code; produce a design/spec (use plan mode for bigger changes).
    The spec must include: files to change, public API with signatures, behaviour, edge cases, acceptance
    criteria, and which wiki page(s) and sample file document it (see the `new-feature` skill for the checklist).
-   Wait for my approval on bigger designs and on every new public API.
+   Wait for my approval on bigger designs. A new public API needs no approval: choose the names you
+   recommend and list them in the summary.
 2. Delegate implementation to `developer` with the full spec (subagents do not see this conversation).
 3. Delegate test verification to `tester`, passing the spec and the developer's summary.
 4. If tests fail: diagnose the root cause yourself, then send a targeted fix spec to `developer`
