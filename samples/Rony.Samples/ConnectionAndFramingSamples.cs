@@ -85,6 +85,62 @@ public class ConnectionAndFramingSamples
     }
 
     [Fact]
+    public async Task Little_endian_length_prefix()
+    {
+        using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.LengthPrefix(4, bigEndian: false) });
+        server.Mock.Send(new byte[] { 0x01 }).Receive(new byte[] { 0xAA, 0xBB });
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync(new byte[] { 0x01, 0x00, 0x00, 0x00, 0x01 });   // length 1 (little-endian), then the payload
+
+        var response = await client.ReceiveExactlyAsync(6);
+        Assert.Equal(new byte[] { 0x02, 0x00, 0x00, 0x00, 0xAA, 0xBB }, response);
+    }
+
+    [Fact]
+    public async Task Length_that_includes_the_prefix()
+    {
+        var framing = MessageFraming.LengthPrefix(2, bigEndian: true, includesPrefix: true);
+        using var server = new MockServer(new TcpServer(0) { Framing = framing });
+        server.Mock.Send(new byte[] { 0x01, 0x02, 0x03 }).Receive(new byte[] { 0xAA });
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync(new byte[] { 0x00, 0x05, 0x01, 0x02, 0x03 });   // length 5 = 2 prefix bytes + 3 payload bytes
+
+        var response = await client.ReceiveExactlyAsync(3);
+        Assert.Equal(new byte[] { 0x00, 0x03, 0xAA }, response);
+    }
+
+    [Fact]
+    public async Task Fixed_length_messages()
+    {
+        using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.FixedLength(8, padding: (byte)' ') });
+        server.Mock.Send("PING    ").Receive("PONG");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync("PING    ");
+
+        Assert.Equal("PONG    ", await client.ReceiveAsync());
+    }
+
+    [Fact]
+    public async Task Start_and_end_bytes()
+    {
+        using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.StxEtx });
+        server.Mock.Send("STATUS").Receive("OK");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync(new byte[] { 0x02 }.Concat("STATUS".GetBytes()).Append((byte)0x03).ToArray());
+
+        var response = await client.ReceiveBytesAsync();
+        Assert.Equal(new byte[] { 0x02, (byte)'O', (byte)'K', 0x03 }, response);
+    }
+
+    [Fact]
     public async Task Custom_framing_with_start_and_end_markers()
     {
         using var server = new MockServer(new TcpServer(0) { Framing = new StxEtxFraming() });

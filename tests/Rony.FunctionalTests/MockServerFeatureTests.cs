@@ -166,6 +166,55 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task StxEtx_Framing_Should_Split_Messages_And_Frame_Responses()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.StxEtx });
+            server.Mock.Send("one").Receive("1");
+            server.Mock.Send("two").Receive("2");
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act
+            await stream.WriteAsync(new byte[] { 0x02, (byte)'o', (byte)'n', (byte)'e', 0x03, 0x02, (byte)'t' });
+            await stream.WriteAsync(new byte[] { (byte)'w', (byte)'o', 0x03 });
+            var responses = await ReadExactlyAsync(stream, 6);
+
+            //Assert
+            Assert.Equal(new byte[] { 0x02, (byte)'1', 0x03, 0x02, (byte)'2', 0x03 }, responses);
+        }
+
+        [Fact]
+        public async Task LengthPrefix_Including_The_Prefix_Should_Close_Only_The_Connection_With_An_Invalid_Length()
+        {
+            //Arrange
+            var tcpServer = new TcpServer(0) { Framing = MessageFraming.LengthPrefix(2, true, true) };
+            var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            using var server = new MockServer(tcpServer) { Log = lines.Enqueue };
+            server.Mock.Send(new byte[] { 0x01 }).Receive(new byte[] { 0x02 });
+            server.Start();
+            var failed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+            tcpServer.ConnectionFailed += (_, exception) => failed.TrySetResult(exception);
+            using var bad = await ConnectAsync(server);
+            using var good = await ConnectAsync(server);
+            var goodStream = good.GetStream();
+
+            //Act
+            await bad.GetStream().WriteAsync(new byte[] { 0x00, 0x01, 0x09 });
+            var exception = await failed.Task.WaitAsync(ReadTimeout);
+            var badResponse = await ReadToEndAsync(bad.GetStream());
+            await goodStream.WriteAsync(new byte[] { 0x00, 0x03, 0x01 });
+            var response = await ReadExactlyAsync(goodStream, 3);
+
+            //Assert
+            Assert.IsType<InvalidDataException>(exception);
+            Assert.Equal("", badResponse);
+            Assert.Equal(new byte[] { 0x00, 0x03, 0x02 }, response);
+            Assert.Contains(lines, line => line.Contains("failed"));
+        }
+
+        [Fact]
         public async Task Sequence_Should_Return_Responses_In_Order_On_One_Connection()
         {
             //Arrange
@@ -552,6 +601,53 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task AndResetConnection_Should_Reset_The_Client_After_The_Reply()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("X").Receive("partial").AndResetConnection();
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+            var connection = await server.WaitForConnectionAsync();
+
+            //Act
+            await WriteAsync(stream, "X");
+            using var timeout = new CancellationTokenSource(ReadTimeout);
+
+            //Assert (the reply may be discarded by the reset; a clean close would end the read with 0 bytes instead of failing)
+            await Assert.ThrowsAnyAsync<IOException>(async () =>
+            {
+                var buffer = new byte[16];
+                while (await stream.ReadAsync(buffer, timeout.Token) > 0)
+                {
+                }
+            });
+            await connection.WaitForCloseAsync();
+            server.Should().HaveNoOpenConnections();
+        }
+
+        [Fact]
+        public async Task Truncated_Greeting_Should_Send_Only_The_First_Bytes_And_Keep_The_Connection_Usable()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.OnConnect().Receive("hello").Truncated(2);
+            server.Mock.Send("ping").Receive("pong");
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act
+            var greeting = await ReadExactlyAsync(stream, 2);
+            var response = await SendAndReadAsync(stream, "ping");
+
+            //Assert
+            Assert.Equal("he", greeting.GetString());
+            Assert.Equal("pong", response);
+        }
+
+        [Fact]
         public async Task Corrupted_Should_Change_A_Copy_Of_The_Response()
         {
             //Arrange
@@ -700,6 +796,7 @@ namespace Rony.FunctionalTests
             var port = server.Port;
             using var open = await ConnectAsync(server);
             var openStream = open.GetStream();
+            await server.WaitForConnectionAsync();
 
             //Act
             server.RefuseConnections();
@@ -712,7 +809,7 @@ namespace Rony.FunctionalTests
             var answeredAfterwards = await SendAndReadAsync(later.GetStream(), "ping");
 
             //Assert
-            Assert.Equal(SocketError.ConnectionRefused, refused.SocketErrorCode);
+            Assert.True(refused.SocketErrorCode == SocketError.ConnectionRefused, $"Expected ConnectionRefused but got {refused.SocketErrorCode}: {refused.Message}");
             Assert.Equal("pong", answeredWhileRefusing);
             Assert.Equal("pong", answeredAfterwards);
             Assert.True(server.Active);

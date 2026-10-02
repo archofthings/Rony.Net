@@ -21,6 +21,9 @@ No breaking changes.
   `Throttled(bytesPerSecond)` sends it at about that rate. A message pushed meanwhile waits for the last piece, and
   `StopAsync()` ends a slow response at once. `IFaultInjectionListener` gains a chunked `SendRawAsync` overload (the
   interface is new in 1.2).
+- **More framings:** `MessageFraming.LengthPrefix(prefixLength, bigEndian, includesPrefix)` for lengths that count the
+  prefix, `FixedLength(length, padding)`, `StartEnd(start, end)` and `StxEtx`. The little-endian length prefix
+  (`bigEndian: false`) existed before and is now documented.
 - **xUnit v3:** the `Rony.Net.Xunit.v3` package, the same `MockServerTest` and `LogTo(ITestOutputHelper)` as
   `Rony.Net.Xunit` (which stays for xUnit v2) in the same `Rony.Net.Xunit` namespace.
 

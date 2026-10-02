@@ -88,6 +88,8 @@ TCP doesn't keep message boundaries. Tell the server where messages end, and it 
 ```csharp
 new TcpServer(0) { Framing = MessageFraming.Delimiter("\r\n") };   // line-based protocols
 new TcpServer(0) { Framing = MessageFraming.LengthPrefix(2) };     // binary, length-prefixed
+new TcpServer(0) { Framing = MessageFraming.FixedLength(8) };         // fixed-size records
+new TcpServer(0) { Framing = MessageFraming.StxEtx };                // 0x02 ... 0x03
 new TcpServer(0) { KeepAlive = false };                            // close after every response
 ```
 Details, and custom framing: [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)

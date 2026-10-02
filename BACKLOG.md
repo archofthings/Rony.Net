@@ -1,7 +1,7 @@
 # Backlog
 
-Proposed work for Rony.Net after 1.1.0. Nothing here is started or promised. The numbers are the ones used in the
-1.1 planning, so they have gaps (1–5, 12 and 14 shipped in 1.1.0; see `CHANGELOG.md`).
+Proposed work for Rony.Net after 1.2.0. Nothing here is started or promised. The numbers are the ones used in the
+1.1 planning, so they have gaps (1–5, 12 and 14 shipped in 1.1.0; 6, 7, 8 and 16 in 1.2.0; see `CHANGELOG.md`).
 
 To start an item: `/new-feature <item>` gives the checklist. When an item ships, remove it here and describe it in
 `CHANGELOG.md`.
@@ -10,19 +10,13 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 
 | Order | Item | Why this position |
 |---|---|---|
-| 5 | 8. More framings | Self-contained in `MessageFraming.cs` |
-| 6 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
-| 7 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
-| 8 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
-| 9 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
+| 1 | Make the old tests follow the test rules (below) | Full test runs are unreliable on macOS until then |
+| 2 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
+| 3 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
+| 4 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
+| 5 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
 
 ## Library features
-
-### 8. More framings
-- Little-endian length prefix.
-- A length prefix that includes its own size.
-- Fixed-length messages.
-- STX/ETX.
 
 ### 9. Partial matching
 - JSON field matching: `SendJson(j => ...)`.
@@ -55,5 +49,5 @@ configuration.
       Node 20 deprecation warning).
 - [ ] Add an `.editorconfig` and make the code pass `dotnet format --verify-no-changes` (it reports 6 issues
       today), then check it in CI.
-- [ ] Move the package metadata that the four projects repeat (authors, license, repository, Source Link
+- [ ] Move the package metadata that the five projects repeat (authors, license, repository, Source Link
       settings) into a `src/Directory.Build.props`.

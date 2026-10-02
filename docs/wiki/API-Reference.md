@@ -12,7 +12,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `void Stop()` | Stops listening, closes connections and cancels delayed responses. Repeated calls do nothing. |
 | `void Dispose()` | Stops the server and releases the listener |
 | `Task StartAsync(CancellationToken cancellationToken = default)` | Starts listening; completes once the server is listening. A cancelled token cancels the task and the server is not started. |
-| `void RefuseConnections()` | New clients get "connection refused"; open connections keep working. Throws `InvalidOperationException` when not started, `NotSupportedException` without `IFaultInjectionListener` |
+| `void RefuseConnections()` | New clients get "connection refused"; connections the server has accepted keep working (a client not accepted yet may be reset). Throws `InvalidOperationException` when not started, `NotSupportedException` without `IFaultInjectionListener` |
 | `void AcceptConnections()` | Listens again on the same port; does nothing when not refusing. Throws `SocketException` if the port cannot be bound again |
 | `Task StopAsync()` | Like `Stop()`, then waits until the server's background work has ended; afterwards no callback of yours runs until the next start. Do not await it from inside a callback. |
 | `ValueTask DisposeAsync()` | `StopAsync()`, then the same cleanup as `Dispose()` (`await using`) |
@@ -137,7 +137,7 @@ The last response in a sequence repeats once the sequence ends.
 | `IMessageFraming Framing` | How the stream is split into messages. Default: `MessageFraming.None`. Set before `Start()`. |
 | `bool KeepAlive` | Keep connections open after a response. Default: `true`. |
 | `bool FailHandshake` | (`TcpServerSsl` only) Every new TLS handshake fails. Can change while running. |
-| `void RefuseConnections()` | Stops accepting new connections (clients get "connection refused"); open connections keep working |
+| `void RefuseConnections()` | Stops accepting new connections (clients get "connection refused"); accepted connections keep working |
 | `void AcceptConnections()` | Listens again on the same port; does nothing when not refusing. Throws `SocketException` if the port cannot be bound again |
 | `byte[] Frame(byte[] message)` | Frames a message with `Framing` |
 | `Task SendRawAsync(byte[] data, object sender)` | Writes bytes to a connection as they are, without framing |
@@ -153,6 +153,10 @@ The last response in a sequence repeats once the sequence ends.
 | `MessageFraming.None` | One burst is one message (default) |
 | `MessageFraming.Delimiter(string or byte[] delimiter)` | Messages end with the delimiter |
 | `MessageFraming.LengthPrefix(int prefixLength = 4, bool bigEndian = true)` | Messages start with a 1, 2 or 4-byte length |
+| `MessageFraming.LengthPrefix(int prefixLength, bool bigEndian, bool includesPrefix)` | Like the above; with `includesPrefix: true` the length counts the prefix too. A length smaller than the prefix closes that connection |
+| `MessageFraming.FixedLength(int length, byte padding = 0)` | Every `length` bytes are one message; shorter responses are padded on the right |
+| `MessageFraming.StartEnd(byte start, byte end)` | Messages sit between a start and an end byte; no escaping |
+| `MessageFraming.StxEtx` | `StartEnd(0x02, 0x03)` |
 | `IMessageFraming.Decode(ReadOnlySpan<byte> data, bool endOfBurst, out int consumed)` | Extracts complete messages |
 | `IMessageFraming.Encode(byte[] response)` | Frames a response |
 
