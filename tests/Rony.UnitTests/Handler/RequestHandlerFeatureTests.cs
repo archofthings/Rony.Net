@@ -14,6 +14,65 @@ namespace Rony.Tests.Handler
         private readonly RequestHandler _handler = new RequestHandler();
 
         [Fact]
+        public void Truncated_And_Corrupted_Should_Validate_Their_Arguments()
+        {
+            //Arrange
+            var builder = _handler.Send("X").Receive("HELLO");
+
+            //Assert
+            Assert.Throws<ArgumentOutOfRangeException>(() => builder.Truncated(-1));
+            Assert.Throws<ArgumentNullException>(() => builder.Corrupted(null));
+        }
+
+        [Theory]
+        [InlineData("chunks-size")]
+        [InlineData("chunks-delay")]
+        [InlineData("throttled")]
+        [InlineData("chunks-noreply")]
+        [InlineData("throttled-noreply")]
+        public void InChunks_And_Throttled_Should_Validate_Their_Arguments_And_Need_A_Reply(string case_)
+        {
+            //Arrange
+            var reply = _handler.Send("X").Receive("HELLO");
+            var noReply = _handler.Send("Y").NoReply();
+
+            //Act
+            Action action = case_ switch
+            {
+                "chunks-size" => () => reply.InChunks(0),
+                "chunks-delay" => () => reply.InChunks(1, TimeSpan.FromMilliseconds(-1)),
+                "throttled" => () => reply.Throttled(0),
+                "chunks-noreply" => () => noReply.InChunks(1),
+                _ => () => noReply.Throttled(1)
+            };
+
+            //Assert
+            if (case_.EndsWith("noreply"))
+                Assert.Throws<InvalidOperationException>(action);
+            else
+                Assert.Throws<ArgumentOutOfRangeException>(action);
+        }
+
+        [Theory]
+        [InlineData("disconnect")]
+        [InlineData("noreply")]
+        [InlineData("reset")]
+        public void Truncated_And_Corrupted_Should_Throw_When_The_Previous_Step_Sends_No_Reply(string step)
+        {
+            //Arrange
+            var builder = step switch
+            {
+                "disconnect" => _handler.Send("X").Disconnect(),
+                "noreply" => _handler.Send("X").NoReply(),
+                _ => _handler.Send("X").ResetConnection()
+            };
+
+            //Assert
+            Assert.Throws<InvalidOperationException>(() => builder.Truncated(1));
+            Assert.Throws<InvalidOperationException>(() => builder.Corrupted(bytes => bytes));
+        }
+
+        [Fact]
         public void Regex_Should_Match_Request_Text()
         {
             //Act

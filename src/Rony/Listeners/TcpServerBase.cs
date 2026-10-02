@@ -5,6 +5,7 @@ using Rony.Wrappers;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -16,12 +17,15 @@ namespace Rony.Listeners
     /// Shared logic of the TCP based servers: accepts connections in the background, reads every
     /// connection independently and keeps connections open across requests.
     /// </summary>
-    public abstract class TcpServerBase : IConnectionListener
+    public abstract class TcpServerBase : IFaultInjectionListener
     {
         private readonly object _syncRoot = new object();
         private readonly ConcurrentDictionary<TcpConnection, byte> _connections = new ConcurrentDictionary<TcpConnection, byte>();
+        private readonly ConcurrentDictionary<Task, CancellationToken> _background = new ConcurrentDictionary<Task, CancellationToken>();
         private TcpListenerWrapper _listener;
         private CancellationTokenSource _cancellation;
+        private CancellationTokenSource _acceptCancellation;
+        private bool _refusing;
         private AsyncQueue<Message> _messages;
 
         /// <summary>The address the server listens on.</summary>
@@ -36,7 +40,7 @@ namespace Rony.Listeners
             get
             {
                 lock (_syncRoot)
-                    return _listener != null && _listener.Active;
+                    return _listener != null && (_refusing || _listener.Active);
             }
         }
 
@@ -91,7 +95,139 @@ namespace Rony.Listeners
                 _listener = listener;
                 _cancellation = new CancellationTokenSource();
                 _messages = new AsyncQueue<Message>();
-                _ = AcceptLoopAsync(listener, _messages, _cancellation.Token);
+                StartAccepting(listener);
+            }
+        }
+
+        /// <summary>Starts an accept loop for <paramref name="listener"/> that ends with the server or when connections are refused. Call under the lock.</summary>
+        private void StartAccepting(TcpListenerWrapper listener)
+        {
+            _acceptCancellation = CancellationTokenSource.CreateLinkedTokenSource(_cancellation.Token);
+            Track(AcceptLoopAsync(listener, _messages, _cancellation.Token, _acceptCancellation.Token), _acceptCancellation.Token);
+        }
+
+        /// <inheritdoc />
+        /// <exception cref="InvalidOperationException">The server is not started.</exception>
+        public void RefuseConnections()
+        {
+            lock (_syncRoot)
+            {
+                if (_listener == null) throw new InvalidOperationException("The server is not started.");
+                if (_refusing) return;
+
+                // End the accept loop first, so closing the socket is not mistaken for a failed accept.
+                _acceptCancellation.Cancel();
+                _acceptCancellation.Dispose();
+                AcceptPendingConnections(_listener, _messages, _cancellation.Token);
+                _listener.Stop();
+                _refusing = true;
+            }
+        }
+
+        /// <summary>
+        /// Accepts the connections that completed their connect but wait in the accept queue, so closing the listening
+        /// socket does not drop them. A client the accept loop obtained at the same time is handled by the loop itself,
+        /// because it tracks every client it gets, also after its accept token was cancelled. Call under the lock.
+        /// </summary>
+        private void AcceptPendingConnections(TcpListenerWrapper listener, AsyncQueue<Message> messages, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Never block while holding the lock, e.g. when the loop takes the last pending connection first.
+                listener.Server.Blocking = false;
+                while (listener.Pending())
+                {
+                    // Read off the caller's stack: connection events and user callbacks must not run under the lock.
+                    var client = listener.AcceptTcpClient();
+                    Track(Task.Run(() => ReadConnectionAsync(client, messages, cancellationToken)), cancellationToken);
+                }
+            }
+            catch (SocketException)
+            {
+                // Nothing (more) to accept.
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        /// <inheritdoc />
+        /// <exception cref="SocketException">The port could not be bound again.</exception>
+        public void AcceptConnections()
+        {
+            lock (_syncRoot)
+            {
+                if (_listener == null || !_refusing) return;
+
+                var listener = new TcpListenerWrapper(Address, Port);
+                listener.Start();
+                _listener = listener;
+                _refusing = false;
+                StartAccepting(listener);
+            }
+        }
+
+        /// <inheritdoc />
+        public byte[] Frame(byte[] message)
+        {
+            if (message == null) throw new ArgumentNullException(nameof(message));
+            return Framing.Encode(message);
+        }
+
+        /// <inheritdoc />
+        public Task SendRawAsync(byte[] data, object sender)
+        {
+            if (data == null) throw new ArgumentNullException(nameof(data));
+            var connection = (TcpConnection)sender;
+            if (connection.IsClosed) throw new InvalidOperationException("The connection is closed.");
+            return data.Length == 0 ? Task.CompletedTask : connection.WriteAsync(data);
+        }
+
+        /// <inheritdoc />
+        public Task SendRawAsync(byte[] data, object sender, int chunkSize, TimeSpan delay, CancellationToken cancellationToken)
+        {
+            if (data == null) throw new ArgumentNullException(nameof(data));
+            if (chunkSize <= 0) throw new ArgumentOutOfRangeException(nameof(chunkSize), "The chunk size must be greater than zero.");
+            if (delay < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(delay), "The delay must not be negative.");
+            var connection = (TcpConnection)sender;
+            if (connection.IsClosed) throw new InvalidOperationException("The connection is closed.");
+            return data.Length == 0 ? Task.CompletedTask : connection.WriteAsync(data, chunkSize, delay, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task ResetAsync(object sender)
+        {
+            ((TcpConnection)sender).Reset();
+            return Task.CompletedTask;
+        }
+
+        /// <summary>Remembers a background task, until it completes, so <see cref="WaitForBackgroundWorkAsync"/> can wait for it.</summary>
+        private void Track(Task task, CancellationToken cancellationToken)
+        {
+            _background[task] = cancellationToken;
+            task.ContinueWith(completed => _background.TryRemove(completed, out _), TaskScheduler.Default);
+        }
+
+        /// <summary>
+        /// Waits until the accept loop and every connection task of a stopped run (the ones whose token is cancelled)
+        /// have ended, so no connection event is raised afterwards. Call it after <see cref="Stop"/>.
+        /// </summary>
+        internal async Task WaitForBackgroundWorkAsync()
+        {
+            while (true)
+            {
+                var pending = _background.Where(entry => entry.Value.IsCancellationRequested && !entry.Key.IsCompleted)
+                    .Select(entry => entry.Key).ToArray();
+                if (pending.Length == 0) return;
+
+                try
+                {
+                    await Task.WhenAll(pending).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // A failed connection task is not a failure of the caller.
+                }
             }
         }
 
@@ -102,8 +238,10 @@ namespace Rony.Listeners
                 if (_listener == null) return;
 
                 _cancellation.Cancel();
+                _acceptCancellation?.Dispose();
                 _listener.Stop();
                 _listener = null;
+                _refusing = false;
             }
 
             foreach (var connection in _connections.Keys)
@@ -173,16 +311,16 @@ namespace Rony.Listeners
             ((TcpConnection)sender).MessageHandled();
         }
 
-        private async Task AcceptLoopAsync(TcpListenerWrapper listener, AsyncQueue<Message> messages, CancellationToken cancellationToken)
+        private async Task AcceptLoopAsync(TcpListenerWrapper listener, AsyncQueue<Message> messages, CancellationToken cancellationToken, CancellationToken acceptToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (!acceptToken.IsCancellationRequested)
             {
                 TcpClient client;
                 try
                 {
                     client = await listener.AcceptTcpClientAsync().ConfigureAwait(false);
                 }
-                catch (Exception) when (cancellationToken.IsCancellationRequested)
+                catch (Exception) when (acceptToken.IsCancellationRequested)
                 {
                     return;
                 }
@@ -195,7 +333,7 @@ namespace Rony.Listeners
                     continue;
                 }
 
-                _ = ReadConnectionAsync(client, messages, cancellationToken);
+                Track(ReadConnectionAsync(client, messages, cancellationToken), cancellationToken);
             }
         }
 
@@ -206,7 +344,10 @@ namespace Rony.Listeners
             try
             {
                 remoteEndPoint = client.Client?.RemoteEndPoint;
-                var stream = await OpenStreamAsync(client).ConfigureAwait(false);
+                Stream stream;
+                // A client still in its handshake is not a known connection yet: abort it when the server stops.
+                using (cancellationToken.Register(() => client.Dispose()))
+                    stream = await OpenStreamAsync(client).ConfigureAwait(false);
                 connection = new TcpConnection(client, stream, OnConnectionClosed);
                 _connections.TryAdd(connection, 0);
                 if (cancellationToken.IsCancellationRequested)

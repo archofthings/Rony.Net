@@ -70,6 +70,17 @@ public class PortAndLifecycleSamples
     }
 
     [Fact]
+    public async Task Async_lifecycle()
+    {
+        await using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("PING").Receive("PONG");
+        await server.StartAsync();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));
+    }
+
+    [Fact]
     public async Task Configure_after_start()
     {
         using var server = new MockServer(new TcpServer(0));

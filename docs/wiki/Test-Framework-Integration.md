@@ -1,16 +1,23 @@
 # Test Framework Integration
 
-Rony.Net works with any test framework. Three small packages remove the setup code:
+Rony.Net works with any test framework. Four small packages remove the setup code:
 
 | Package | Framework | Gives you |
 |---|---|---|
 | `Rony.Net.Xunit` | xUnit v2 | `MockServerTest` base class, `server.LogTo(ITestOutputHelper)` |
+| `Rony.Net.Xunit.v3` | xUnit v3 | The same, for xUnit v3's `Xunit.ITestOutputHelper` |
 | `Rony.Net.NUnit` | NUnit 3.14 and later | `MockServerTest` base class, `server.LogToTestContext()` |
 | `Rony.Net.MSTest` | MSTest 4 | `MockServerTest` base class, `server.LogTo(TestContext)` |
 
 ```console
-dotnet add package Rony.Net.Xunit     # or Rony.Net.NUnit, or Rony.Net.MSTest
+dotnet add package Rony.Net.Xunit     # or Rony.Net.Xunit.v3, Rony.Net.NUnit, or Rony.Net.MSTest
 ```
+
+**Which xUnit package?** Use `Rony.Net.Xunit` with xUnit v2 (`xunit` 2.x) and `Rony.Net.Xunit.v3` with xUnit v3
+(`xunit.v3`). xUnit v3 moved `ITestOutputHelper` from `Xunit.Abstractions` to the `Xunit` namespace, so the v2 package
+does not work with it. The two packages have the same types in the same namespace (`Rony.Net.Xunit`); only the
+`ITestOutputHelper` type differs, so switching is a package change plus `using Xunit;` instead of
+`using Xunit.Abstractions;`. Install only one of them.
 
 Each one brings in `Rony.Net`, so that is the only package you need.
 

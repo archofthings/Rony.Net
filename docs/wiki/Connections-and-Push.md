@@ -81,12 +81,27 @@ await connection.WaitForCloseAsync();   // throws TimeoutException after 5 secon
 Assert.Empty(server.OpenConnections);
 ```
 
+## Waiting for all connections to close
+When your test starts several clients, wait until none is open instead of waiting for each connection:
+```csharp
+await server.WaitForAllConnectionsClosedAsync();   // returns at once if none is open
+server.Should().HaveNoOpenConnections();
+```
+`HaveNoOpenConnections()` checks immediately; its failure message lists the open connections and reminds you to
+await `WaitForAllConnectionsClosedAsync()` first. The wait throws `TimeoutException` (default 5 seconds) that lists
+the connections still open.
+
+To assert on what one connection received, use [`connection.Should()`](Verifying-Requests#assertions-on-one-connection).
+
 | Member | |
 |---|---|
 | `server.Should().HaveAcceptedConnections(Times times)` | How many connections were accepted. Throws `MockVerificationException`. (Classic: `server.VerifyConnections(times)`.) |
 | `server.WaitForConnectionAsync(timeout)` | Waits for the first connection |
 | `server.WaitForConnectionsAsync(count, timeout)` | Waits until `count` connections were accepted |
+| `server.WaitForAllConnectionsClosedAsync(timeout)` | Waits until no connection is open |
+| `server.Should().HaveNoOpenConnections()` | No connection is open right now |
 | `connection.WaitForCloseAsync(timeout)` | Waits until the connection is closed |
+| `connection.Should()` | [Assertions on one connection](Verifying-Requests#assertions-on-one-connection) |
 
 The timeouts default to 5 seconds, and every wait also takes a `CancellationToken`.
 

@@ -47,6 +47,31 @@ namespace Rony.Listeners
             }
         }
 
+        /// <summary>Writes <paramref name="data"/> in pieces while holding the write lock, so nothing is written in between.</summary>
+        public async Task WriteAsync(byte[] data, int chunkSize, TimeSpan delay, CancellationToken cancellationToken)
+        {
+            await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                // Small pieces must not wait for the Nagle algorithm.
+                var socket = Client.Client;
+                if (socket != null) socket.NoDelay = true;
+
+                for (var offset = 0; offset < data.Length; offset += chunkSize)
+                {
+                    if (offset > 0 && delay > TimeSpan.Zero)
+                        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await Stream.WriteAsync(data, offset, Math.Min(chunkSize, data.Length - offset), cancellationToken).ConfigureAwait(false);
+                    await Stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
         public void MessageQueued() => Interlocked.Increment(ref _pendingMessages);
 
         public void MessageHandled()
@@ -62,9 +87,30 @@ namespace Rony.Listeners
                 Close();
         }
 
-        public void Close()
+        public void Close() => Release(false);
+
+        /// <summary>Aborts the connection with a TCP RST. The socket is closed before the stream, so TLS sends no close_notify.</summary>
+        public void Reset() => Release(true);
+
+        private void Release(bool abort)
         {
             if (Interlocked.Exchange(ref _closed, 1) == 1) return;
+            if (abort)
+            {
+                try
+                {
+                    var socket = Client.Client;
+                    if (socket != null)
+                    {
+                        socket.LingerState = new LingerOption(true, 0);
+                        socket.Dispose();
+                    }
+                }
+                catch
+                {
+                    // Already broken; closing below releases the rest.
+                }
+            }
             try
             {
                 Stream.Dispose();

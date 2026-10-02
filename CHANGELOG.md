@@ -2,6 +2,31 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.2.0 (unreleased)
+
+No breaking changes.
+
+### Added
+- **Async lifecycle:** `server.StartAsync()`, `server.StopAsync()` and `await using` (`DisposeAsync()`). `StopAsync()` waits
+  for requests, delayed responses and connections in flight, so no `Log` line or callback runs after it completed.
+- **Per-connection assertions:** `connection.Should()` with `HaveReceived`, `NotHaveReceived`, `HaveReceivedInOrder`,
+  `BeInState`, `BeOpen` and `BeClosed`; only requests received on that connection count, and failure messages name it.
+- **No open connections:** `server.WaitForAllConnectionsClosedAsync()` and `server.Should().HaveNoOpenConnections()`.
+- **More failure modes:** `ResetConnection()`, `ThenResetConnection()`, `AndResetConnection()` and `connection.ResetAsync()`
+  abort a TCP connection with a reset (RST); `Truncated(byteCount)` and `Corrupted(func)` change a response as it goes on
+  the wire; `server.RefuseConnections()` / `AcceptConnections()` make new clients get "connection refused" while open
+  connections keep working; `TcpServerSsl.FailHandshake` makes every TLS handshake fail. Custom listeners opt in with
+  the new `IFaultInjectionListener`.
+- **Chunked and slow responses:** `InChunks(chunkSize, delay)` sends a response in pieces with a wait between them and
+  `Throttled(bytesPerSecond)` sends it at about that rate. A message pushed meanwhile waits for the last piece, and
+  `StopAsync()` ends a slow response at once. `IFaultInjectionListener` gains a chunked `SendRawAsync` overload (the
+  interface is new in 1.2).
+- **More framings:** `MessageFraming.LengthPrefix(prefixLength, bigEndian, includesPrefix)` for lengths that count the
+  prefix, `FixedLength(length, padding)`, `StartEnd(start, end)` and `StxEtx`. The little-endian length prefix
+  (`bigEndian: false`) existed before and is now documented.
+- **xUnit v3:** the `Rony.Net.Xunit.v3` package, the same `MockServerTest` and `LogTo(ITestOutputHelper)` as
+  `Rony.Net.Xunit` (which stays for xUnit v2) in the same `Rony.Net.Xunit` namespace.
+
 ## 1.1.0
 
 No breaking changes: code written for 1.0 compiles and behaves the same.

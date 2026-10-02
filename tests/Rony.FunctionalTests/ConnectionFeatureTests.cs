@@ -449,6 +449,77 @@ namespace Rony.FunctionalTests
             await Assert.ThrowsAsync<NotSupportedException>(() => server.BroadcastAsync("x"));
         }
 
+        [Fact]
+        public async Task Connection_Assertions_Should_Count_Only_Requests_Of_That_Connection()
+        {
+            //Arrange
+            using var server = LineServer(s =>
+            {
+                s.Mock.Send("LOGIN bob").NoReply();
+                s.Mock.Send("LIST").NoReply();
+                s.Mock.Send("QUIT").NoReply();
+            });
+            using var first = await LineClient.ConnectAsync(server.Port);
+            var firstConnection = await server.WaitForConnectionAsync();
+            await first.SendAsync("LOGIN bob");
+            await first.SendAsync("LIST");
+            using var second = await LineClient.ConnectAsync(server.Port);
+            var secondConnection = (await server.WaitForConnectionsAsync(2))[1];
+            await second.SendAsync("QUIT");
+            await server.Mock.WaitForRequestsAsync(3);
+
+            //Act & Assert
+            firstConnection.Should().HaveReceived("LOGIN bob", Times.Once())
+                .And.HaveReceivedInOrder("LOGIN bob", "LIST")
+                .And.NotHaveReceived("QUIT")
+                .And.BeOpen();
+            secondConnection.Should().HaveReceived(r => r.ConnectionId == 2).And.NotHaveReceived("LIST");
+            var exception = Assert.Throws<MockVerificationException>(() => firstConnection.Should().HaveReceived("QUIT"));
+            Assert.Contains("on connection #1", exception.Message);
+            Assert.DoesNotContain("QUIT\"", exception.Message.Substring(exception.Message.IndexOf("Received requests:", StringComparison.Ordinal)));
+            Assert.Throws<MockVerificationException>(() => firstConnection.Should().BeClosed());
+
+            second.Dispose();
+            await secondConnection.WaitForCloseAsync();
+            secondConnection.Should().BeClosed();
+            Assert.Throws<MockVerificationException>(() => secondConnection.Should().BeOpen());
+        }
+
+        [Fact]
+        public async Task No_Open_Connections_Should_Be_Awaitable_And_Verifiable()
+        {
+            //Arrange
+            using var server = LineServer();
+            await server.WaitForAllConnectionsClosedAsync();
+            server.Should().HaveNoOpenConnections();
+            using var client = await LineClient.ConnectAsync(server.Port);
+            await server.WaitForConnectionAsync();
+
+            //Act & Assert
+            var verification = Assert.Throws<MockVerificationException>(() => server.Should().HaveNoOpenConnections());
+            Assert.Contains("WaitForAllConnectionsClosedAsync", verification.Message);
+            var timeout = await Assert.ThrowsAsync<TimeoutException>(() => server.WaitForAllConnectionsClosedAsync(TimeSpan.FromMilliseconds(100)));
+            Assert.Contains("1 is still open", timeout.Message);
+            Assert.Contains("#1", timeout.Message);
+
+            var waiting = server.WaitForAllConnectionsClosedAsync();
+            client.Dispose();
+            await waiting;
+            server.Should().HaveNoOpenConnections();
+        }
+
+        [Fact]
+        public async Task No_Open_Connections_Should_Not_Be_Supported_For_Udp()
+        {
+            //Arrange
+            using var server = new MockServer(new UdpServer("127.0.0.1", 0));
+            server.Start();
+
+            //Act & Assert
+            await Assert.ThrowsAsync<NotSupportedException>(() => server.WaitForAllConnectionsClosedAsync());
+            Assert.Throws<NotSupportedException>(() => server.Should().HaveNoOpenConnections());
+        }
+
         private static async Task<string> UdpRequestAsync(UdpClient client, int port, string request)
         {
             var data = Encoding.UTF8.GetBytes(request);

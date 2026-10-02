@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Sockets;
 using Rony.Listeners;
 using Rony.Net;
 using Xunit;
@@ -136,5 +137,113 @@ public class SequenceAndFailureSamples
         await client.SendAsync("slow\nfast\n");
 
         Assert.Equal("1\n2\n", (await client.ReceiveExactlyAsync(4)).GetString());
+    }
+
+    [Fact]
+    public async Task Connection_reset()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("X").ResetConnection();
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync("X");
+
+        // A reset is an error on the client; a clean close would read 0 bytes.
+        await Assert.ThrowsAnyAsync<IOException>(() => client.ReceiveAsync());
+        await server.Connections[0].WaitForCloseAsync();
+        server.Should().HaveNoOpenConnections();
+    }
+
+    [Fact]
+    public async Task Reset_from_the_test()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        var connection = await server.WaitForConnectionAsync();
+        await connection.ResetAsync();
+
+        await Assert.ThrowsAnyAsync<IOException>(() => client.ReceiveAsync());
+        connection.Should().BeClosed();
+    }
+
+    [Fact]
+    public async Task Truncated_response()
+    {
+        using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.LengthPrefix() });
+        server.Mock.Send("X").Receive("HELLO WORLD").Truncated(5).AndDisconnect();
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync(new byte[] { 0, 0, 0, 1, (byte)'X' });   // a length-prefixed "X"
+
+        // The prefix announces 11 bytes, but only 1 follows it: 5 bytes of the 15 on the wire.
+        Assert.Equal("\0\0\0\vH", await client.ReadToEndAsync());
+    }
+
+    [Fact]
+    public async Task Response_in_chunks()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        var body = new string('x', 64);
+        server.Mock.Send("GET").Receive(body).InChunks(16, TimeSpan.FromMilliseconds(50));
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync("GET");
+
+        // Four pieces of 16 bytes, 50 ms apart; the client sees the complete response in the end.
+        Assert.Equal(body, (await client.ReceiveExactlyAsync(64)).GetString());
+    }
+
+    [Fact]
+    public async Task Throttled_response()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        var body = new string('x', 300);
+        server.Mock.Send("GET").Receive(body).Throttled(bytesPerSecond: 1024);
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        var stopwatch = Stopwatch.StartNew();
+        await client.SendAsync("GET");
+
+        // About 1024 bytes a second: three pieces of 102 bytes, 100 ms apart.
+        Assert.Equal(body, (await client.ReceiveExactlyAsync(300)).GetString());
+        Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(150));
+    }
+
+    [Fact]
+    public async Task Corrupted_response()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("X").Receive("HELLO").Corrupted(bytes => { bytes[0] ^= 0xFF; return bytes; });
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync("X");
+
+        Assert.Equal(new byte[] { (byte)'H' ^ 0xFF, (byte)'E', (byte)'L', (byte)'L', (byte)'O' }, await client.ReceiveExactlyAsync(5));
+    }
+
+    [Fact]
+    public async Task Refuse_and_accept_connections()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("ping").Receive("pong");
+        server.Start();
+        using var open = await TcpTestClient.ConnectAsync(server.Port);
+        await server.WaitForConnectionAsync();   // the server has accepted it, so it stays open
+
+        server.RefuseConnections();
+        var refused = await Assert.ThrowsAsync<SocketException>(() => TcpTestClient.ConnectAsync(server.Port));
+        Assert.Equal(SocketError.ConnectionRefused, refused.SocketErrorCode);
+        Assert.Equal("pong", await open.SendAndReceiveAsync("ping"));   // open connections keep working
+
+        server.AcceptConnections();
+        using var later = await TcpTestClient.ConnectAsync(server.Port);
+        Assert.Equal("pong", await later.SendAndReceiveAsync("ping"));
     }
 }

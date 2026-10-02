@@ -59,6 +59,9 @@ namespace Rony.Models
         /// <summary>The requests received on this connection, oldest first.</summary>
         public IReadOnlyList<ReceivedRequest> ReceivedRequests => _server.Mock.ReceivedRequests.Where(r => r.ConnectionId == Id).ToArray();
 
+        /// <summary>Fluent assertions on this connection; only requests received on it count.</summary>
+        public ClientConnectionAssertions Should() => new ClientConnectionAssertions(_server, this);
+
         /// <summary>The listener's handle for this connection.</summary>
         internal object Sender { get; }
 
@@ -70,6 +73,13 @@ namespace Rony.Models
 
         /// <summary>Closes the connection from the server side.</summary>
         public Task CloseAsync() => _server.CloseAsync(this);
+
+        /// <summary>
+        /// Aborts the connection from the server side so the client sees a connection reset (RST) instead of a clean
+        /// end of stream.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The listener does not implement <see cref="Interfaces.IFaultInjectionListener"/> (UDP has no connections at all).</exception>
+        public Task ResetAsync() => _server.ResetAsync(this);
 
         /// <summary>
         /// Waits until the connection is closed, by either side; returns at once if it already is. Use it to check

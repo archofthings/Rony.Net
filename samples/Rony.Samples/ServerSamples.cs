@@ -65,4 +65,16 @@ public class ServerSamples
         Assert.Equal("127.0.0.1", server.Address.ToString());
         Assert.NotEqual(0, server.Port);
     }
+
+    [Fact]
+    public async Task Failing_the_tls_handshake()
+    {
+        using var certificate = TestCertificates.CreateSelfSigned();
+        using var server = new MockServer(new TcpServerSsl(0, certificate, SslProtocols.Tls12) { FailHandshake = true });
+        server.Start();
+
+        // AuthenticationException or IOException, depending on the platform.
+        await Assert.ThrowsAnyAsync<Exception>(() => TcpTestClient.ConnectSslAsync(server.Port, certificate));
+        server.Should().HaveAcceptedConnections(Times.Never());
+    }
 }

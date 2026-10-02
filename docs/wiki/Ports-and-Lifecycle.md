@@ -77,6 +77,35 @@ What `Stop()` does:
 - Cancels responses that are still waiting on a delay ([`After`](Simulating-Failures#slow-responses)).
 - Keeps the configured responses and recorded requests.
 
+## Async lifecycle
+`StartAsync()`, `StopAsync()` and `DisposeAsync()` are the awaitable forms of `Start()`, `Stop()` and `Dispose()`:
+
+```csharp
+await using var server = new MockServer(new TcpServer(0));
+server.Mock.Send("PING").Receive("PONG");
+await server.StartAsync();
+
+using var client = await TcpTestClient.ConnectAsync(server.Port);
+Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));
+```
+
+- `StartAsync()` completes once the server is listening, so a client can connect right away. It throws
+  `OperationCanceledException` (the returned task is cancelled) if its token is already cancelled.
+- `StopAsync()` does what `Stop()` does, then waits until the server's background work has ended: the listen loop,
+  every request, delayed response and greeting in flight, and connections that were still being opened.
+  After it completes, the server calls no more callbacks of yours (`Log`, `Receive(...)` functions, matcher
+  predicates, connection event handlers) until it is started again. It is safe to call repeatedly, on a server that was
+  never started, and together with `Stop()`.
+- `DisposeAsync()` is `StopAsync()` followed by `Dispose()`.
+
+Prefer `await using` in tests: when the test method returns, no callback or log line runs any more, so a `Log` that
+writes to the test output never fails with "no currently active test". With a plain `using`, a delayed response may still
+finish after the test.
+
+Do not await `StopAsync()` or `DisposeAsync()` from inside one of the server's own callbacks (a `Receive(...)` function,
+a predicate, `Log` or a connection event handler): it would wait for itself. A custom `IListener` gets the guarantee
+only for the server's own tasks, not for work the listener runs itself.
+
 ## Configure before or after Start
 Responses can be added at any time, from any thread:
 
