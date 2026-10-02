@@ -8,26 +8,33 @@ using System.Threading.Tasks;
 namespace Rony.Handlers
 {
     /// <summary>
-    /// Thread-safe record of received requests that can be awaited.
+    /// Thread-safe, ordered record of things that happened (requests, connections) that can be awaited.
     /// </summary>
-    internal sealed class RequestJournal
+    internal sealed class Journal<T>
     {
         private readonly object _syncRoot = new object();
-        private readonly List<ReceivedRequest> _requests = new List<ReceivedRequest>();
+        private readonly List<T> _items = new List<T>();
         private TaskCompletionSource<bool> _changed = NewSignal();
 
-        public IReadOnlyList<ReceivedRequest> Snapshot()
+        public IReadOnlyList<T> Snapshot()
         {
             lock (_syncRoot)
-                return _requests.ToArray();
+                return _items.ToArray();
         }
 
-        public void Record(ReceivedRequest request)
+        public void Record(T item)
+        {
+            lock (_syncRoot)
+                _items.Add(item);
+            NotifyChanged();
+        }
+
+        /// <summary>Wakes up the waiters, for example after a recorded item changed.</summary>
+        public void NotifyChanged()
         {
             TaskCompletionSource<bool> changed;
             lock (_syncRoot)
             {
-                _requests.Add(request);
                 changed = _changed;
                 _changed = NewSignal();
             }
@@ -38,15 +45,15 @@ namespace Rony.Handlers
         public void Clear()
         {
             lock (_syncRoot)
-                _requests.Clear();
+                _items.Clear();
         }
 
         /// <summary>
-        /// Waits until <paramref name="condition"/> returns a result for the recorded requests.
+        /// Waits until <paramref name="condition"/> returns a result for the recorded items.
         /// </summary>
-        public async Task<T> WaitAsync<T>(Func<IReadOnlyList<ReceivedRequest>, T> condition, TimeSpan timeout,
-            Func<IReadOnlyList<ReceivedRequest>, string> timeoutMessage, CancellationToken cancellationToken)
-            where T : class
+        public async Task<TResult> WaitAsync<TResult>(Func<IReadOnlyList<T>, TResult> condition, TimeSpan timeout,
+            Func<IReadOnlyList<T>, string> timeoutMessage, CancellationToken cancellationToken)
+            where TResult : class
         {
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             if (timeout != Timeout.InfiniteTimeSpan)
@@ -57,14 +64,14 @@ namespace Rony.Handlers
             while (true)
             {
                 Task changed;
-                IReadOnlyList<ReceivedRequest> requests;
+                IReadOnlyList<T> items;
                 lock (_syncRoot)
                 {
-                    requests = _requests.ToArray();
+                    items = _items.ToArray();
                     changed = _changed.Task;
                 }
 
-                var result = condition(requests);
+                var result = condition(items);
                 if (result != null) return result;
 
                 if (await Task.WhenAny(changed, cancelled.Task).ConfigureAwait(false) != changed)
@@ -75,6 +82,12 @@ namespace Rony.Handlers
             }
         }
 
+        private static TaskCompletionSource<bool> NewSignal() =>
+            new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    internal static class RequestJournal
+    {
         public static string Describe(IReadOnlyList<ReceivedRequest> requests)
         {
             if (requests.Count == 0) return "No requests were received.";
@@ -82,7 +95,11 @@ namespace Rony.Handlers
                    string.Join(Environment.NewLine, requests.Select((r, i) => $"  {i + 1}. {r}"));
         }
 
-        private static TaskCompletionSource<bool> NewSignal() =>
-            new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        public static string Describe(IReadOnlyList<ClientConnection> connections)
+        {
+            if (connections.Count == 0) return "No connections were accepted.";
+            return "Connections:" + Environment.NewLine +
+                   string.Join(Environment.NewLine, connections.Select(c => $"  {c}"));
+        }
     }
 }

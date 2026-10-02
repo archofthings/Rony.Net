@@ -4,16 +4,16 @@
     <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <PackageId>Rony.Net</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>Mojtaba Kiani</Authors>
     <Product>Rony.Net</Product>
-    <Description>A TCP, TCP + SSL/TLS and UDP mock server for .NET tests. Configure request/response pairs, simulate delays and failures, and verify what your client sent.</Description>
+    <Description>A TCP, TCP + SSL/TLS and UDP mock server for .NET tests. Configure request/response pairs and stateful scenarios, push messages to clients, simulate delays and failures, and verify what your client sent.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/archofthings/Rony.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/archofthings/Rony.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>mock;mock-server;tcp;udp;ssl;tls;socket;testing;unit-testing;integration-testing;functional-testing;xunit;nunit;mstest</PackageTags>
-    <PackageReleaseNotes>First stable release. Persistent TCP connections, message framing, automatic ports, pattern matching, response sequences, failure simulation, request verification and waiting. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>Connections and server-pushed messages, greetings on connect, stateful scenarios, configurable handling of unmatched requests, logging, ordered verification and fluent assertions. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <NeutralLanguage>en</NeutralLanguage>
 

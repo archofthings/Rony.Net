@@ -23,10 +23,10 @@ public class VerificationSamples
             await client.SendAndReceiveAsync("LIST");
         }
 
-        server.Mock.Verify("LOGIN alice");                       // at least once
-        server.Mock.Verify("LIST", Times.Exactly(2));
-        server.Mock.Verify("LOGOUT", Times.Never());
-        server.Mock.Verify(r => r.BodyString.StartsWith("LOGIN"), Times.Once());
+        server.Should().HaveReceived("LOGIN alice");                       // at least once
+        server.Should().HaveReceived("LIST", Times.Exactly(2));
+        server.Should().NotHaveReceived("LOGOUT");
+        server.Should().HaveReceived(r => r.BodyString.StartsWith("LOGIN"), Times.Once());
     }
 
     [Fact]
@@ -36,12 +36,12 @@ public class VerificationSamples
         server.Mock.Match("x");
         server.Mock.Match("x");
 
-        server.Mock.Verify("x", Times.Exactly(2));
-        server.Mock.Verify("x", Times.AtLeast(1));
-        server.Mock.Verify("x", Times.AtMost(3));
-        server.Mock.Verify("x", Times.Between(1, 2));
-        server.Mock.Verify("x", Times.AtLeastOnce());
-        server.Mock.Verify("y", Times.Never());
+        server.Should().HaveReceived("x", Times.Exactly(2));
+        server.Should().HaveReceived("x", Times.AtLeast(1));
+        server.Should().HaveReceived("x", Times.AtMost(3));
+        server.Should().HaveReceived("x", Times.Between(1, 2));
+        server.Should().HaveReceived("x", Times.AtLeastOnce());
+        server.Should().NotHaveReceived("y");
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public class VerificationSamples
         server.Mock.Match("PING");
         server.Mock.Match("PNIG");
 
-        var error = Assert.Throws<MockVerificationException>(() => server.Mock.Verify("PING", Times.Exactly(2)));
+        var error = Assert.Throws<MockVerificationException>(() => server.Should().HaveReceived("PING", Times.Exactly(2)));
 
         // Expected request "PING" exactly 2 times, but it was received 1 time.
         // Received requests:
@@ -72,7 +72,7 @@ public class VerificationSamples
             await client.SendAndReceiveAsync("PING");
 
         // Passes: every request had a configured response.
-        server.Mock.VerifyAllRequestsMatched();
+        server.Should().HaveNoUnmatchedRequests();
     }
 
     [Fact]
@@ -155,7 +155,62 @@ public class VerificationSamples
 
         server.Mock.ClearReceivedRequests();
 
-        server.Mock.Verify("ping", Times.Never());
+        server.Should().NotHaveReceived("ping");
         Assert.Single(server.Mock.Configs);   // responses are kept
+    }
+
+    [Fact]
+    public async Task Verify_the_order()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("").Receive("OK");
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+        {
+            foreach (var command in new[] { "LOGIN bob", "NOOP", "LIST", "QUIT" })
+                await client.SendAndReceiveAsync(command);
+        }
+
+        server.Should().HaveReceivedInOrder("LOGIN bob", "LIST", "QUIT");   // NOOP in between is fine
+        server.Should().HaveReceivedInOrder(r => r.BodyString.StartsWith("LOGIN"), r => r.BodyString == "QUIT");
+    }
+
+    [Fact]
+    public void A_wrong_order_explains_itself()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Match("LIST");
+        server.Mock.Match("LOGIN bob");
+
+        var error = Assert.Throws<MockVerificationException>(() => server.Should().HaveReceivedInOrder("LOGIN bob", "LIST"));
+
+        // Expected requests in order: "LOGIN bob", "LIST", but "LIST" was not received after "LOGIN bob".
+        // Received requests:
+        //   1. "LIST" (unmatched)
+        //   2. "LOGIN bob" (unmatched)
+        Assert.Contains("\"LIST\" was not received after \"LOGIN bob\"", error.Message);
+    }
+
+    [Fact]
+    public async Task Fluent_assertions()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("LOGIN bob").Receive("OK");
+        server.Mock.Send("LIST").Receive("a,b,c");
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+        {
+            await client.SendAndReceiveAsync("LOGIN bob");
+            await client.SendAndReceiveAsync("LIST");
+        }
+
+        server.Should().HaveReceived("LOGIN bob", Times.Once())
+            .And.HaveReceived("LIST")
+            .And.NotHaveReceived("DELETE")
+            .And.HaveReceivedInOrder("LOGIN bob", "LIST")
+            .And.HaveNoUnmatchedRequests()
+            .And.HaveAcceptedConnections(Times.Once());
     }
 }

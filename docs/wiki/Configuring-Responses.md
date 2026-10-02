@@ -63,7 +63,7 @@ If a request has no matching response and there is no `Send("")` default:
 - **UDP:** an empty datagram is sent back.
 
 The request is still recorded, with `Matched == false`, so you can detect it with
-[`VerifyAllRequestsMatched()`](Verifying-Requests#strict-mode).
+[`server.Should().HaveNoUnmatchedRequests()`](Verifying-Requests#strict-mode).
 
 ```csharp
 using var server = new MockServer(new TcpServer(0));

@@ -2,6 +2,36 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.1.0
+
+No breaking changes: code written for 1.0 compiles and behaves the same.
+
+### Added
+- **Greetings:** `Mock.OnConnect().Receive(...)` sends a message as soon as a client connects, before its first
+  request. Use `Then(...)` for a different greeting per connection, or `OnConnect().Disconnect()` to refuse connections.
+- **Connections:** `server.Connections` and `OpenConnections` (`ClientConnection` with `Id`, `RemoteEndPoint`,
+  `ConnectedAt`, `ClosedAt`, `IsOpen`, `ReceivedRequests`), `ConnectionOpened`/`ConnectionClosed` events,
+  `WaitForConnectionAsync()`, `WaitForConnectionsAsync(count)`, `connection.WaitForCloseAsync()` and
+  `VerifyConnections(Times)`. `ReceivedRequest.ConnectionId` tells which connection a request arrived on.
+- **Pushed messages:** `connection.SendAsync(...)`, `server.BroadcastAsync(...)` and `connection.CloseAsync()`.
+- **Stateful scenarios:** `Mock.InState("state").Send(...)` rules and `.GoTo("state")` transitions, a settable
+  `Mock.State`, and `Mock.StateScope = StateScope.Connection` for a state per connection.
+- **Unmatched requests:** `Mock.OnUnmatched()` chooses the reaction (reply, stay silent, disconnect) while the requests
+  still count as unmatched; `Mock.FailOnUnmatched = true` makes every `Verify...` and `WaitFor...` call throw as soon
+  as an unmatched request arrives.
+- **Logging:** `server.Log` receives a line for every connection, request (with the rule that matched it), response,
+  state change and error, including exceptions thrown by `Receive(...)` functions and predicates, and failed TLS handshakes.
+- **Ordered verification:** `Mock.VerifyInOrder(...)` with text, bytes or predicates.
+- **Fluent assertions:** `server.Should().HaveReceived(...).And.HaveReceivedInOrder(...)` and more.
+- **Test framework packages:** `Rony.Net.Xunit`, `Rony.Net.NUnit` and `Rony.Net.MSTest` (MSTest 4), each with a
+  `MockServerTest` base class (a started server per test that logs to the test output) and a log extension method.
+- `IConnectionListener`, implemented by `TcpServer` and `TcpServerSsl`, for custom listeners that want the connection
+  features. Listeners that only implement `IListener` keep working.
+
+### Fixed
+- A TCP connection that got a request without a reply (`NoReply()`, `Disconnect()`) and was then closed by the client
+  was not released until the server stopped.
+
 ## 1.0.0
 
 First stable release. The public API follows [semantic versioning](https://semver.org) from here on.

@@ -11,14 +11,17 @@ server.Start();
 
 // ... run the code under test against 127.0.0.1:server.Port ...
 
-server.Mock.Verify("PING", Times.Once());
+server.Should().HaveReceived("PING", Times.Once());
 ```
 
 ## Why use it
 - **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams.
 - **Any protocol.** Text or binary, one request per connection or many, delimited or length-prefixed messages.
+- **Realistic servers.** Greetings, pushed messages, and stateful scenarios such as "log in before listing".
 - **Failure testing.** Slow responses, dropped connections, silence, and responses that change over time.
-- **Assertions on the client.** Check which requests were sent and how often, or wait until one arrives.
+- **Assertions on the client.** Check which requests were sent, how often and in which order, how it used its
+  connections, or wait until a request arrives. Fluent assertions included.
+- **Easy debugging.** A log of everything the server saw and did, written to your test output.
 - **Test-friendly.** Free ports for parallel tests, thread-safe configuration, clear failure messages.
 
 ## Install
@@ -26,7 +29,8 @@ server.Mock.Verify("PING", Times.Once());
 dotnet add package Rony.Net
 ```
 Works with .NET Core 3.x, .NET 5 and every later version (the package targets `netstandard2.1` and `net8.0`).
-It works with any test framework: xUnit, NUnit, MSTest or none at all.
+It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional packages
+(`Rony.Net.Xunit`, `Rony.Net.NUnit`, `Rony.Net.MSTest`) remove the setup code; see [Test Framework Integration](Test-Framework-Integration).
 
 ## Documentation
 
@@ -37,6 +41,7 @@ It works with any test framework: xUnit, NUnit, MSTest or none at all.
 | [SSL and TLS](SSL-and-TLS) | Secure servers, certificates for tests |
 | [Ports and Lifecycle](Ports-and-Lifecycle) | Free ports, start/stop/restart, parallel tests |
 | [Connections and Framing](Connections-and-Framing) | Persistent connections, delimiters, length prefixes, custom framing |
+| [Connections and Push](Connections-and-Push) | Greetings, pushed messages, inspecting and checking connections |
 
 | Configure responses | |
 |---|---|
@@ -44,11 +49,14 @@ It works with any test framework: xUnit, NUnit, MSTest or none at all.
 | [Request Matching](Request-Matching) | Exact, regex and predicate matching, and precedence |
 | [Response Sequences](Response-Sequences) | A different response each time |
 | [Simulating Failures](Simulating-Failures) | Delays, disconnects, silence, flaky servers |
+| [Stateful Scenarios](Stateful-Scenarios) | Rules that depend on what happened before (`InState`, `GoTo`) |
 
 | Check your client | |
 |---|---|
-| [Verifying Requests](Verifying-Requests) | `Verify`, `Times`, strict mode, inspecting requests |
+| [Verifying Requests](Verifying-Requests) | `server.Should()` assertions, `Times`, order, strict mode, inspecting requests |
 | [Waiting for Requests](Waiting-for-Requests) | `WaitForRequestAsync` instead of `Thread.Sleep` |
+| [Logging and Diagnostics](Logging-and-Diagnostics) | See what the server received and did, and why |
+| [Test Framework Integration](Test-Framework-Integration) | Base classes for xUnit, NUnit and MSTest |
 
 | More | |
 |---|---|

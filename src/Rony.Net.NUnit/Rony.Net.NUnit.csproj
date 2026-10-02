@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <PackageId>Rony.Net.NUnit</PackageId>
+    <Version>1.1.0</Version>
+    <Authors>Mojtaba Kiani</Authors>
+    <Product>Rony.Net</Product>
+    <Description>NUnit integration for Rony.Net: a MockServerTest base class that starts a mock server for every test and writes its log to the test output, and a LogToTestContext() extension.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/archofthings/Rony.Net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>mock;mock-server;tcp;udp;socket;testing;nunit;rony</PackageTags>
+    <PackageReleaseNotes>First release. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <NeutralLanguage>en</NeutralLanguage>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rony\Rony.csproj" />
+  </ItemGroup>
+
+</Project>

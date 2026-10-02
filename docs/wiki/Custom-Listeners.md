@@ -105,13 +105,37 @@ server.Mock.Send("ping").Receive("pong");
 server.Start();
 
 Assert.Equal("pong", await listener.SendAsync("ping"));
-server.Mock.Verify("ping", Times.Once());
+server.Should().HaveReceived("ping", Times.Once());
 ```
+
+## Connections, greetings and pushed messages
+A listener that only implements `IListener` gets everything above, but not the [connection features](Connections-and-Push):
+`server.Connections`, `OnConnect()` greetings, `SendAsync`/`BroadcastAsync` and connection lines in the
+[log](Logging-and-Diagnostics). For those, implement `IConnectionListener` as well:
+
+```csharp
+public interface IConnectionListener : IListener
+{
+    event Action<object, EndPoint> ConnectionOpened;    // a client connected (sender handle, client address)
+    event Action<object> ConnectionClosed;              // a connection closed, by either side (sender handle)
+    event Action<EndPoint, Exception> ConnectionFailed; // a handshake failed or the connection broke (logged)
+
+    Task SendAsync(byte[] data, object sender);         // push a message the client didn't ask for
+    void CompleteWithoutReply(object sender);           // a request got no reply (NoReply, Disconnect)
+}
+```
+
+- Raise **`ConnectionOpened`** before any of that connection's requests come out of `ReceiveAsync()`, with the same
+  object you later use as `Message.Sender`. Greetings are sent from the event, so they come before any response.
+- Raise **`ConnectionClosed`** once per connection, whoever closed it.
+- **`SendAsync`** may run at the same time as a reply on the same connection, so serialize writes if your transport needs it.
+- **`CompleteWithoutReply`** is called instead of `ReplyAsync` for requests that get no reply, in case you count
+  pending requests (as `TcpServerBase` does, to close a connection once the client is done and every request is handled).
 
 ## A TCP variation
 To customise TCP itself, for example how streams are opened, derive from `TcpServerBase` instead and override
 `OpenStreamAsync(TcpClient)`. That is how `TcpServerSsl` adds TLS. You keep persistent connections, framing,
-`KeepAlive` and port `0` support.
+`KeepAlive`, port `0` support and the connection features.
 
 ```csharp
 public class LoggingTcpServer : TcpServerBase

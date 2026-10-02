@@ -115,6 +115,9 @@ For a complete example with a real client class, retries and timeouts, see [Reci
 
 ## Other failures
 - **Server not running:** call `server.Stop()`. Connections are refused, and existing ones are closed.
+- **Connections dropped on arrival:** `server.Mock.OnConnect().Disconnect()`, or turn away only later clients with
+  `OnConnect().Receive("200 welcome").Then("421 busy").AndDisconnect()`. See [Connections and Push](Connections-and-Push#greetings-talk-first).
+- **The server hangs up on its own:** `await server.Connections[0].CloseAsync()`, at any moment in the test.
 - **Server comes back:** call `server.Start()` again. With port `0`, it returns on the same port.
 - **Garbage or error responses:** configure them like any other response, for example `Receive(new byte[] { 0xFF, 0xFF })` or `Receive("ERR 500")`.
 

@@ -69,14 +69,48 @@ server.Mock.Send(new Regex("^GET /admin")).Receive("403 Forbidden");
 server.Mock.Send(new Regex("^GET ")).Receive("200 OK");
 ```
 
+With [scenario states](Stateful-Scenarios), a rule for the current state wins over a rule without a state at each of these levels.
+
+## Unmatched requests
+A request that no rule matches is recorded as unmatched. By default the server sends nothing back (UDP: an empty
+datagram) and closes the connection:
+
+```csharp
+server.Mock.Send("PING").Receive("PONG");
+// client sends "PNIG" → the connection is closed
+```
+
+`OnUnmatched()` chooses a different reaction, with everything a response can do:
+
+```csharp
+server.Mock.OnUnmatched().Receive(text => $"ERR unknown command '{text}'");   // answer, keep the connection
+server.Mock.OnUnmatched().NoReply();                                          // ignore, keep the connection
+server.Mock.OnUnmatched().Receive("ERR").AndDisconnect();                     // answer, then hang up
+```
+
+The difference from a `Send("")` default: requests answered by `OnUnmatched()` still count as **unmatched**, so
+[strict mode](Verifying-Requests#strict-mode) and [`FailOnUnmatched`](Verifying-Requests#fail-fast-on-unexpected-requests)
+still report them. Use `Send("")` when "anything else" is a normal part of the protocol, and `OnUnmatched()` when it means
+the client did something wrong.
+
+```csharp
+server.Mock.Send("PING").Receive("PONG");
+server.Mock.OnUnmatched().Receive(text => $"ERR unknown command '{text}'");
+
+Assert.Equal("ERR unknown command 'PNIG'", await client.SendAndReceiveAsync("PNIG"));
+Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));   // still connected
+Assert.Single(server.Mock.UnmatchedRequests);                     // still reported
+```
+
 ## Inspecting the configuration
-`server.Mock.Configs` lists the exact-request configurations, keyed by request bytes. Patterns and predicates aren't
-included. Each `Config` has a `CallCount`:
+`server.Mock.Configs` lists the exact-request configurations, keyed by request bytes. Patterns, predicates and rules
+for a [state](Stateful-Scenarios) aren't included. Each `Config` has a `CallCount`:
 
 ```csharp
 Assert.Equal(2, server.Mock.Configs["LIST".GetBytes()].CallCount);
 ```
 
-To check how often a request arrived, [`Verify`](Verifying-Requests) is usually clearer.
+To check how often a request arrived, [`server.Should().HaveReceived(...)`](Verifying-Requests) is usually clearer.
 
-Runnable code: [`ResponseSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/ResponseSamples.cs)
+Runnable code: [`ResponseSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/ResponseSamples.cs),
+[`UnmatchedRequestSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/UnmatchedRequestSamples.cs)

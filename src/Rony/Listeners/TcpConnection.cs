@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Rony.Listeners
 {
@@ -16,6 +17,8 @@ namespace Rony.Listeners
         private int _readCompleted;
         private int _closed;
         private readonly Action<TcpConnection> _onClosed;
+        // Responses and pushed messages can be written at the same time; streams (SslStream in particular) allow one write at a time.
+        private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
 
         public TcpConnection(TcpClient client, Stream stream, Action<TcpConnection> onClosed)
         {
@@ -29,6 +32,20 @@ namespace Rony.Listeners
         public Stream Stream { get; }
         public EndPoint RemoteEndPoint { get; }
         public bool IsClosed => Volatile.Read(ref _closed) == 1;
+
+        public async Task WriteAsync(byte[] data)
+        {
+            await _writeLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await Stream.WriteAsync(data, 0, data.Length).ConfigureAwait(false);
+                await Stream.FlushAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
 
         public void MessageQueued() => Interlocked.Increment(ref _pendingMessages);
 

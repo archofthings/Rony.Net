@@ -6,16 +6,20 @@
 - [SSL and TLS](SSL-and-TLS)
 - [Ports and Lifecycle](Ports-and-Lifecycle)
 - [Connections and Framing](Connections-and-Framing)
+- [Connections and Push](Connections-and-Push)
 
 **Responses**
 - [Configuring Responses](Configuring-Responses)
 - [Request Matching](Request-Matching)
 - [Response Sequences](Response-Sequences)
 - [Simulating Failures](Simulating-Failures)
+- [Stateful Scenarios](Stateful-Scenarios)
 
 **Assertions**
 - [Verifying Requests](Verifying-Requests)
 - [Waiting for Requests](Waiting-for-Requests)
+- [Logging and Diagnostics](Logging-and-Diagnostics)
+- [Test Framework Integration](Test-Framework-Integration)
 
 **More**
 - [Recipes](Recipes)

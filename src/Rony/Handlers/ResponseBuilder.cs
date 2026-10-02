@@ -48,6 +48,16 @@ namespace Rony.Handlers
             return this;
         }
 
+        /// <summary>
+        /// Moves the scenario to <paramref name="state"/> once the previous response is used, so rules configured with
+        /// <c>InState(state)</c> apply to the requests that follow.
+        /// </summary>
+        public ResponseBuilder GoTo(string state)
+        {
+            _config.LastStep.NextState = state ?? throw new ArgumentNullException(nameof(state));
+            return this;
+        }
+
         private ResponseBuilder Add(ResponseStep step)
         {
             _config.AddStep(step);

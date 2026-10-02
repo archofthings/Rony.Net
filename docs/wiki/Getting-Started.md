@@ -37,7 +37,7 @@ public async Task First_test_with_a_plain_TcpClient()
 
     // 3. Check the response, and what the client sent.
     Assert.Equal("PONG", buffer[..read].GetString());
-    server.Mock.Verify("PING", Times.Once());
+    server.Should().HaveReceived("PING", Times.Once());
 }
 ```
 

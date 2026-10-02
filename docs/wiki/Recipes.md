@@ -85,7 +85,7 @@ public class QuoteClientTests : IDisposable
         var price = await CreateClient().GetPriceAsync("ACME");
 
         Assert.Equal(101.25m, price);
-        _server.Mock.Verify("PRICE ACME", Times.Once());
+        _server.Should().HaveReceived("PRICE ACME", Times.Once());
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class QuoteClientTests : IDisposable
         var price = await CreateClient().GetPriceAsync("ACME");
 
         Assert.Equal(99.5m, price);
-        _server.Mock.Verify("PRICE ACME", Times.Exactly(2));
+        _server.Should().HaveReceived("PRICE ACME", Times.Exactly(2));
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class QuoteClientTests : IDisposable
 
         await Assert.ThrowsAsync<TimeoutException>(() => CreateClient().GetPriceAsync("ACME"));
 
-        _server.Mock.Verify("PRICE ACME", Times.Exactly(3));
+        _server.Should().HaveReceived("PRICE ACME", Times.Exactly(3));
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class QuoteClientTests : IDisposable
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateClient().GetPriceAsync("NOPE"));
 
         Assert.Equal("ERR unknown symbol", error.Message);
-        _server.Mock.Verify("PRICE NOPE", Times.Once());
+        _server.Should().HaveReceived("PRICE NOPE", Times.Once());
     }
 
     [Fact]
@@ -145,6 +145,10 @@ Some points to note:
   clients the same way: through constructor parameters, options or configuration.
 - `MessageFraming.Delimiter("\n")` matches the protocol, so the `"\n"` is added to every response automatically.
 - Short timeouts (300 ms) keep the failure tests fast.
+
+## Less setup with the test framework packages
+`Rony.Net.Xunit`, `Rony.Net.NUnit` and `Rony.Net.MSTest` have a `MockServerTest` base class that creates, starts,
+logs and disposes a server for every test. See [Test Framework Integration](Test-Framework-Integration).
 
 ## Share one server between tests
 A server per test is simplest, and starting one is cheap. To share one across a test class, reset it at the start of each test.
@@ -205,7 +209,7 @@ public class QuoteClientTests
         var price = await new QuoteClient(_server.Port, TimeSpan.FromSeconds(1)).GetPriceAsync("ACME");
 
         Assert.That(price, Is.EqualTo(101.25m));
-        _server.Mock.Verify("PRICE ACME", Times.Once());
+        _server.Should().HaveReceived("PRICE ACME", Times.Once());
     }
 }
 ```
@@ -235,7 +239,7 @@ public class QuoteClientTests
         var price = await new QuoteClient(_server.Port, TimeSpan.FromSeconds(1)).GetPriceAsync("ACME");
 
         Assert.AreEqual(101.25m, price);
-        _server.Mock.Verify("PRICE ACME", Times.Once());
+        _server.Should().HaveReceived("PRICE ACME", Times.Once());
     }
 }
 ```

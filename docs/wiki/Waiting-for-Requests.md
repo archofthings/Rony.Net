@@ -30,6 +30,12 @@ var requests = await server.Mock.WaitForRequestsAsync(count: 3);       // at lea
 - The timeout defaults to **5 seconds**. Pass your own as the second argument.
 - All of them accept a `CancellationToken` as the last argument.
 
+To wait for connections instead, see [Connections and Push](Connections-and-Push#checking-how-your-client-uses-connections):
+`server.WaitForConnectionAsync()`, `server.WaitForConnectionsAsync(count)` and `connection.WaitForCloseAsync()`.
+
+With [`FailOnUnmatched`](Verifying-Requests#fail-fast-on-unexpected-requests), a wait stops with a
+`MockVerificationException` as soon as an unexpected request arrives.
+
 ## Timeouts
 When the timeout expires, a `TimeoutException` explains what was expected and lists what did arrive:
 
@@ -48,8 +54,8 @@ Wait for the last request you expect, then verify the rest:
 
 ```csharp
 await server.Mock.WaitForRequestAsync("COMMIT");
-server.Mock.Verify("BEGIN", Times.Once());
-server.Mock.Verify(r => r.BodyString.StartsWith("INSERT"), Times.Exactly(3));
+server.Should().HaveReceived("BEGIN", Times.Once());
+server.Should().HaveReceived(r => r.BodyString.StartsWith("INSERT"), Times.Exactly(3));
 ```
 
 Runnable code: [`VerificationSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/VerificationSamples.cs)
