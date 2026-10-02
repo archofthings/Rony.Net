@@ -42,6 +42,9 @@ Go straight to the right file and its test. Paths are relative to `src/Rony/`; u
 
 Documentation:
 - `README.md` (also the NuGet readme of `Rony.Net`), `CHANGELOG.md`, and each framework package's own `README.md`.
+  The README stays as short as possible but complete: its "Features" list names every feature in a few words with
+  a link to the wiki page; details and code examples (beyond the quick start) belong in the wiki. A new feature
+  adds or extends a line there, never a new section.
 - `docs/wiki/` is the wiki source; `.github/workflows/wiki.yml` publishes it on pushes to `main`. Never edit the
   live wiki.
 - `samples/Rony.Samples/`: **every code example in the README and wiki is an xUnit test here.** Change both together.

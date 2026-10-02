@@ -35,7 +35,8 @@ A feature in Rony.Net is finished only when every part below is done. Put the li
 - [ ] Wiki page in `docs/wiki/`: a section on the matching page, or a new page that is also linked from
       `_Sidebar.md` and `Home.md`.
 - [ ] `docs/wiki/API-Reference.md` lists the new members.
-- [ ] `README.md` when the feature belongs in the overview (it is also the NuGet readme, so keep it short).
+- [ ] `README.md`: the feature is named in the "Features" list in a few words, with a link to its wiki page
+      (extend an existing line where it fits). No code example and no new section; details go in the wiki.
 - [ ] **Every code example exists as a passing xUnit test in `samples/Rony.Samples`**, in the file that matches
       the wiki page. Examples use `server.Should()…`.
 - [ ] `CHANGELOG.md`: an entry under the upcoming version (create the heading if it does not exist yet).
