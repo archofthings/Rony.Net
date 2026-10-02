@@ -38,11 +38,3 @@ configuration.
 ### 15. Configuration files and a standalone server
 - Mock configuration from JSON or YAML.
 - A standalone CLI and Docker image that run a mock server from such a file.
-
-## Repository housekeeping
-- [ ] Bump `actions/checkout` and `actions/setup-dotnet` to v5 in the three workflows (the release log shows a
-      Node 20 deprecation warning).
-- [ ] Add an `.editorconfig` and make the code pass `dotnet format --verify-no-changes` (it reports 6 issues
-      today), then check it in CI.
-- [ ] Move the package metadata that the five projects repeat (authors, license, repository, Source Link
-      settings) into a `src/Directory.Build.props`.
