@@ -16,6 +16,7 @@
       "Bash(dotnet --list-sdks*)",
       "Bash(dotnet --list-runtimes*)",
       "Bash(.claude/skills/setup-dev/scripts/setup_dev.sh*)",
+      "Bash(.claude/skills/release/scripts/check_release.sh*)",
       "Bash(git diff*)",
       "Bash(git status*)",
       "Bash(git log*)",

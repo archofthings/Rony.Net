@@ -444,3 +444,6 @@ $RECYCLE.BIN/
 # Claude Code: local settings and session worktrees
 .claude/settings.local.json
 .claude/worktrees/
+
+# The /release skill: the Visual Studio rule [Rr]elease/ above would ignore it
+!.claude/skills/release/
