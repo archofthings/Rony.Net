@@ -50,6 +50,7 @@ Available as `server.Mock`.
 | `Send(Regex pattern)` | Requests whose text matches the pattern |
 | `SendMatching(Func<string, bool> predicate)` | Requests whose text satisfies the predicate |
 | `SendMatchingBytes(Func<byte[], bool> predicate)` | Requests whose bytes satisfy the predicate |
+| `SendJson(Func<JsonValue, bool> predicate)` | Requests that are valid JSON and satisfy the predicate; other requests don't match |
 | `InState(string state).Send...(...)` | Any of the above, only in that [scenario state](Stateful-Scenarios) |
 | `OnConnect()` | A new TCP connection: the response is a [greeting](Connections-and-Push#greetings-talk-first) |
 | `OnUnmatched()` | Requests no other rule matches; they stay [unmatched](Request-Matching#unmatched-requests) |
@@ -62,6 +63,7 @@ Available as `server.Mock`.
 | `Receive(byte[] response)` | Responds with these bytes |
 | `Receive(Func<string, string> func)` | Responds with `func(request text)` |
 | `Receive(Func<byte[], byte[]> func)` | Responds with `func(request bytes)` |
+| `ReceiveMatch(Func<Match, string> func)` | Responds with `func(regex match)`; only after `Send(Regex)` (otherwise `InvalidOperationException`) |
 | `Disconnect()` | Closes the TCP connection without replying |
 | `ResetConnection()` | Aborts the TCP connection with a reset (RST) without replying |
 | `NoReply()` | Never replies |
@@ -108,6 +110,7 @@ Returned by `Receive(...)`, `Disconnect()`, `ResetConnection()` and `NoReply()`.
 | Member | Effect |
 |---|---|
 | `Then(string / byte[] / Func<string, string> / Func<byte[], byte[]>)` | Adds the next response in the sequence |
+| `ThenMatch(Func<Match, string> func)` | Adds the next response, built from the regex match; only after `Send(Regex)` |
 | `ThenDisconnect()` | Next time: close without replying |
 | `ThenNoReply()` | Next time: no reply |
 | `After(TimeSpan delay)` | Delays the previous response |
@@ -195,6 +198,13 @@ Returned by `connection.Should()`; every method returns the assertions again, an
 requests received on that connection; `BeInState(string)`, `BeOpen()`, `BeClosed()`.
 See [Assertions on one connection](Verifying-Requests#assertions-on-one-connection).
 
+## `Rony.Models.JsonValue`, `JsonKind`
+A small immutable JSON value parsed by the library (no dependency), passed to `SendJson(...)` predicates.
+`JsonValue.Parse(string)` (throws `FormatException`) and `TryParse(string, out JsonValue)`; `Kind` (`Undefined`, `Null`, `Boolean`,
+`Number`, `String`, `Array`, `Object`), `Exists`, indexers `[string name]` and `[int index]` (never throw; a missing part is
+`Undefined`), `Count`, `Items`, `Properties`, `AsString()`, `AsNumber()`, `AsBoolean()` (null for another kind) and `ToString()`
+(compact JSON). See [JSON requests](Request-Matching#json-requests).
+
 ## `Rony.Net.StateScope`
 `Server` (one scenario state for the server) or `Connection` (one per connection).
 
@@ -224,6 +234,7 @@ UTF-8 extension methods: `string.GetBytes()` and `byte[].GetString()`.
 | `MockVerificationException` | `Verify...(...)`, `VerifyInOrder(...)`, `VerifyAllRequestsMatched()`, `VerifyConnections(...)`, `Should()` assertions; waits with `FailOnUnmatched` |
 | `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)`, `WaitForConnection(s)Async(...)`, `WaitForCloseAsync(...)` |
 | `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter |
-| `InvalidOperationException` | `Receive(...)` without `Send(...)`; a response too long for its length prefix; pushing to a closed connection |
+| `InvalidOperationException` | `Receive(...)` without `Send(...)`; `ReceiveMatch(...)` / `ThenMatch(...)` on a rule that was not started with `Send(Regex)`; a response too long for its length prefix; pushing to a closed connection |
 | `NotSupportedException` | Connection members on a listener without connections, such as `UdpServer` |
+| `FormatException` | `JsonValue.Parse(...)` with invalid JSON |
 | `ArgumentOutOfRangeException` | A negative delay or count; a length prefix other than 1, 2 or 4 |

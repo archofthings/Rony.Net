@@ -10,16 +10,11 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 
 | Order | Item | Why this position |
 |---|---|---|
-| 1 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
-| 2 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
-| 3 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
-| 4 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
+| 1 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
+| 2 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
+| 3 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
 
 ## Library features
-
-### 9. Partial matching
-- JSON field matching: `SendJson(j => ...)`.
-- Regex capture groups passed to the response: `Receive(m => $"HELLO {m.Groups[1]}")`.
 
 ### 10. TLS extras
 - Mutual TLS: require and validate a client certificate.

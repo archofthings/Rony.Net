@@ -1,3 +1,4 @@
+using Rony.Models;
 using System;
 using System.Text.RegularExpressions;
 
@@ -31,5 +32,8 @@ namespace Rony.Handlers
 
         /// <summary>Configures the response to every request whose bytes satisfy <paramref name="predicate"/> in this state.</summary>
         public RequestHandler SendMatchingBytes(Func<byte[], bool> predicate) => _handler.SendBytes(predicate, _state);
+
+        /// <summary>Configures the response to every request that is valid JSON and satisfies <paramref name="predicate"/> in this state. See <see cref="RequestHandler.SendJson(Func{JsonValue, bool})"/>.</summary>
+        public RequestHandler SendJson(Func<JsonValue, bool> predicate) => _handler.SendJson(predicate, _state);
     }
 }

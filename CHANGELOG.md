@@ -2,6 +2,15 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.3.0
+
+No breaking changes.
+
+### Added
+- **Partial matching:** `SendJson(j => j["type"].AsString() == "login")` matches requests by JSON content (the new
+  dependency-free `JsonValue`, also usable with `JsonValue.Parse`), and `ReceiveMatch(m => ...)` / `ThenMatch(m => ...)`
+  build a response from the capture groups of a `Send(Regex)` rule.
+
 ## 1.2.0
 
 No breaking changes.

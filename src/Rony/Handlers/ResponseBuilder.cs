@@ -1,5 +1,6 @@
 using Rony.Models;
 using System;
+using System.Text.RegularExpressions;
 
 namespace Rony.Handlers
 {
@@ -26,6 +27,20 @@ namespace Rony.Handlers
 
         /// <inheritdoc cref="Then(string)"/>
         public ResponseBuilder Then(Func<byte[], byte[]> func) => Add(ResponseStep.Reply(func));
+
+        /// <summary>
+        /// Responds with the result of <paramref name="func"/>, called with the regular expression match of the request,
+        /// the next time the request arrives. Only for a rule started with <c>Send(Regex)</c>.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="func"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">The rule was not started with <c>Send(Regex)</c>.</exception>
+        public ResponseBuilder ThenMatch(Func<Match, string> func)
+        {
+            if (func == null) throw new ArgumentNullException(nameof(func));
+            if (_config.Pattern == null)
+                throw new InvalidOperationException(RequestHandler.NeedsRegex(nameof(ThenMatch)));
+            return Add(ResponseStep.Reply(_config.Pattern, func));
+        }
 
         /// <summary>Closes the connection without replying the next time the request arrives.</summary>
         public ResponseBuilder ThenDisconnect() => Add(ResponseStep.CloseConnection());
