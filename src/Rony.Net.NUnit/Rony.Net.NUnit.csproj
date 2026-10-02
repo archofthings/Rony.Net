@@ -4,7 +4,6 @@
     <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <PackageId>Rony.Net.NUnit</PackageId>
-    <Version>1.1.0</Version>
     <Authors>Mojtaba Kiani</Authors>
     <Product>Rony.Net</Product>
     <Description>NUnit integration for Rony.Net: a MockServerTest base class that starts a mock server for every test and writes its log to the test output, and a LogToTestContext() extension.</Description>

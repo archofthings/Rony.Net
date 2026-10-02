@@ -440,3 +440,7 @@ $RECYCLE.BIN/
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# Claude Code: local settings and session worktrees
+.claude/settings.local.json
+.claude/worktrees/
