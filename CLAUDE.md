@@ -123,6 +123,14 @@ relevant tests.
   - A commit is due when a task or a logical step of it is finished and verified (build with 0 warnings, tests
     pass), and before switching to unrelated work. Subagents only suggest a message; the orchestrator writes
     the command.
+- **Every hand-over has four parts, in this order**, each as its own `bash` block or copyable text:
+  1. the branch rename, if the branch name breaks the rule below;
+  2. the commit command(s);
+  3. the push command: `git push -u origin <branch>` the first time, `git push` afterwards;
+  4. the pull request: a title and a description I can paste into GitHub, in a `markdown` block. Follow
+     `.claude/skills/release/templates/pr.md`, describe the whole branch against `main` (not only the last
+     commit), give the real test numbers, and end with the Claude Code line. When the branch already has a PR,
+     give the updated description only if the new commits change what it should say; otherwise say it still fits.
 - **Branch names are meaningful:** `feature/<what it adds>` or `fix/<what it fixes>`, lower case with hyphens,
   for example `feature/chunked-responses` or `fix/udp-state-key`. No random text or numbers at the end, and no
   other prefixes. If the session starts on a generated branch name (the app creates names like
