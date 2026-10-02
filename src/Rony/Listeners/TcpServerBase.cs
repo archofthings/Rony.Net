@@ -118,8 +118,32 @@ namespace Rony.Listeners
                 // End the accept loop first, so closing the socket is not mistaken for a failed accept.
                 _acceptCancellation.Cancel();
                 _acceptCancellation.Dispose();
+                AcceptPendingConnections(_listener, _messages, _cancellation.Token);
                 _listener.Stop();
                 _refusing = true;
+            }
+        }
+
+        /// <summary>
+        /// Accepts the connections that completed their connect but wait in the accept queue, so closing the listening
+        /// socket does not drop them. A client the accept loop obtained at the same time is handled by the loop itself,
+        /// because it tracks every client it gets, also after its accept token was cancelled. Call under the lock.
+        /// </summary>
+        private void AcceptPendingConnections(TcpListenerWrapper listener, AsyncQueue<Message> messages, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Never block while holding the lock, e.g. when the loop takes the last pending connection first.
+                listener.Server.Blocking = false;
+                while (listener.Pending())
+                    Track(ReadConnectionAsync(listener.AcceptTcpClient(), messages, cancellationToken), cancellationToken);
+            }
+            catch (SocketException)
+            {
+                // Nothing (more) to accept.
+            }
+            catch (ObjectDisposedException)
+            {
             }
         }
 
@@ -153,6 +177,15 @@ namespace Rony.Listeners
             var connection = (TcpConnection)sender;
             if (connection.IsClosed) throw new InvalidOperationException("The connection is closed.");
             return data.Length == 0 ? Task.CompletedTask : connection.WriteAsync(data);
+        }
+
+        /// <inheritdoc />
+        public Task SendRawAsync(byte[] data, object sender, int chunkSize, TimeSpan delay, CancellationToken cancellationToken)
+        {
+            if (data == null) throw new ArgumentNullException(nameof(data));
+            var connection = (TcpConnection)sender;
+            if (connection.IsClosed) throw new InvalidOperationException("The connection is closed.");
+            return data.Length == 0 ? Task.CompletedTask : connection.WriteAsync(data, chunkSize, delay, cancellationToken);
         }
 
         /// <inheritdoc />

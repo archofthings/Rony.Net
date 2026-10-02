@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Rony.Interfaces
@@ -17,6 +19,14 @@ namespace Rony.Interfaces
 
         /// <summary>Writes bytes as they are, without framing. Unlike a reply it does not end a request.</summary>
         Task SendRawAsync(byte[] data, object sender);
+
+        /// <summary>
+        /// Writes bytes as they are, in pieces of <paramref name="chunkSize"/> bytes (the last may be shorter), waiting
+        /// <paramref name="delay"/> between pieces. Each piece is flushed on its own, and nothing else is written to the
+        /// connection until the last one is. The waits end with <paramref name="cancellationToken"/>, which then throws
+        /// <see cref="System.OperationCanceledException"/>. Unlike a reply it does not end a request.
+        /// </summary>
+        Task SendRawAsync(byte[] data, object sender, int chunkSize, TimeSpan delay, CancellationToken cancellationToken);
 
         /// <summary>Stops accepting new connections (clients get "connection refused") while open connections keep working.</summary>
         void RefuseConnections();

@@ -17,6 +17,10 @@ No breaking changes.
   the wire; `server.RefuseConnections()` / `AcceptConnections()` make new clients get "connection refused" while open
   connections keep working; `TcpServerSsl.FailHandshake` makes every TLS handshake fail. Custom listeners opt in with
   the new `IFaultInjectionListener`.
+- **Chunked and slow responses:** `InChunks(chunkSize, delay)` sends a response in pieces with a wait between them and
+  `Throttled(bytesPerSecond)` sends it at about that rate. A message pushed meanwhile waits for the last piece, and
+  `StopAsync()` ends a slow response at once. `IFaultInjectionListener` gains a chunked `SendRawAsync` overload (the
+  interface is new in 1.2).
 - **xUnit v3:** the `Rony.Net.Xunit.v3` package, the same `MockServerTest` and `LogTo(ITestOutputHelper)` as
   `Rony.Net.Xunit` (which stays for xUnit v2) in the same `Rony.Net.Xunit` namespace.
 

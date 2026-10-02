@@ -25,6 +25,35 @@ namespace Rony.Tests.Handler
         }
 
         [Theory]
+        [InlineData("chunks-size")]
+        [InlineData("chunks-delay")]
+        [InlineData("throttled")]
+        [InlineData("chunks-noreply")]
+        [InlineData("throttled-noreply")]
+        public void InChunks_And_Throttled_Should_Validate_Their_Arguments_And_Need_A_Reply(string case_)
+        {
+            //Arrange
+            var reply = _handler.Send("X").Receive("HELLO");
+            var noReply = _handler.Send("Y").NoReply();
+
+            //Act
+            Action action = case_ switch
+            {
+                "chunks-size" => () => reply.InChunks(0),
+                "chunks-delay" => () => reply.InChunks(1, TimeSpan.FromMilliseconds(-1)),
+                "throttled" => () => reply.Throttled(0),
+                "chunks-noreply" => () => noReply.InChunks(1),
+                _ => () => noReply.Throttled(1)
+            };
+
+            //Assert
+            if (case_.EndsWith("noreply"))
+                Assert.Throws<InvalidOperationException>(action);
+            else
+                Assert.Throws<ArgumentOutOfRangeException>(action);
+        }
+
+        [Theory]
         [InlineData("disconnect")]
         [InlineData("noreply")]
         [InlineData("reset")]

@@ -96,6 +96,41 @@ namespace Rony.Handlers
             return this;
         }
 
+        /// <summary>
+        /// Sends the previous response in pieces of <paramref name="chunkSize"/> bytes, as it goes on the wire (after framing and
+        /// <c>Truncated</c>/<c>Corrupted</c>), waiting <paramref name="delay"/> between the pieces (not before the first or after the last).
+        /// Every piece is written and flushed on its own; with a zero delay the client may still read several pieces at once.
+        /// <c>After</c> still delays the start, and <c>AndDisconnect</c>/<c>AndResetConnection</c> happen after the last piece.
+        /// Nothing else is written to the connection between the pieces. The last call of <c>InChunks</c> or <see cref="Throttled"/>
+        /// on a step wins. A listener that cannot send in chunks (UDP) sends the response whole. TCP only.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="chunkSize"/> is zero or negative, or <paramref name="delay"/> is negative.</exception>
+        /// <exception cref="InvalidOperationException">The previous step sends no reply.</exception>
+        public ResponseBuilder InChunks(int chunkSize, TimeSpan delay = default)
+        {
+            if (chunkSize <= 0) throw new ArgumentOutOfRangeException(nameof(chunkSize), "The chunk size must be positive.");
+            if (delay < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(delay), "The delay can't be negative.");
+            RequireReply(nameof(InChunks)).Chunking = (chunkSize, delay, 0);
+            return this;
+        }
+
+        /// <summary>
+        /// Sends the previous response at about <paramref name="bytesPerSecond"/>: about ten pieces a second (one byte at a time
+        /// for rates under 10 bytes per second), as with <see cref="InChunks"/>. The last call of <c>Throttled</c> or
+        /// <c>InChunks</c> on a step wins. A listener that cannot send in chunks (UDP) sends the response whole. TCP only.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="bytesPerSecond"/> is zero or negative.</exception>
+        /// <exception cref="InvalidOperationException">The previous step sends no reply.</exception>
+        public ResponseBuilder Throttled(int bytesPerSecond)
+        {
+            if (bytesPerSecond <= 0) throw new ArgumentOutOfRangeException(nameof(bytesPerSecond), "The rate must be positive.");
+            var step = RequireReply(nameof(Throttled));
+            step.Chunking = bytesPerSecond < 10
+                ? (1, TimeSpan.FromMilliseconds(1000.0 / bytesPerSecond), bytesPerSecond)
+                : (bytesPerSecond / 10, TimeSpan.FromMilliseconds(100), bytesPerSecond);
+            return this;
+        }
+
         private ResponseStep RequireReply(string method)
         {
             var step = _config.LastStep;

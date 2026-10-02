@@ -591,6 +591,106 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task InChunks_Should_Send_The_Framed_Response_In_Pieces()
+        {
+            //Arrange (length prefix 0000000B + 11 bytes = 15 bytes, in pieces of 4)
+            using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.LengthPrefix() });
+            server.Mock.Send("X").Receive("HELLO WORLD").InChunks(4, TimeSpan.FromMilliseconds(300));
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act
+            await stream.WriteAsync(new byte[] { 0, 0, 0, 1, (byte)'X' });
+            var first = new byte[15];
+            using var timeout = new CancellationTokenSource(ReadTimeout);
+            var firstRead = await stream.ReadAsync(first, timeout.Token);
+            var rest = await ReadExactlyAsync(stream, 15 - firstRead);
+
+            //Assert (the first read can only see the first piece: the second is sent 300 ms later)
+            Assert.Equal(4, firstRead);
+            var all = first.Take(firstRead).Concat(rest).ToArray();
+            Assert.Equal(new byte[] { 0, 0, 0, 11 }.Concat("HELLO WORLD".GetBytes()).ToArray(), all);
+        }
+
+        [Fact]
+        public async Task Throttled_Should_Take_As_Long_As_The_Rate_Requires()
+        {
+            //Arrange (100 bytes/s = 10 bytes every 100 ms: 50 bytes need 4 waits)
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("X").Receive(new string('a', 50)).Throttled(bytesPerSecond: 100);
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act
+            var watch = Stopwatch.StartNew();
+            await WriteAsync(stream, "X");
+            var response = await ReadExactlyAsync(stream, 50);
+            watch.Stop();
+
+            //Assert
+            Assert.Equal(new string('a', 50), response.GetString());
+            Assert.True(watch.Elapsed >= TimeSpan.FromMilliseconds(300), $"took only {watch.Elapsed}");
+        }
+
+        [Fact]
+        public async Task Push_During_A_Chunked_Response_Should_Wait_For_The_Last_Piece()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            var body = new string('a', 20);
+            server.Mock.Send("X").Receive(body).InChunks(5, TimeSpan.FromMilliseconds(100));
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+            var connection = await server.WaitForConnectionAsync();
+
+            //Act
+            await WriteAsync(stream, "X");
+            var first = await ReadExactlyAsync(stream, 1);
+            await connection.SendAsync("PUSH");
+            var rest = await ReadExactlyAsync(stream, 23);
+
+            //Assert
+            Assert.Equal(body + "PUSH", first.Concat(rest).ToArray().GetString());
+        }
+
+        [Fact]
+        public async Task StopAsync_Should_Complete_While_A_Slow_Response_Is_Being_Sent()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("X").Receive("slow response").InChunks(1, TimeSpan.FromMinutes(1));
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+            await WriteAsync(stream, "X");
+            await ReadExactlyAsync(stream, 1);
+
+            //Act + Assert
+            await server.StopAsync().WaitAsync(ReadTimeout);
+        }
+
+        [Fact]
+        public async Task Udp_Should_Send_A_Chunked_Response_Whole()
+        {
+            //Arrange
+            using var server = new MockServer(new UdpServer("127.0.0.1", 0));
+            server.Mock.Send("ping").Receive("pong").InChunks(1, TimeSpan.FromMinutes(1));
+            server.Start();
+            using var client = new UdpClient();
+
+            //Act
+            var request = "ping".GetBytes();
+            await client.SendAsync(request, request.Length, new IPEndPoint(IPAddress.Loopback, server.Port));
+            var response = await client.ReceiveAsync().WaitAsync(ReadTimeout);
+
+            //Assert
+            Assert.Equal("pong", response.Buffer.GetString());
+        }
+
+        [Fact]
         public async Task RefuseConnections_Should_Refuse_New_Clients_Until_AcceptConnections()
         {
             //Arrange

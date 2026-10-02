@@ -184,6 +184,38 @@ public class SequenceAndFailureSamples
     }
 
     [Fact]
+    public async Task Response_in_chunks()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        var body = new string('x', 64);
+        server.Mock.Send("GET").Receive(body).InChunks(16, TimeSpan.FromMilliseconds(50));
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        await client.SendAsync("GET");
+
+        // Four pieces of 16 bytes, 50 ms apart; the client sees the complete response in the end.
+        Assert.Equal(body, (await client.ReceiveExactlyAsync(64)).GetString());
+    }
+
+    [Fact]
+    public async Task Throttled_response()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        var body = new string('x', 300);
+        server.Mock.Send("GET").Receive(body).Throttled(bytesPerSecond: 1024);
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(server.Port);
+        var stopwatch = Stopwatch.StartNew();
+        await client.SendAsync("GET");
+
+        // About 1024 bytes a second: three pieces of 102 bytes, 100 ms apart.
+        Assert.Equal(body, (await client.ReceiveExactlyAsync(300)).GetString());
+        Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(150));
+    }
+
+    [Fact]
     public async Task Corrupted_response()
     {
         using var server = new MockServer(new TcpServer(0));

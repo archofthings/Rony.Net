@@ -5,6 +5,7 @@ Real servers are slow, drop connections and stop answering. Rony.Net lets you te
 | Method | What the client sees |
 |---|---|
 | `.After(delay)` | The response arrives after `delay` |
+| `.InChunks(size, delay)` / `.Throttled(bytesPerSecond)` | The response arrives piece by piece, slowly |
 | `NoReply()` / `.ThenNoReply()` | Nothing; the connection stays open (a timeout) |
 | `Disconnect()` / `.ThenDisconnect()` | The connection closes without a response |
 | `.AndDisconnect()` | The response, then the connection closes |
@@ -47,6 +48,55 @@ Assert.Equal("1\n2\n", (await client.ReceiveExactlyAsync(4)).GetString());
 ```
 
 `server.Stop()` cancels delays that are still waiting.
+
+### Chunked and throttled responses
+A real server often sends a large response in pieces over a long time. `.InChunks(chunkSize, delay)` sends the previous
+response, **as it goes on the wire** (after [framing](Connections-and-Framing) and any `Truncated`/`Corrupted`), in
+pieces of `chunkSize` bytes (the last may be shorter) and waits `delay` between the pieces, not before the first and not
+after the last. `.Throttled(bytesPerSecond)` does the same at about that rate: ten pieces a second, or one byte at a
+time for rates under 10 bytes per second.
+
+```csharp
+using var server = new MockServer(new TcpServer(0));
+var body = new string('x', 64);
+server.Mock.Send("GET").Receive(body).InChunks(16, TimeSpan.FromMilliseconds(50));
+server.Start();
+
+using var client = await TcpTestClient.ConnectAsync(server.Port);
+await client.SendAsync("GET");
+
+// Four pieces of 16 bytes, 50 ms apart; the client sees the complete response in the end.
+Assert.Equal(body, (await client.ReceiveExactlyAsync(64)).GetString());
+```
+
+```csharp
+using var server = new MockServer(new TcpServer(0));
+var body = new string('x', 300);
+server.Mock.Send("GET").Receive(body).Throttled(bytesPerSecond: 1024);
+server.Start();
+
+using var client = await TcpTestClient.ConnectAsync(server.Port);
+var stopwatch = Stopwatch.StartNew();
+await client.SendAsync("GET");
+
+// About 1024 bytes a second: three pieces of 102 bytes, 100 ms apart.
+Assert.Equal(body, (await client.ReceiveExactlyAsync(300)).GetString());
+Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(150));
+```
+
+- Every piece is written and flushed on its own. With a zero `delay` the client may still read several pieces at once.
+- `.After(delay)` still delays the start; `.AndDisconnect()` and `.AndResetConnection()` happen after the last piece.
+- A message pushed with `connection.SendAsync(...)` or `server.BroadcastAsync(...)` while a response is being sent waits
+  until the last piece is written, so it never lands in the middle of the response.
+- `server.Stop()` ends a slow response at once; if the client disconnects part-way, the failure is logged like any
+  failed response.
+- Calling `InChunks` and `Throttled` on the same step (or one of them twice): the last call wins.
+- They work for `OnConnect()` greetings and `OnUnmatched()`, throw `ArgumentOutOfRangeException` for a chunk size or
+  rate that is not positive (or a negative delay), and `InvalidOperationException` after `Disconnect()`, `NoReply()` or
+  `ResetConnection()`. A listener that cannot send in chunks (UDP, or a
+  [custom listener](Custom-Listeners#simulating-failures-in-a-custom-listener) without `IFaultInjectionListener`) sends
+  the response whole and logs a line saying so. The log shows what happened, for example
+  `#1 sent 64 bytes in 4 chunks of 16 bytes, 50 ms apart ...`.
 
 ## Timeouts: a server that never answers
 ```csharp

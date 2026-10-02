@@ -10,7 +10,6 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 
 | Order | Item | Why this position |
 |---|---|---|
-| 4 | 6. Chunked or slow responses | Builds on the response chain; pairs with 7 |
 | 5 | 8. More framings | Self-contained in `MessageFraming.cs` |
 | 6 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
 | 7 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
@@ -18,10 +17,6 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 | 9 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
 
 ## Library features
-
-### 6. Chunked or slow responses
-Send a response in pieces with delays between them, or throttle the bandwidth, so that a client's partial reads
-and buffering can be tested.
 
 ### 8. More framings
 - Little-endian length prefix.

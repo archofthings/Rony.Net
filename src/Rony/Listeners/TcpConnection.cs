@@ -47,6 +47,31 @@ namespace Rony.Listeners
             }
         }
 
+        /// <summary>Writes <paramref name="data"/> in pieces while holding the write lock, so nothing is written in between.</summary>
+        public async Task WriteAsync(byte[] data, int chunkSize, TimeSpan delay, CancellationToken cancellationToken)
+        {
+            await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                // Small pieces must not wait for the Nagle algorithm.
+                var socket = Client.Client;
+                if (socket != null) socket.NoDelay = true;
+
+                for (var offset = 0; offset < data.Length; offset += chunkSize)
+                {
+                    if (offset > 0 && delay > TimeSpan.Zero)
+                        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await Stream.WriteAsync(data, offset, Math.Min(chunkSize, data.Length - offset), cancellationToken).ConfigureAwait(false);
+                    await Stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _writeLock.Release();
+            }
+        }
+
         public void MessageQueued() => Interlocked.Increment(ref _pendingMessages);
 
         public void MessageHandled()

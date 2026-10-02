@@ -133,7 +133,7 @@ public interface IConnectionListener : IListener
   pending requests (as `TcpServerBase` does, to close a connection once the client is done and every request is handled).
 
 ## Simulating failures in a custom listener
-`ResetConnection()`, `Truncated(...)`, `Corrupted(...)`, `connection.ResetAsync()` and `server.RefuseConnections()` need a
+`ResetConnection()`, `Truncated(...)`, `Corrupted(...)`, `InChunks(...)`, `Throttled(...)`, `connection.ResetAsync()` and `server.RefuseConnections()` need a
 listener that implements the optional `IFaultInjectionListener` (which extends `IConnectionListener`; `TcpServer` and
 `TcpServerSsl` implement it):
 
@@ -143,6 +143,8 @@ public interface IFaultInjectionListener : IConnectionListener
     Task ResetAsync(object sender);                  // abort the connection (RST for TCP)
     byte[] Frame(byte[] message);                    // the bytes a response would be sent as (framing applied)
     Task SendRawAsync(byte[] data, object sender);   // write bytes as they are: no framing, does not end a request
+    Task SendRawAsync(byte[] data, object sender, int chunkSize, TimeSpan delay, CancellationToken cancellationToken);
+                                                     // the same in pieces of chunkSize bytes, delay apart, nothing else written in between
     void RefuseConnections();
     void AcceptConnections();
 }
@@ -150,7 +152,7 @@ public interface IFaultInjectionListener : IConnectionListener
 
 To truncate or corrupt a response, the server asks for `Frame(response)`, changes the bytes and sends them with
 `SendRawAsync`; it then finishes the request with `ReplyAsync(empty, sender)`, as for any reply. Without the interface,
-a reset closes the connection like `Disconnect()`, `Truncated` and `Corrupted` send the response unmodified, and
+a reset closes the connection like `Disconnect()`, `Truncated` and `Corrupted` send the response unmodified, `InChunks` and `Throttled` send it whole, and
 `RefuseConnections()` throws `NotSupportedException`:
 
 ```csharp

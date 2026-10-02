@@ -544,7 +544,13 @@ namespace Rony.Net
                     if (modifiers.Length > 0 && _faultListener == null)
                         Trace($"{label} the listener does not support truncated or corrupted responses; sending the response unmodified");
 
-                    if (_faultListener != null && ((modifiers.Length > 0 && response.Length > 0) || abort))
+                    var chunking = step.Chunking;
+                    var chunked = chunking.Size > 0 && response.Length > 0;
+                    if (chunked && _faultListener == null)
+                        Trace($"{label} the listener cannot send in chunks; sending the response whole");
+                    chunked &= _faultListener != null;
+
+                    if (_faultListener != null && ((modifiers.Length > 0 && response.Length > 0) || abort || chunked))
                     {
                         // Write the framed (and modified) bytes ourselves; the request is finished below, as a normal reply would.
                         // An empty response stays empty, as with a normal reply.
@@ -553,10 +559,22 @@ namespace Rony.Net
                             var framed = response.Length > 0 ? _faultListener.Frame(response) : Empty;
                             var tags = string.Empty;
                             var sent = response.Length > 0 ? Modify(modifiers, framed, label, out tags) : Empty;
-                            if (sent.Length > 0)
+                            chunked &= sent.Length > 0;
+                            if (chunked)
+                                await _faultListener.SendRawAsync(sent, sender, chunking.Size, chunking.Delay, cancellationToken).ConfigureAwait(false);
+                            else if (sent.Length > 0)
                                 await _faultListener.SendRawAsync(sent, sender).ConfigureAwait(false);
+                            var chunkNote = string.Empty;
+                            if (chunked)
+                            {
+                                var count = (sent.Length + chunking.Size - 1) / chunking.Size;
+                                chunkNote = (tags.Length > 0 ? string.Empty : $"{sent.Length} bytes ") +
+                                            $"in {count} chunk{(count == 1 ? string.Empty : "s")} of {chunking.Size} byte{(chunking.Size == 1 ? string.Empty : "s")}, " +
+                                            $"{chunking.Delay.TotalMilliseconds:0} ms apart" +
+                                            (chunking.BytesPerSecond > 0 ? $" (throttled to {chunking.BytesPerSecond} bytes/s)" : string.Empty) + " ";
+                            }
                             Trace($"{label} sent {(kind == null ? string.Empty : kind + " ")}" +
-                                  (tags.Length > 0 ? $"{sent.Length} of {framed.Length} bytes ({tags}) " : string.Empty) +
+                                  (tags.Length > 0 ? $"{sent.Length} of {framed.Length} bytes ({tags}) " : string.Empty) + chunkNote +
                                   $"{ByteFormatter.Describe(sent)}{delay}");
                             if (abort)
                             {

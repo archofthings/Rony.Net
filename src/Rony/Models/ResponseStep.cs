@@ -47,6 +47,24 @@ namespace Rony.Models
             }
         }
 
+        private readonly object _chunkLock = new object();
+        private (int Size, TimeSpan Delay, int BytesPerSecond) _chunking;
+
+        /// <summary>Sends the framed response in pieces: size in bytes (0 = whole), wait between pieces, and the throttle rate for logging (0 = plain chunks).</summary>
+        public (int Size, TimeSpan Delay, int BytesPerSecond) Chunking
+        {
+            get
+            {
+                lock (_chunkLock)
+                    return _chunking;
+            }
+            set
+            {
+                lock (_chunkLock)
+                    _chunking = value;
+            }
+        }
+
         /// <summary>The scenario state to move to once this step is used; null keeps the current state.</summary>
         public string NextState { get; set; }
         public bool SendsReply => Producer != null;

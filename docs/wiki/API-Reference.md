@@ -116,6 +116,8 @@ Returned by `Receive(...)`, `Disconnect()`, `ResetConnection()` and `NoReply()`.
 | `AndResetConnection()` | Resets the connection after the previous response was written (the client may not see it) |
 | `Truncated(int byteCount)` | Sends only the first `byteCount` bytes of the previous response, as it goes on the wire (after framing) |
 | `Corrupted(Func<byte[], byte[]> corrupt)` | Changes the bytes of the previous response, as it goes on the wire; gets a copy |
+| `InChunks(int chunkSize, TimeSpan delay = default)` | Sends the previous response, as it goes on the wire, in pieces of `chunkSize` bytes with `delay` between them; the last call of `InChunks`/`Throttled` wins |
+| `Throttled(int bytesPerSecond)` | Sends the previous response at about this rate (ten pieces a second; one byte at a time under 10 bytes/s) |
 | `GoTo(string state)` | Moves the [scenario](Stateful-Scenarios) to `state` once the previous response is used |
 
 The last response in a sequence repeats once the sequence ends.
@@ -139,6 +141,7 @@ The last response in a sequence repeats once the sequence ends.
 | `void AcceptConnections()` | Listens again on the same port; does nothing when not refusing. Throws `SocketException` if the port cannot be bound again |
 | `byte[] Frame(byte[] message)` | Frames a message with `Framing` |
 | `Task SendRawAsync(byte[] data, object sender)` | Writes bytes to a connection as they are, without framing |
+| `Task SendRawAsync(byte[] data, object sender, int chunkSize, TimeSpan delay, CancellationToken cancellationToken)` | Writes bytes as they are in pieces, `delay` apart, holding the connection's write lock so nothing is written in between |
 | `Task ResetAsync(object sender)` | Aborts a connection with a TCP reset (RST) |
 | `protected abstract Task<Stream> OpenStreamAsync(TcpClient client)` | Prepares the stream for a new connection |
 | `protected virtual bool HasPendingData(Stream stream)` | Whether more data can be read right away |
@@ -196,7 +199,7 @@ One exact-request configuration: `CallCount`, and `GetResponse(string or byte[])
 
 ## `Rony.Interfaces.IListener`, `IConnectionListener`, `IFaultInjectionListener`
 The transport contract, its extension for transports with connections, and the optional extension for failure
-simulation (`ResetAsync`, `Frame`, `SendRawAsync`, `RefuseConnections`, `AcceptConnections`); see [Custom Listeners](Custom-Listeners).
+simulation (`ResetAsync`, `Frame`, `SendRawAsync` (also the chunked overload), `RefuseConnections`, `AcceptConnections`); see [Custom Listeners](Custom-Listeners).
 `TcpServer` and `TcpServerSsl` implement `IConnectionListener` and `IFaultInjectionListener`.
 
 ## Test framework packages
