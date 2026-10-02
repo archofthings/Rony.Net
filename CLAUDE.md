@@ -123,6 +123,11 @@ relevant tests.
   - A commit is due when a task or a logical step of it is finished and verified (build with 0 warnings, tests
     pass), and before switching to unrelated work. Subagents only suggest a message; the orchestrator writes
     the command.
+- **Branch names are meaningful:** `feature/<what it adds>` or `fix/<what it fixes>`, lower case with hyphens,
+  for example `feature/chunked-responses` or `fix/udp-state-key`. No random text or numbers at the end, and no
+  other prefixes. If the session starts on a generated branch name (the app creates names like
+  `claude/<words>-<random>` for worktrees), propose the rename as a command I can copy before the first commit:
+  `git branch -m feature/<name>`. Never commit on `main`.
 - Because nothing is committed between steps, each agent reports the exact files it changed, and the next agent
   reviews the working tree (`git status`, `git diff`), not a commit.
 - Only the orchestrator changes `CLAUDE.md`, `BACKLOG.md` and `.claude/` (agents, skills, hooks, shared
