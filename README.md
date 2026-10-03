@@ -35,6 +35,7 @@ server.Should().HaveReceived("PING", Times.Once());
 - **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, TLS details (protocol, server name, client certificate), and waiting for requests and connections without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
 - **Record and replay.** Record the conversation with a real server through a proxy, save it as an editable JSON file and replay it as a mock server. → [Record and Replay](https://github.com/archofthings/Rony.Net/wiki/Record-and-Replay)
 - **Configuration files.** Describe the server and its rules in a JSON file and load it with one call. → [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files)
+- **Standalone server.** The `rony` command-line tool (and a Dockerfile in the repository to build an image) runs a configuration file, record a real server and replay the recording, with no .NET test code. → [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
 - **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
 - **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit v2 or v3, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
@@ -46,6 +47,7 @@ Or in the Package Manager Console: `Install-Package Rony.Net`.
 
 Optional, for less setup code: `Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3), `Rony.Net.NUnit` or `Rony.Net.MSTest`
 ([Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)).
+To run a mock server without code: the `Rony.Net.Cli` tool ([Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)).
 
 ## Quick start
 ```csharp
@@ -182,6 +184,16 @@ using var server = MockServer.FromFile("mock.json");   // listener and rules fro
 server.Start();
 ```
 Details: [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files)
+
+## Standalone server
+```console
+dotnet tool install --global Rony.Net.Cli
+rony run mock.json                                   # serve a configuration file (Ctrl+C stops it)
+rony record --target api.test:5000 --out login.json  # record a real server through a proxy
+rony replay login.json                               # serve the recording
+docker run --rm -p 4000:4000 -v "$PWD:/config" rony   # the same as a Docker image (build it from the Dockerfile)
+```
+Details: [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
 
 ## Connections and pushed messages
 ```csharp

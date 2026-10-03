@@ -127,6 +127,7 @@ namespace Rony.Net
         /// </summary>
         /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
         /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+        /// <exception cref="DirectoryNotFoundException">The directory of the file does not exist.</exception>
         /// <exception cref="FormatException">The content is not valid JSON or the configuration is invalid.</exception>
         public static MockServer FromFile(string path)
         {
@@ -269,23 +270,28 @@ namespace Rony.Net
         /// <summary>Stops the server and releases the listener.</summary>
         public void Dispose()
         {
-            Stop();
-            if (_connectionListener != null)
+            try
             {
-                _connectionListener.ConnectionOpened -= OnConnectionOpened;
-                _connectionListener.ConnectionClosed -= OnConnectionClosed;
-                _connectionListener.ConnectionFailed -= OnConnectionFailed;
+                Stop();
+                if (_connectionListener != null)
+                {
+                    _connectionListener.ConnectionOpened -= OnConnectionOpened;
+                    _connectionListener.ConnectionClosed -= OnConnectionClosed;
+                    _connectionListener.ConnectionFailed -= OnConnectionFailed;
+                }
+                _listener.Dispose();
             }
-            _listener.Dispose();
-
-            IDisposable[] owned;
-            lock (_owned)
+            finally
             {
-                owned = _owned.ToArray();
-                _owned.Clear();
+                IDisposable[] owned;
+                lock (_owned)
+                {
+                    owned = _owned.ToArray();
+                    _owned.Clear();
+                }
+                foreach (var resource in owned)
+                    resource.Dispose();
             }
-            foreach (var resource in owned)
-                resource.Dispose();
         }
 
         /// <summary>Disposes <paramref name="resource"/> (a certificate created for the server) when the server is disposed.</summary>
@@ -302,8 +308,14 @@ namespace Rony.Net
         /// </summary>
         public async ValueTask DisposeAsync()
         {
-            await StopAsync().ConfigureAwait(false);
-            Dispose();
+            try
+            {
+                await StopAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                Dispose();
+            }
         }
 
         private static async Task WaitQuietlyAsync(Task task)

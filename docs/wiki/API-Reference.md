@@ -261,6 +261,10 @@ simulation (`ResetAsync`, `Frame`, `SendRawAsync` (also the chunked overload), `
 `VerifyAllRequestsMatchedAfterTest`, `CreateListener()`) and `LogTo(...)` / `LogToTestContext()` extensions.
 See [Test Framework Integration](Test-Framework-Integration).
 
+## Command-line tool
+`Rony.Net.Cli` (`dotnet tool install --global Rony.Net.Cli`) is the `rony` tool with the commands `run`, `validate`, `record` and `replay`. It has no public .NET API;
+see [Standalone Server](Standalone-Server).
+
 ## `Rony.Models.Message`
 A request as delivered by a listener: `Body`, `BodyString`, `Sender`, `RemoteEndPoint`.
 

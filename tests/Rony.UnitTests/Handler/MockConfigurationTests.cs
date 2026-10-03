@@ -88,6 +88,8 @@ namespace Rony.Tests.Handler
         [InlineData("{ 'version': 1, 'server': { 'transport': 'udp' }, 'onConnect': { 'reply': 'hi' } }", "onConnect: not allowed with transport \"udp\"")]
         [InlineData("{ 'version': 1, 'server': { 'dualMode': true } }", "server.dualMode: needs an IPv6 address")]
         [InlineData("{ 'version': 1, 'server': { 'framing': { 'type': 'lengthPrefix', 'prefixLength': 3 } } }", "server.framing.prefixLength: must be 1, 2 or 4")]
+        [InlineData("{ 'version': 1, 'server': { 'framing': { 'type': 'startEnd', 'start': 2, 'end': 2 } } }", "server.framing:")]
+        [InlineData("{ 'version': 1, 'rules': [ { 'requst': 'a', 'reply': 'x' } ] }", "rules[0]: unknown property \"requst\"")]
         [InlineData("{ 'version': 1, 'server': { 'transport': 'tls', 'tls': { 'certificate': 'missing-file.pfx' } } }", "server.tls.certificate: file not found")]
         public void FromJson_Should_Reject_Invalid_Configurations_Naming_The_Problem_And_Where(string json, string message)
         {

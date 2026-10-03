@@ -214,6 +214,18 @@ namespace Rony.Handlers
 
         private static IMessageFraming ParseFraming(JsonData framing, string where)
         {
+            try
+            {
+                return ParseFramingCore(framing, where);
+            }
+            catch (ArgumentException exception)
+            {
+                throw Error(where, exception.Message);
+            }
+        }
+
+        private static IMessageFraming ParseFramingCore(JsonData framing, string where)
+        {
             if (framing.Kind != JsonDataKind.Object) throw Error(where, "must be an object");
             var type = OptString(framing, "type", where);
             if (type == null) throw Error(where, "\"type\" is required");
@@ -270,6 +282,7 @@ namespace Rony.Handlers
                 if (item.Kind != JsonDataKind.Object) throw Error(where, "must be an object");
 
                 var rule = new Rule { Where = where };
+                CheckProperties(item, where, ResponseFields.Concat(new[] { "request", "match", "json", "state", "replies" }).ToArray());
                 var matchers = MatcherFields.Where(field => item[field].Exists).ToArray();
                 if (matchers.Length == 0) throw Error(where, "needs one of \"request\", \"match\" or \"json\"");
                 if (matchers.Length > 1) throw Error(where, $"\"{matchers[0]}\" and \"{matchers[1]}\" cannot both be set; use one of \"request\", \"match\" or \"json\"");
@@ -497,9 +510,9 @@ namespace Rony.Handlers
             {
                 certificate = new X509Certificate2(File.ReadAllBytes(path), password);
             }
-            catch (CryptographicException exception)
+            catch (Exception exception) when (exception is CryptographicException || exception is IOException || exception is UnauthorizedAccessException)
             {
-                throw Error("server.tls.certificate", $"cannot load the certificate {path}: {exception.Message}");
+                throw Error("server.tls.certificate", $"cannot load the certificate {Path.GetFullPath(path)}: {exception.Message}");
             }
 
             if (!certificate.HasPrivateKey)

@@ -16,6 +16,7 @@
 - [Stateful Scenarios](Stateful-Scenarios)
 - [Record and Replay](Record-and-Replay)
 - [Configuration Files](Configuration-Files)
+- [Standalone Server](Standalone-Server)
 
 **Assertions**
 - [Verifying Requests](Verifying-Requests)

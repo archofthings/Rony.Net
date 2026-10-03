@@ -46,7 +46,7 @@ jobs:
         run: dotnet test --configuration Release
 
       - name: Pack
-        # Rony.Net, Rony.Net.Xunit, Rony.Net.Xunit.v3, Rony.Net.NUnit and Rony.Net.MSTest; test and sample projects are not packable
+        # Rony.Net, Rony.Net.Xunit, Rony.Net.Xunit.v3, Rony.Net.NUnit, Rony.Net.MSTest and Rony.Net.Cli (the rony tool); test and sample projects are not packable
         run: dotnet pack --configuration Release --output artifacts
 
       - name: Log in to NuGet (Trusted Publishing)

@@ -21,6 +21,9 @@ No breaking changes.
   socket, with framing) and its rules from a JSON file: exact, regular expression and JSON matching, greetings, sequences,
   delays, disconnects, resets, silence and scenario states. Mistakes are reported as a `FormatException` naming the
   place, and unknown properties are rejected so typos are found. The returned server can be extended in code.
+- **Standalone server:** the new `Rony.Net.Cli` package is the `rony` .NET tool (`dotnet tool install --global Rony.Net.Cli`)
+  and a Dockerfile: `rony run <config.json>` serves a configuration file, `rony validate` checks it, `rony record` records a
+  real server through a proxy (TLS to and from the proxy, framing options) and `rony replay` serves the recording.
 
 ## 1.3.0
 

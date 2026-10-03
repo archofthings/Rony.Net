@@ -103,6 +103,9 @@ How the recording becomes rules, connection by connection and message by message
 
 Recorded times are not replayed as delays: add `.After(...)` yourself if a test needs them.
 
+## From the command line
+The `rony record` and `rony replay` commands do the same without code, see [Standalone Server](Standalone-Server).
+
 ## Limitations
 - TCP and TLS only. The proxy does not relay UDP.
 - Every request is matched on its own. A protocol whose reply depends on earlier requests replays correctly only when the client

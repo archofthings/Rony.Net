@@ -30,7 +30,7 @@ dotnet add package Rony.Net --version X.Y.Z
 - <!-- tooling, CI, tests; only what a contributor would notice -->
 
 ## 📦 Packages
-`Rony.Net`, `Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit` and `Rony.Net.MSTest`, all at X.Y.Z.
+`Rony.Net`, `Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest` and `Rony.Net.Cli` (the `rony` tool), all at X.Y.Z.
 <!-- Say which framework packages changed, or that they have no changes of their own. -->
 
 ## 📖 Documentation

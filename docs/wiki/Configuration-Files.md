@@ -12,12 +12,14 @@ server.Start();
 
 | Method | Description |
 |---|---|
-| `MockServer.FromFile(path)` | Reads the file. Relative paths inside it (the certificate) are resolved against the file's directory. A missing file throws `FileNotFoundException`. |
+| `MockServer.FromFile(path)` | Reads the file. Relative paths inside it (the certificate) are resolved against the file's directory. A missing file throws `FileNotFoundException`, a missing directory `DirectoryNotFoundException`. |
 | `MockServer.FromJson(json)` | The same for JSON text. Relative paths are resolved against the current directory. |
 | `MockServer.FromJson(json, baseDirectory)` | The same, resolving relative paths against `baseDirectory` (`null` means the current directory). |
 
 The server is created but not started. A null argument throws `ArgumentNullException`; anything wrong with the content
 throws a `FormatException` (see [Errors](#errors)). The file format described here is **version 1**.
+
+To run such a file without any .NET code, use the `rony` command-line tool: [Standalone Server](Standalone-Server).
 
 ## A complete example
 ```json
@@ -62,7 +64,7 @@ Any other property is an error, so a typo (`"replys"`) is found instead of silen
 |---|---|---|
 | `transport` | all | `"tcp"` (default), `"tls"`, `"udp"` or `"unix"`. |
 | `address` | tcp, tls, udp | An IP address; default `127.0.0.1` (also for UDP). |
-| `port` | tcp, tls, udp | `0` to `65535`; default `0`, the OS picks a free port: read `server.Port` after `Start()`. |
+| `port` | tcp, tls, udp | `0` to `65535`; default `0`, the OS picks a free port: read `server.Port` after `Start()`. A `udp` server binds its port when the file is loaded (as with `new UdpServer(...)`), so a port in use fails at `FromFile`/`FromJson`. |
 | `dualMode` | tcp, tls, udp | `true` also accepts IPv4 clients on an IPv6 address such as `"::"`. Needs an IPv6 `address`. |
 | `path` | unix | The socket file. Omitted: a unique file in the temp directory. |
 | `keepAlive` | tcp, tls, unix | Keep connections open after a response; default `true`. |
@@ -107,7 +109,7 @@ A rule has **exactly one matcher**, optionally a `state`, and a [response](#resp
 | Matcher | Matches | Same as |
 |---|---|---|
 | `"request"` | exactly this [body](#bodies); an empty request (`""`) matches any request | `Mock.Send("...")` / `Mock.Send(bytes)` |
-| `"match"` | a regular expression (unanchored, so use `^` and `$`) on the request text; `$1`, `${name}` and `$0` in a text `reply` are replaced with the capture groups | `Mock.Send(Regex)` with `ReceiveMatch` |
+| `"match"` | a regular expression (unanchored, so use `^` and `$`) on the request text; `$1`, `${name}` and `$0` in a text `reply` are replaced with the capture groups (.NET substitution syntax: a literal dollar before a digit or brace is written `$$`) | `Mock.Send(Regex)` with `ReceiveMatch` |
 | `"json"` | a request that is JSON and contains every property given, recursively for objects; arrays and scalars must be equal; extra properties are fine | `Mock.SendJson(...)` |
 | `"state"` | not a matcher: limits the rule to a scenario state | `Mock.InState("...")` |
 
@@ -142,7 +144,7 @@ A response is a set of these properties, used inline in a rule, in `onConnect` a
 
 | Property | Description | Same as |
 |---|---|---|
-| `reply` | a [body](#bodies) to send | `Receive(...)` |
+| `reply` | a [body](#bodies) to send; `"reply": ""` sends nothing, so the client waits as with `noReply` | `Receive(...)` |
 | `disconnect` | `true` closes the connection after the reply, or right away without a `reply` | `AndDisconnect()` / `Disconnect()` |
 | `reset` | `true` aborts the connection with a TCP reset, after the reply if there is one | `AndResetConnection()` / `ResetConnection()` |
 | `noReply` | `true` accepts the request and stays silent | `NoReply()` |
@@ -200,7 +202,8 @@ Other examples:
 
 | Message | Cause |
 |---|---|
-| `version: is missing; the only supported version is 1` | no `version`, or another value |
+| `version: is missing; the only supported version is 1` | no `version` |
+| `version: 2 is not supported; only version 1 is supported` | another value (here 2) |
 | `rules[2]: "reply" and "replies" cannot both be set` | inline response and a sequence |
 | `rules[0]: needs one of "request", "match" or "json"` | no matcher (two matchers: `"request" and "match" cannot both be set`) |
 | `rules[0]: needs a response: "reply", "noReply", "disconnect" or "reset"` | a rule without a response |
