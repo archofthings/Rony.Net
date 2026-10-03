@@ -156,6 +156,7 @@ relevant tests.
   prepares everything, then gives me the commands to run; only when I ask.
 - Releases are published by `release.yml` when a tag is pushed, never from a local machine: `dotnet nuget push`
   is blocked. The workflow runs on **lowercase** `v*` tags only, and fails unless the `<Version>` in
-  `Directory.Build.props` equals the tag.
+  `Directory.Build.props` equals the tag and `docs/releases/<version>.md` exists: that file is the release
+  description (written in `/release bump`, shown to me before the commit) and becomes the GitHub release body.
 - The nuget.org Trusted Publishing policy uses the glob `Rony.Net*` (`Rony.Net.*` would not match `Rony.Net`
   itself). A new package must have an ID that starts with `Rony.Net`.

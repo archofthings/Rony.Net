@@ -39,12 +39,18 @@ Run on a branch named `fix/release-X.Y.Z-version` or as the last step of the fea
      own." followed by the changelog link.
    - `CLAUDE.md`: the test count in the `dotnet test` line ("N tests at X.Y.Z").
    - `BACKLOG.md`: the header sentence that says which items shipped in which version.
+   - `docs/releases/X.Y.Z.md` (new): the release description, from `templates/release-notes.md`, in the style of
+     the previous file in `docs/releases/`. `release.yml` publishes it as the GitHub release body (GitHub's list
+     of merged pull requests is appended automatically) and refuses to release without it. Check every code
+     example against the README, wiki or samples, and show the description to the user before the commit.
 3. `scripts/check_release.sh X.Y.Z` must pass, then `dotnet build` and `dotnet test`.
-4. Give the commit command ("Bump the version to X.Y.Z"), the push command and the PR text.
+4. Give the commit command ("Bump the version to X.Y.Z", including `docs/releases/X.Y.Z.md`), the push command and
+   the PR text.
 
 ## `publish`: tag a merged bump
 1. `git fetch origin --tags`, then `scripts/check_release.sh --publish`. It checks that `origin/main` carries the
-   version, that the changelog has its heading, and that the tag does not exist yet.
+   version, that the changelog has its heading, that `docs/releases/X.Y.Z.md` exists, and that the tag does not
+   exist yet.
 2. `gh pr checks` or `gh run list --branch main --limit 1`: CI on `main` is green.
 3. Give the commands, to be run in the main checkout (not a worktree):
 
@@ -52,10 +58,13 @@ Run on a branch named `fix/release-X.Y.Z-version` or as the last step of the fea
    git switch main && git pull --ff-only
    ```
    ```bash
-   git tag vX.Y.Z && git push origin vX.Y.Z
+   git tag -m "Rony.Net X.Y.Z" vX.Y.Z && git push origin vX.Y.Z
    ```
+   The user's git signs tags (`tag.gpgsign`), and a signed tag needs a message: without `-m` git opens an editor.
 4. After the user has pushed the tag: `gh run list --workflow release.yml --limit 1` until it has finished, then
-   `gh release view vX.Y.Z`. nuget.org lists a new version only after validation, often 10–30 minutes later;
+   `gh release view vX.Y.Z`: the body must start with the description from `docs/releases/X.Y.Z.md`. If a
+   release was published without it, write the file and, only when the user asks, update the release with
+   `gh release edit vX.Y.Z --notes-file <file with the description and the generated list>`. nuget.org lists a new version only after validation, often 10–30 minutes later;
    check `https://api.nuget.org/v3-flatcontainer/<lowercase id>/index.json` for each of the five packages.
 5. If the release run failed, read its log (`gh run view <id> --log-failed`) and fix the cause on a branch. A tag
    that points at the wrong commit is deleted and pushed again by the user only; say so and give the commands.
