@@ -65,7 +65,7 @@ Run on a branch named `fix/release-X.Y.Z-version` or as the last step of the fea
    `gh release view vX.Y.Z`: the body must start with the description from `docs/releases/X.Y.Z.md`. If a
    release was published without it, write the file and, only when the user asks, update the release with
    `gh release edit vX.Y.Z --notes-file <file with the description and the generated list>`. nuget.org lists a new version only after validation, often 10–30 minutes later;
-   check `https://api.nuget.org/v3-flatcontainer/<lowercase id>/index.json` for each of the five packages.
+   check `https://api.nuget.org/v3-flatcontainer/<lowercase id>/index.json` for each of the six packages.
 5. If the release run failed, read its log (`gh run view <id> --log-failed`) and fix the cause on a branch. A tag
    that points at the wrong commit is deleted and pushed again by the user only; say so and give the commands.
 
