@@ -269,6 +269,7 @@ var settings = new Dictionary<string, string>
 - [Simulating Failures](Simulating-Failures): retries and timeouts without a client class.
 - [Waiting for Requests](Waiting-for-Requests): code that sends in the background.
 - [Custom Listeners](Custom-Listeners): mock without a network.
+- [Standalone Server](Standalone-Server): the same mock for a client that is not .NET code, or to try your application by hand.
 - The [functional tests](https://github.com/archofthings/Rony.Net/tree/main/tests/Rony.FunctionalTests) cover every server type in depth.
 
 Runnable code: [`RecipeSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/RecipeSamples.cs)

@@ -34,6 +34,7 @@ No breaking changes.
 
 ### Documentation
 - New wiki page [Known Issues and Limitations](https://github.com/archofthings/Rony.Net/wiki/Known-Issues), summarised in the README.
+- The wiki page [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server) has walk-throughs for the `rony` tool: development stand-in, teams without .NET, record and replay (also TLS), CI, containers and Docker Compose, stateful and failing servers, Unix socket and UDP, one file for the tool and tests.
 
 ## 1.3.0
 

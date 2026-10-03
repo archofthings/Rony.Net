@@ -26,6 +26,43 @@ namespace Rony.Cli.Tests
         private const string DockerConfig =
             "{ \"version\": 1, \"server\": { \"address\": \"0.0.0.0\", \"port\": 4000 }, \"rules\": [ { \"request\": \"PING\", \"reply\": \"PONG\" } ] }";
 
+        // The configurations of the scenarios on the wiki page Standalone-Server.
+        private const string ShopConfig = @"{
+  ""version"": 1,
+  ""server"": { ""port"": 4000, ""framing"": { ""type"": ""delimiter"", ""delimiter"": ""\n"" } },
+  ""onConnect"": { ""reply"": ""READY"" },
+  ""rules"": [
+    { ""request"": ""GET price:42"", ""reply"": ""19.99"" },
+    { ""match"": ""^GET (\\S+)$"", ""reply"": ""NOT FOUND $1"" }
+  ]
+}";
+
+        private const string FlakyConfig = @"{
+  ""version"": 1,
+  ""stateScope"": ""connection"",
+  ""server"": { ""port"": 4001, ""framing"": { ""type"": ""delimiter"", ""delimiter"": ""\n"" } },
+  ""onConnect"": { ""reply"": ""HELLO"" },
+  ""onUnmatched"": { ""reply"": ""ERR login first"" },
+  ""rules"": [
+    { ""request"": ""LOGIN bob secret"", ""reply"": ""OK"", ""goTo"": ""authenticated"" },
+    { ""request"": ""FETCH"", ""state"": ""authenticated"",
+      ""replies"": [ { ""reply"": ""ERR busy"" }, { ""reply"": ""ERR busy"" }, { ""reply"": ""DATA 42"", ""afterMs"": 2000 } ] },
+    { ""request"": ""CRASH"", ""state"": ""authenticated"", ""disconnect"": true }
+  ]
+}";
+
+        private const string UnixConfig = @"{
+  ""version"": 1,
+  ""server"": { ""transport"": ""unix"", ""path"": ""/tmp/rony-demo.sock"", ""framing"": { ""type"": ""delimiter"", ""delimiter"": ""\n"" } },
+  ""rules"": [ { ""request"": ""PING"", ""reply"": ""PONG"" } ]
+}";
+
+        private const string UdpConfig = @"{
+  ""version"": 1,
+  ""server"": { ""transport"": ""udp"", ""port"": 5000 },
+  ""rules"": [ { ""request"": ""PING"", ""reply"": ""PONG"" } ]
+}";
+
         private sealed class TempDirectory : IDisposable
         {
             public TempDirectory() => Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rony-cli-" + Guid.NewGuid().ToString("N"));
@@ -161,6 +198,8 @@ namespace Rony.Cli.Tests
         [Theory]
         [InlineData(WikiConfig)]
         [InlineData(DockerConfig)]
+        [InlineData(ShopConfig)]
+        [InlineData(FlakyConfig)]
         public async Task Validate_Should_Print_OK_For_A_Valid_File(string config)
         {
             using var directory = new TempDirectory();
@@ -170,6 +209,78 @@ namespace Rony.Cli.Tests
 
             Assert.Equal(0, code);
             Assert.Equal("OK", output.Text);
+        }
+
+        private static async Task<(Task<int> Run, string Listening)> StartAsync(string file, CancellationToken stop, string prefix)
+        {
+            var output = new LineWriter();
+            var run = CliApp.RunAsync(new[] { "run", file, "--quiet" }, output, new LineWriter(), stop);
+            return (run, await output.WaitForLineAsync(l => l.StartsWith(prefix)).WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Run_Should_Serve_The_Stateful_Scenario_Of_The_Wiki()
+        {
+            using var directory = new TempDirectory();
+            using var stop = new CancellationTokenSource();
+            var (run, listening) = await StartAsync(directory.Write("flaky.json", FlakyConfig.Replace("\"port\": 4001", "\"port\": 0")), stop.Token, "Listening on tcp 127.0.0.1:");
+
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", PortOf(listening));
+            using var stream = client.GetStream();
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            async Task<string> AskAsync(string request)
+            {
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(request + "\n"));
+                return await reader.ReadLineAsync().WaitAsync(Limit);
+            }
+
+            Assert.Equal("HELLO", await reader.ReadLineAsync().WaitAsync(Limit));
+            Assert.Equal("ERR login first", await AskAsync("FETCH"));
+            Assert.Equal("OK", await AskAsync("LOGIN bob secret"));
+            Assert.Equal("ERR busy", await AskAsync("FETCH"));
+            Assert.Equal("ERR busy", await AskAsync("FETCH"));
+            await stream.WriteAsync(Encoding.UTF8.GetBytes("CRASH\n"));
+            Assert.Null(await reader.ReadLineAsync().WaitAsync(Limit));   // disconnected
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Run_Should_Serve_The_Unix_Socket_Scenario_Of_The_Wiki()
+        {
+            using var directory = new TempDirectory();
+            var socketPath = System.IO.Path.Combine(directory.Path, "rony.sock");
+            using var stop = new CancellationTokenSource();
+            var (run, listening) = await StartAsync(directory.Write("sock.json", UnixConfig.Replace("/tmp/rony-demo.sock", socketPath.Replace("\\", "\\\\"))), stop.Token, "Listening on unix ");
+
+            Assert.Equal("Listening on unix " + socketPath, listening);
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath));
+            using var stream = new NetworkStream(socket);
+            await stream.WriteAsync(Encoding.UTF8.GetBytes("PING\n"));
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            Assert.Equal("PONG", await reader.ReadLineAsync().WaitAsync(Limit));
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Run_Should_Serve_The_Udp_Scenario_Of_The_Wiki()
+        {
+            using var directory = new TempDirectory();
+            using var stop = new CancellationTokenSource();
+            var (run, listening) = await StartAsync(directory.Write("udp.json", UdpConfig.Replace("\"port\": 5000", "\"port\": 0")), stop.Token, "Listening on udp 127.0.0.1:");
+
+            using var client = new UdpClient();
+            await client.SendAsync(Encoding.UTF8.GetBytes("PING"), 4, "127.0.0.1", PortOf(listening));
+            var reply = await client.ReceiveAsync().WaitAsync(Limit);
+            Assert.Equal("PONG", Encoding.UTF8.GetString(reply.Buffer));
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
         }
 
         [Fact]

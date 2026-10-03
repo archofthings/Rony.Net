@@ -97,3 +97,4 @@ Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));
 - [Servers](Servers) and [SSL and TLS](SSL-and-TLS): pick a transport.
 - [Configuring Responses](Configuring-Responses): everything `Send(...).Receive(...)` can do.
 - [Verifying Requests](Verifying-Requests): assert on what your client sent.
+- [Configuration Files](Configuration-Files) and [Standalone Server](Standalone-Server): describe a server in JSON, and run it without .NET code (the `rony` tool).

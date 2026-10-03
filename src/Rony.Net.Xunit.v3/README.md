@@ -1,6 +1,6 @@
 # Rony.Net.Xunit.v3
 
-[xUnit](https://xunit.net) (v3) integration for [Rony.Net](https://github.com/archofthings/Rony.Net), the TCP, TLS and UDP mock server for .NET tests.
+[xUnit](https://xunit.net) (v3) integration for [Rony.Net](https://github.com/archofthings/Rony.Net), the TCP, TLS, UDP and Unix socket mock server for .NET tests.
 
 - `MockServerTest`: a base class that gives every test its own started mock server, writes the server's log to the
   test output, and disposes the server after the test.

@@ -58,6 +58,7 @@ Assert.Equal(connection.Id, server.ReceivedRequests[0].ConnectionId);
 | `IsOpen` | Whether it is still open |
 | `ReceivedRequests` | The requests received on this connection |
 | `State` | Its [scenario state](Stateful-Scenarios) |
+| `Tls` | The protocol, server name and client certificate of a TLS connection, `null` otherwise: [SSL and TLS](SSL-and-TLS#checking-protocol-server-name-and-client-certificate) |
 | `SendAsync(string or byte[])` | [Pushes a message](#pushing-messages) to the client |
 | `CloseAsync()` | Closes the connection from the server side |
 | `WaitForCloseAsync(timeout)` | Waits until the connection is closed |

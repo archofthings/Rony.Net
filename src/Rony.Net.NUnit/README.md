@@ -1,6 +1,6 @@
 # Rony.Net.NUnit
 
-[NUnit](https://nunit.org) integration for [Rony.Net](https://github.com/archofthings/Rony.Net), the TCP, TLS and UDP mock server for .NET tests.
+[NUnit](https://nunit.org) integration for [Rony.Net](https://github.com/archofthings/Rony.Net), the TCP, TLS, UDP and Unix socket mock server for .NET tests.
 Works with NUnit 3.14 and later.
 
 - `MockServerTest`: a base class that gives every test its own started mock server, writes the server's log to the

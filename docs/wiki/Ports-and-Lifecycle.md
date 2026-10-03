@@ -18,6 +18,10 @@ var client = new QuoteClient(server.Port, TimeSpan.FromSeconds(1));
 
 For `UdpServer` the port is known as soon as the server is created, because UDP binds right away.
 
+A `UnixSocketServer` has no port: it listens on a socket file, `listener.Path`, a unique one in the temp directory by default
+(see [Unix domain sockets](Servers#unix-domain-sockets)). A server from a [configuration file](Configuration-Files#server) uses
+port `0` when the file has none, so `MockServer.FromFile(...)` gives a free port as well.
+
 ## Many servers side by side
 Each server gets its own free port, so tests that run in parallel never collide:
 

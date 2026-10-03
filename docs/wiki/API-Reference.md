@@ -1,6 +1,6 @@
 # API Reference
 
-Every public type in Rony.Net 1.1. The package includes XML documentation, so IntelliSense shows the same descriptions in your editor.
+Every public type in Rony.Net 1.4. The package includes XML documentation, so IntelliSense shows the same descriptions in your editor.
 
 ## `Rony.Net.MockServer`
 The mock server. Wraps a listener and answers requests with the responses configured on `Mock`.
@@ -22,7 +22,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `RequestHandler Mock` | Configuration, recording and verification |
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | Shortcut for `Mock.ReceivedRequests` |
 | `Action<string> Log` | Receives a [log](Logging-and-Diagnostics) line for everything the server does |
-| `MockServerAssertions Should()` | [Fluent assertions](Verifying-Requests#fluent-assertions) |
+| `MockServerAssertions Should()` | [Fluent assertions](Verifying-Requests#all-assertions) |
 | `static MockServer FromJson(string json)` | A server (listener and rules) from a [configuration in JSON](Configuration-Files); not started. Throws `FormatException` naming the problem and where it is |
 | `static MockServer FromJson(string json, string baseDirectory)` | Same; relative paths in the configuration (the certificate) are resolved against `baseDirectory` (`null` = current directory) |
 | `static MockServer FromFile(string path)` | Same, reading the JSON from a file; relative paths are resolved against the file's directory. `FileNotFoundException` for a missing file |
@@ -201,7 +201,7 @@ A TCP connection the server accepted; see [Connections and Push](Connections-and
 Returned by `server.Should()`; every method returns the assertions again, and `And` reads well between them.
 `HaveReceived(request or predicate[, Times])`, `NotHaveReceived(...)`, `HaveReceivedInOrder(...)`,
 `HaveNoUnmatchedRequests()`, `HaveAcceptedConnections(Times)`, `HaveNoOpenConnections()`, `BeInState(string)`.
-See [Fluent assertions](Verifying-Requests#fluent-assertions).
+See [Fluent assertions](Verifying-Requests#all-assertions).
 
 ## `Rony.Net.ClientConnectionAssertions`
 Returned by `connection.Should()`; every method returns the assertions again, and `And` reads well between them.
@@ -256,6 +256,10 @@ The transport contract, its extension for transports with connections, the optio
 (`GetTlsInfo`), and the optional extension for failure
 simulation (`ResetAsync`, `Frame`, `SendRawAsync` (also the chunked overload), `RefuseConnections`, `AcceptConnections`); see [Custom Listeners](Custom-Listeners).
 `TcpServer`, `TcpServerSsl` and `UnixSocketServer` implement `IConnectionListener` and `IFaultInjectionListener`; `TcpServerSsl` also implements `ITlsListener`.
+
+## `Rony.Wrappers.UdpClientWrapper`
+The `UdpClient` that `UdpServer` uses: `(IPEndPoint localEp)`, `(IPEndPoint localEp, bool dualMode)` (an IPv6 address plus `dualMode`
+also receives IPv4 datagrams; `ArgumentException` for an IPv4 address), `(int port)` and `(string hostName, int port)`, plus `Active`.
 
 ## Test framework packages
 `Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3, same types and namespace), `Rony.Net.NUnit` and `Rony.Net.MSTest`: a `MockServerTest` base class (`Server`,

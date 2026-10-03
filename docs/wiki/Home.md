@@ -1,7 +1,7 @@
 # Rony.Net
 
 **Rony.Net** is a mock server for testing .NET code that talks over the network.
-Start a real TCP, TCP + SSL/TLS or UDP server inside your test, tell it how to answer, point your client at it,
+Start a real TCP, TCP + SSL/TLS, UDP or Unix socket server inside your test, tell it how to answer, point your client at it,
 and then check what your client sent.
 
 ```csharp
@@ -38,7 +38,7 @@ To run a mock server without writing code, install the `rony` tool (`Rony.Net.Cl
 | Start here | |
 |---|---|
 | [Getting Started](Getting-Started) | Install, first test, the namespaces you need |
-| [Servers](Servers) | TCP and UDP servers, addresses and properties |
+| [Servers](Servers) | TCP, UDP and Unix socket servers, IPv6, addresses and properties |
 | [SSL and TLS](SSL-and-TLS) | Secure servers, certificates for tests |
 | [Ports and Lifecycle](Ports-and-Lifecycle) | Free ports, start/stop/restart, parallel tests |
 | [Connections and Framing](Connections-and-Framing) | Persistent connections, delimiters, length prefixes, custom framing |
@@ -53,7 +53,7 @@ To run a mock server without writing code, install the `rony` tool (`Rony.Net.Cl
 | [Stateful Scenarios](Stateful-Scenarios) | Rules that depend on what happened before (`InState`, `GoTo`) |
 | [Record and Replay](Record-and-Replay) | Record a real server with `RecordingProxy`, replay it with `server.Replay(...)` |
 | [Configuration Files](Configuration-Files) | Describe the server and its rules in a JSON file, load it with `MockServer.FromFile(...)` |
-| [Standalone Server](Standalone-Server) | The `rony` command-line tool and a Dockerfile to build an image: run a configuration file, record and replay without code |
+| [Standalone Server](Standalone-Server) | The `rony` command-line tool and a Dockerfile to build an image: run, record and replay without code. Scenarios for development, teams without .NET, CI and Docker Compose |
 
 | Check your client | |
 |---|---|

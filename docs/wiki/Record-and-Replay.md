@@ -104,7 +104,7 @@ How the recording becomes rules, connection by connection and message by message
 Recorded times are not replayed as delays: add `.After(...)` yourself if a test needs them.
 
 ## From the command line
-The `rony record` and `rony replay` commands do the same without code, see [Standalone Server](Standalone-Server).
+The `rony record` and `rony replay` commands do the same without code, see [Standalone Server](Standalone-Server#record-a-real-server-once-replay-it-offline).
 
 ## Limitations
 - A recording and the proxy's log contain everything sent through the proxy, including credentials and tokens: review them
