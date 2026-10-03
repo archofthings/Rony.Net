@@ -27,7 +27,7 @@ With the [test framework packages](Test-Framework-Integration), the log goes to 
 | Event | Example |
 |---|---|
 | Start and stop | `listening on 127.0.0.1:50123`, `stopped` |
-| Connections | `#1 connected from 127.0.0.1:50124`, `#1 disconnected` |
+| Connections | `#1 connected from 127.0.0.1:50124`, `#1 disconnected`; a TLS connection adds the protocol, server name and client certificate: `#1 connected from 127.0.0.1:50124 (Tls12, server name localhost, client certificate CN=my-client)` |
 | Requests and the rule that matched | `#1 received "LIST" (matched /^LI/)`, `#1 received "LSIT" (unmatched)` |
 | [Scenario state](Stateful-Scenarios) | `#1 received "LIST" (matched "LIST" in state "loggedIn")`, `#1 state "initial" -> "loggedIn"` |
 | Responses | `#1 sent "PONG"`, `#1 sent "done" after 2000 ms`, `#1 no reply`, `#1 closing the connection` |

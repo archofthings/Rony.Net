@@ -25,7 +25,12 @@ namespace Rony.FunctionalTests
             //Arrange
             using var clientCertificate = TestCertificate.CreateSelfSigned("my-client");
             var lines = new ConcurrentQueue<string>();
-            using var server = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.Tls12) { RequireClientCertificate = true });
+            X509Certificate2 validated = null;
+            using var server = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.Tls12)
+            {
+                RequireClientCertificate = true,
+                ClientCertificateValidator = certificate => (validated = certificate) != null
+            });
             server.Log = lines.Enqueue;
             server.Mock.Send("ping").Receive("pong");
             server.Start();
@@ -44,6 +49,7 @@ namespace Rony.FunctionalTests
                 .And.HavePresentedClientCertificate(clientCertificate);
             Assert.Equal(clientCertificate.GetCertHashString(), connection.Tls.ClientCertificate.GetCertHashString());
             Assert.Equal("localhost", connection.Tls.ServerName);
+            Assert.Equal("CN=my-client", validated.Subject); // still readable: the validator's certificate is not disposed
             Assert.Contains(lines, line => line.Contains("connected from") && line.Contains("(Tls12, server name localhost, client certificate CN=my-client)"));
             Assert.Throws<MockVerificationException>(() => connection.Should().HaveUsedTls(SslProtocols.Tls13));
             Assert.Throws<MockVerificationException>(() => connection.Should().HaveServerName("other"));

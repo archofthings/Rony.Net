@@ -434,13 +434,21 @@ namespace Rony.Net
             Dispatch(sender, () => RespondAsync(greeting.Step, Empty, sender, Label(connection), "greeting", cancellationToken));
         }
 
-        private static string DescribeTls(TlsConnectionInfo tls)
+        private string DescribeTls(TlsConnectionInfo tls)
         {
-            if (tls == null) return string.Empty;
-            var parts = new List<string> { tls.Protocol.ToString() };
-            if (tls.ServerName != null) parts.Add($"server name {tls.ServerName}");
-            if (tls.ClientCertificate != null) parts.Add($"client certificate {tls.ClientCertificate.Subject}");
-            return $" ({string.Join(", ", parts)})";
+            if (tls == null || Log == null) return string.Empty;
+            try
+            {
+                var parts = new List<string> { tls.Protocol.ToString() };
+                if (tls.ServerName != null) parts.Add($"server name {tls.ServerName}");
+                if (tls.ClientCertificate != null) parts.Add($"client certificate {tls.ClientCertificate.Subject}");
+                return $" ({string.Join(", ", parts)})";
+            }
+            catch (Exception)
+            {
+                // A custom listener may return a disposed certificate; the log line just has no TLS details.
+                return string.Empty;
+            }
         }
 
         private void OnConnectionClosed(object sender)

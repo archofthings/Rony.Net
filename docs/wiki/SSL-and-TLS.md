@@ -25,7 +25,8 @@ new TcpServerSsl(0, certificate, SslProtocols.Tls12)
 ```
 
 ## Creating a certificate in the test
-`TestCertificate.CreateSelfSigned()` creates a self-signed certificate for `localhost` in memory. Nothing gets installed:
+`TestCertificate.CreateSelfSigned()` creates a self-signed certificate for `localhost` in memory. Nothing gets installed.
+The name must be a plain host name or IP address, because it is used as the common name without escaping:
 
 ```csharp
 using var certificate = TestCertificate.CreateSelfSigned();               // CN=localhost
@@ -129,10 +130,9 @@ Assert.Contains("no certificate", error.Message);
 server.Should().HaveAcceptedConnections(Times.Never());
 ```
 
-With TLS 1.3 the client finishes its side of the handshake before the server checks its certificate, so
-`AuthenticateAsClientAsync` can succeed and the client only sees the rejection (an `IOException` or a closed connection)
-on its first read or write. Pin the server to `SslProtocols.Tls12` if the client must fail while connecting, and wait for
-the rejection on the server side (`ConnectionFailed`, or the log) instead of with a delay.
+Depending on the OS and TLS version, the client sees the rejection while connecting or only on its first read or write
+(an `IOException` or a closed connection). Tests should not rely on which. Wait for the rejection on the server side
+instead (the failed connection is logged, and the listener's `ConnectionFailed` event is raised), not with a delay.
 
 Both properties can be changed while the server runs; they apply to new connections. Revocation is not checked.
 

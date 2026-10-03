@@ -17,7 +17,7 @@ namespace Rony.Net
         /// <paramref name="subjectName"/> is one and the DNS name otherwise ("localhost" also gets 127.0.0.1 and ::1).
         /// The caller owns the certificate and disposes it; every call creates a new one.
         /// </summary>
-        /// <param name="subjectName">The common name; "localhost" by default.</param>
+        /// <param name="subjectName">The common name; "localhost" by default. It must be a plain host name or IP address: it is used as the common name without escaping.</param>
         /// <exception cref="ArgumentException"><paramref name="subjectName"/> is null or empty.</exception>
         public static X509Certificate2 CreateSelfSigned(string subjectName = "localhost")
         {

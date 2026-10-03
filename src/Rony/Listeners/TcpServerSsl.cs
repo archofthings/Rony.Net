@@ -49,7 +49,8 @@ namespace Rony.Listeners
 
         /// <summary>
         /// Decides whether a presented client certificate is accepted; null (the default) accepts every certificate.
-        /// A validator which throws rejects the certificate. Only used with <see cref="RequireClientCertificate"/>.
+        /// The certificate it receives is the one later available as <c>connection.Tls.ClientCertificate</c>, so it must
+        /// not be disposed by the validator. A validator which throws rejects the certificate. Only used with <see cref="RequireClientCertificate"/>.
         /// Can be changed while the server runs; it applies to new connections.
         /// </summary>
         public Func<X509Certificate2, bool> ClientCertificateValidator
@@ -134,6 +135,7 @@ namespace Rony.Listeners
             var validator = ClientCertificateValidator;
             string rejection = null;
             string serverName = null;
+            X509Certificate2 validatedCertificate = null;
             var sslStream = new TlsStream(client.GetStream());
             try
             {
@@ -160,10 +162,19 @@ namespace Rony.Listeners
                         }
 
                         if (validator == null) return true;
+                        // The callback may run more than once per handshake: keep only the latest copy.
+                        validatedCertificate?.Dispose();
+                        validatedCertificate = null;
+                        X509Certificate2 copy = null;
                         try
                         {
-                            using var copy = new X509Certificate2(clientCertificate);
-                            if (validator(copy)) return true;
+                            copy = new X509Certificate2(clientCertificate);
+                            if (validator(copy))
+                            {
+                                validatedCertificate = copy;
+                                return true;
+                            }
+
                             rejection = "The client certificate was rejected by ClientCertificateValidator.";
                         }
                         catch (Exception exception)
@@ -171,6 +182,7 @@ namespace Rony.Listeners
                             rejection = "The client certificate was rejected because ClientCertificateValidator threw: " + exception.Message;
                         }
 
+                        copy?.Dispose();
                         return false;
                     };
                 }
@@ -185,12 +197,15 @@ namespace Rony.Listeners
                 }
 
                 var remoteCertificate = sslStream.RemoteCertificate;
-                sslStream.Info = new TlsConnectionInfo(sslStream.SslProtocol, serverName,
-                    remoteCertificate == null ? null : new X509Certificate2(remoteCertificate));
+                var clientCertificateCopy = validatedCertificate
+                    ?? (remoteCertificate == null ? null : new X509Certificate2(remoteCertificate));
+                validatedCertificate = null;
+                sslStream.Info = new TlsConnectionInfo(sslStream.SslProtocol, serverName, clientCertificateCopy);
                 return sslStream;
             }
             catch
             {
+                validatedCertificate?.Dispose();
                 sslStream.Dispose();
                 throw;
             }
