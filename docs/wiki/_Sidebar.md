@@ -15,6 +15,7 @@
 - [Simulating Failures](Simulating-Failures)
 - [Stateful Scenarios](Stateful-Scenarios)
 - [Record and Replay](Record-and-Replay)
+- [Configuration Files](Configuration-Files)
 
 **Assertions**
 - [Verifying Requests](Verifying-Requests)

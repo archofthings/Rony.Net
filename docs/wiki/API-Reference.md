@@ -23,6 +23,9 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | Shortcut for `Mock.ReceivedRequests` |
 | `Action<string> Log` | Receives a [log](Logging-and-Diagnostics) line for everything the server does |
 | `MockServerAssertions Should()` | [Fluent assertions](Verifying-Requests#fluent-assertions) |
+| `static MockServer FromJson(string json)` | A server (listener and rules) from a [configuration in JSON](Configuration-Files); not started. Throws `FormatException` naming the problem and where it is |
+| `static MockServer FromJson(string json, string baseDirectory)` | Same; relative paths in the configuration (the certificate) are resolved against `baseDirectory` (`null` = current directory) |
+| `static MockServer FromFile(string path)` | Same, reading the JSON from a file; relative paths are resolved against the file's directory. `FileNotFoundException` for a missing file |
 | `void Replay(Recording recording)` | Adds rules that answer like the recorded server; see [Record and Replay](Record-and-Replay). Throws `ArgumentException` for requests that already have a rule |
 
 **Connections** (TCP; on other listeners `Connections` is empty and the methods throw `NotSupportedException`). See [Connections and Push](Connections-and-Push).

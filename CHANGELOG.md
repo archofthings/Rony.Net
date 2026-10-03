@@ -17,6 +17,10 @@ No breaking changes.
   and `new UdpServer(endPoint, dualMode: true)` serve IPv4 and IPv6 clients on one port (IPv4 clients appear as IPv4-mapped
   addresses); the new `UnixSocketServer` listens on a Unix domain socket file with the features of `TcpServer`
   (no TLS; a reset just closes the connection).
+- **Configuration files:** `MockServer.FromFile(path)` and `MockServer.FromJson(json)` create a server (TCP, TLS, UDP or Unix
+  socket, with framing) and its rules from a JSON file: exact, regular expression and JSON matching, greetings, sequences,
+  delays, disconnects, resets, silence and scenario states. Mistakes are reported as a `FormatException` naming the
+  place, and unknown properties are rejected so typos are found. The returned server can be extended in code.
 
 ## 1.3.0
 

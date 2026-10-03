@@ -6,6 +6,7 @@ using Rony.Models;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -35,6 +36,7 @@ namespace Rony.Net
         private readonly IConnectionListener _connectionListener;
         private readonly IFaultInjectionListener _faultListener;
         private readonly object _syncRoot = new object();
+        private readonly List<IDisposable> _owned = new List<IDisposable>();
         private bool _refusingConnections;
         private readonly Dictionary<object, Task> _conversations = new Dictionary<object, Task>();
         private readonly Journal<ClientConnection> _connections = new Journal<ClientConnection>();
@@ -100,6 +102,37 @@ namespace Rony.Net
                 _connectionListener.ConnectionClosed += OnConnectionClosed;
                 _connectionListener.ConnectionFailed += OnConnectionFailed;
             }
+        }
+
+        /// <summary>
+        /// Creates a server (listener and rules) from a configuration in JSON (file format version 1, see the wiki page
+        /// "Configuration Files"). The server is not started. Relative paths inside the configuration (the TLS certificate)
+        /// are resolved against the current directory.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
+        /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid; the message names the problem and where it is.</exception>
+        public static MockServer FromJson(string json) => FromJson(json, null);
+
+        /// <summary>
+        /// Like <see cref="FromJson(string)"/>, resolving relative paths inside the configuration against <paramref name="baseDirectory"/>
+        /// (null means the current directory).
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
+        /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid; the message names the problem and where it is.</exception>
+        public static MockServer FromJson(string json, string baseDirectory) => MockConfiguration.Create(json, baseDirectory);
+
+        /// <summary>
+        /// Like <see cref="FromJson(string)"/>, reading the JSON from a file. Relative paths inside the file (the TLS certificate)
+        /// are resolved against the directory of the file.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
+        /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+        /// <exception cref="FormatException">The content is not valid JSON or the configuration is invalid.</exception>
+        public static MockServer FromFile(string path)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var fullPath = Path.GetFullPath(path);
+            return FromJson(File.ReadAllText(fullPath), Path.GetDirectoryName(fullPath));
         }
 
         /// <summary>Starts listening. Calling it again while started does nothing; a stopped server can be started again.</summary>
@@ -244,6 +277,22 @@ namespace Rony.Net
                 _connectionListener.ConnectionFailed -= OnConnectionFailed;
             }
             _listener.Dispose();
+
+            IDisposable[] owned;
+            lock (_owned)
+            {
+                owned = _owned.ToArray();
+                _owned.Clear();
+            }
+            foreach (var resource in owned)
+                resource.Dispose();
+        }
+
+        /// <summary>Disposes <paramref name="resource"/> (a certificate created for the server) when the server is disposed.</summary>
+        internal void Own(IDisposable resource)
+        {
+            lock (_owned)
+                _owned.Add(resource);
         }
 
         /// <summary>

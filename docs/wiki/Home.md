@@ -51,6 +51,7 @@ It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional 
 | [Simulating Failures](Simulating-Failures) | Delays, disconnects, silence, flaky servers |
 | [Stateful Scenarios](Stateful-Scenarios) | Rules that depend on what happened before (`InState`, `GoTo`) |
 | [Record and Replay](Record-and-Replay) | Record a real server with `RecordingProxy`, replay it with `server.Replay(...)` |
+| [Configuration Files](Configuration-Files) | Describe the server and its rules in a JSON file, load it with `MockServer.FromFile(...)` |
 
 | Check your client | |
 |---|---|
