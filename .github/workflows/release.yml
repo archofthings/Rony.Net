@@ -22,7 +22,8 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Check the tag matches the package version
+      - name: Check the tag matches the package version and has release notes
+        id: version
         run: |
           # Directory.Build.props holds the one version of all packages; a project must not override it
           version=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
@@ -34,6 +35,12 @@ jobs:
             echo "The projects listed above set their own <Version>; remove it" >&2
             exit 1
           fi
+          # The release description is written before the tag (see /release bump) and published as it is
+          if [ ! -s "docs/releases/$version.md" ]; then
+            echo "docs/releases/$version.md is missing or empty: write the release description first" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Test
         run: dotnet test --configuration Release
@@ -54,6 +61,8 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          # The written description, followed by GitHub's list of merged pull requests
+          body_path: docs/releases/${{ steps.version.outputs.version }}.md
           generate_release_notes: true
           files: |
             artifacts/*.nupkg

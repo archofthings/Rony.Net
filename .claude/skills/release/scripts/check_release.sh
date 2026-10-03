@@ -44,6 +44,9 @@ for p in $projects; do
   [ -n "$stale" ] && fail "$p: release notes still say '$stale'"
 done
 
+[ -n "$(show "docs/releases/$version.md")" ] && ok "docs/releases/$version.md has the release description" \
+  || fail "docs/releases/$version.md is missing or empty (template: .claude/skills/release/templates/release-notes.md)"
+
 show CLAUDE.md | grep -q "tests at $version" && ok "CLAUDE.md test count is for $version" \
   || fail "CLAUDE.md: the 'dotnet test' line does not say 'tests at $version'"
 

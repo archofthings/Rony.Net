@@ -447,3 +447,6 @@ $RECYCLE.BIN/
 
 # The /release skill: the Visual Studio rule [Rr]elease/ above would ignore it
 !.claude/skills/release/
+
+# Release descriptions (see /release bump): the Visual Studio rule [Rr]eleases/ above would ignore them
+!docs/releases/
