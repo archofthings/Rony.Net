@@ -2,7 +2,8 @@
 
 ## Project
 - Repo: `archofthings/Rony.Net` (remote `origin`), default branch `main`.
-- Packages on nuget.org: `Rony.Net` (core), `Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`. All share
+- Packages on nuget.org: `Rony.Net` (core), `Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`,
+  `Rony.Net.Cli` (the `rony` dotnet tool, `net8.0` only). All share
   the one `<Version>` in `Directory.Build.props`; a project file never sets its own.
 - `global.json` asks for the .NET 8 SDK or any newer one.
 - Open work: `BACKLOG.md` (proposed features and follow-ups; update it when an item is finished or added).
@@ -40,7 +41,11 @@ Go straight to the right file and its test. Paths are relative to `src/Rony/`; u
 | `Models/JsonData.cs`, `Helpers/JsonParser.cs` | Dependency-free JSON reader for `SendJson` and recording files | `Models/JsonDataTests.cs`, `Handler/RequestHandlerPartialMatchingTests.cs` |
 | `Verification/` | `Times`, `MockVerificationException`, `MockServerAssertions` (`server.Should()`) | `Verification/*Tests.cs` |
 | `Helpers/`, `Extensions/`, `Wrappers/` | `AsyncQueue`, byte comparer/formatter, `GetBytes()`, thin socket wrappers | — |
+| `Listeners/UnixSocketServer.cs` | Unix domain socket listener on top of `TcpServerBase` (no TLS, no RST) | functional `EndpointTests.cs` |
+| `TestCertificate.cs`, `Interfaces/ITlsListener.cs`, `Models/TlsConnectionInfo.cs` | Self-signed test certificates; TLS details per connection (`connection.Tls`), mutual TLS lives in `TcpServerSsl.cs` | `TestCertificateTests.cs`, functional `TlsExtrasTests.cs` |
+| `Handlers/MockConfiguration.cs` | `MockServer.FromJson` / `FromFile`: JSON configuration file (format version 1) turned into a listener and rules | `Handler/MockConfigurationTests.cs`, functional `MockConfigurationTests.cs` |
 | `../Rony.Net.{Xunit,NUnit,MSTest}/` | `MockServerTest` base class and `LogTo(...)` / `LogToTestContext()` per framework | `tests/Rony.Net.*.Tests/` |
+| `../Rony.Net.Cli/` | The `rony` tool: `run`, `validate`, `record`, `replay`; hand-written argument parsing, no dependencies. Root `Dockerfile` runs it | `tests/Rony.Net.Cli.Tests/` |
 
 Documentation:
 - `README.md` (also the NuGet readme of `Rony.Net`), `CHANGELOG.md`, and each framework package's own `README.md`.

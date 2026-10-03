@@ -113,6 +113,14 @@ public class ConnectionAndFramingSamples
     }
 
     [Fact]
+    public void Limiting_the_buffered_bytes()
+    {
+        var tcpServer = new TcpServer(0) { Framing = MessageFraming.Delimiter("\n"), MaxBufferedBytes = 64 * 1024 };
+
+        Assert.Equal(64 * 1024, tcpServer.MaxBufferedBytes);
+    }
+
+    [Fact]
     public async Task Fixed_length_messages()
     {
         using var server = new MockServer(new TcpServer(0) { Framing = MessageFraming.FixedLength(8, padding: (byte)' ') });

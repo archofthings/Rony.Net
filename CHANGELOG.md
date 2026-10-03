@@ -2,6 +2,39 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.4.0
+
+No breaking changes.
+
+### Added
+- **TLS extras:** `TestCertificate.CreateSelfSigned(subjectName)` creates an in-memory self-signed certificate for servers
+  and clients; `TcpServerSsl.RequireClientCertificate` and `ClientCertificateValidator` add mutual TLS (a rejected client
+  fails the handshake and is logged); `connection.Tls` (`TlsConnectionInfo`: protocol, SNI server name, client
+  certificate) and the assertions `HaveUsedTls`, `HaveServerName` and `HavePresentedClientCertificate` check them. Custom
+  listeners opt in with the new `ITlsListener`. The connect log line of a TLS connection now ends with the protocol,
+  server name and client certificate.
+- **More endpoints:** IPv6 is official (`new TcpServer(IPAddress.IPv6Loopback, 0)`, also for TLS and UDP); `TcpServerBase.DualMode`
+  and `new UdpServer(endPoint, dualMode: true)` serve IPv4 and IPv6 clients on one port (IPv4 clients appear as IPv4-mapped
+  addresses); the new `UnixSocketServer` listens on a Unix domain socket file with the features of `TcpServer`
+  (no TLS; a reset just closes the connection).
+- **Configuration files:** `MockServer.FromFile(path)` and `MockServer.FromJson(json)` create a server (TCP, TLS, UDP or Unix
+  socket, with framing) and its rules from a JSON file: exact, regular expression and JSON matching, greetings, sequences,
+  delays, disconnects, resets, silence and scenario states. Mistakes are reported as a `FormatException` naming the
+  place, and unknown properties are rejected so typos are found. The returned server can be extended in code.
+- **Standalone server:** the new `Rony.Net.Cli` package is the `rony` .NET tool (`dotnet tool install --global Rony.Net.Cli`)
+  and a Dockerfile: `rony run <config.json>` serves a configuration file, `rony validate` checks it, `rony record` records a
+  real server through a proxy (TLS to and from the proxy, framing options) and `rony replay` serves the recording.
+- **Buffer limit:** `TcpServerBase.MaxBufferedBytes` limits the bytes a connection buffers while waiting for a complete message
+  (`0`, the default, is unlimited); configuration files have `server.maxBufferedBytes`, default 16 MiB, and `rony replay` uses 16 MiB.
+
+### Changed
+- A length-prefixed message with an invalid (negative) 4-byte length now closes that connection and reports it instead of
+  buffering without end. Connection details in log lines (server name, certificate subject, remote endpoint, exception
+  messages) are escaped and cut at 256 characters, so a client cannot inject lines or terminal sequences into the log.
+
+### Documentation
+- New wiki page [Known Issues and Limitations](https://github.com/archofthings/Rony.Net/wiki/Known-Issues), summarised in the README.
+
 ## 1.3.0
 
 No breaking changes.

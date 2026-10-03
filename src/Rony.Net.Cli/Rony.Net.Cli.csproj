@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <RollForward>Major</RollForward>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>Rony.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>rony</ToolCommandName>
+    <PackageId>Rony.Net.Cli</PackageId>
+    <Description>The rony command-line tool for Rony.Net: run a TCP, TLS, UDP or Unix socket mock server from a JSON file, validate it, record the traffic to a real server through a proxy and replay a recording. The repository has a Dockerfile to build an image.</Description>
+    <PackageProjectUrl>https://github.com/archofthings/Rony.Net/wiki/Standalone-Server</PackageProjectUrl>
+    <PackageTags>mock;mock-server;tcp;udp;socket;testing;cli;dotnet-tool;rony</PackageTags>
+    <PackageReleaseNotes>First release, together with Rony.Net 1.4.0. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Rony.Net.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rony\Rony.csproj" />
+  </ItemGroup>
+
+</Project>

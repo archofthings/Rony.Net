@@ -24,7 +24,7 @@ server.Should().HaveReceived("PING", Times.Once());
 📖 **Full documentation, with an example for every feature, is in the [wiki](https://github.com/archofthings/Rony.Net/wiki).**
 
 ## Features
-- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
+- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. Includes TLS with a built-in test certificate and mutual TLS, IPv6, dual-stack and Unix domain sockets. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
 - **Free ports and a clean lifecycle.** Port `0` means tests never fight over ports, even in parallel; start and stop synchronously or with `await using`. → [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
 - **Any protocol.** Text or binary; persistent connections; delimited, length-prefixed, fixed-length, STX/ETX or custom messages. → [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
 - **Flexible matching.** Exact requests, regular expressions with capture groups, JSON fields, predicates, a default response and a handler for unmatched requests. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
@@ -32,8 +32,10 @@ server.Should().HaveReceived("PING", Times.Once());
 - **Server-initiated messages.** Greetings on connect, pushed messages and broadcasts; connection list and events. → [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
 - **Stateful scenarios.** "`LIST` only works after `LOGIN`", for the whole server or per connection. → [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
 - **Failure testing.** Delays, chunked and throttled responses, dropped and reset connections, truncated or corrupted responses, refused connections, failing TLS handshakes, silence and flaky servers. → [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
-- **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, and waiting for requests and connections without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
+- **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, TLS details (protocol, server name, client certificate), and waiting for requests and connections without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
 - **Record and replay.** Record the conversation with a real server through a proxy, save it as an editable JSON file and replay it as a mock server. → [Record and Replay](https://github.com/archofthings/Rony.Net/wiki/Record-and-Replay)
+- **Configuration files.** Describe the server and its rules in a JSON file and load it with one call. → [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files)
+- **Standalone server.** The `rony` command-line tool (and a Dockerfile in the repository to build an image) runs a configuration file, record a real server and replay the recording, with no .NET test code. → [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
 - **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
 - **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit v2 or v3, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
@@ -45,6 +47,7 @@ Or in the Package Manager Console: `Install-Package Rony.Net`.
 
 Optional, for less setup code: `Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3), `Rony.Net.NUnit` or `Rony.Net.MSTest`
 ([Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)).
+To run a mock server without code: the `Rony.Net.Cli` tool ([Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)).
 
 ## Quick start
 ```csharp
@@ -78,13 +81,18 @@ More in [Getting Started](https://github.com/archofthings/Rony.Net/wiki/Getting-
 new MockServer(new TcpServer(0));                                    // TCP on 127.0.0.1
 new MockServer(new TcpServerSsl(0, certificate, SslProtocols.None)); // TCP + SSL/TLS
 new MockServer(new UdpServer("127.0.0.1", 0));                       // UDP
+new MockServer(new UnixSocketServer());                              // Unix domain socket; the file is listener.Path
+new TcpServer(IPAddress.IPv6Any, 0) { DualMode = true };             // IPv4 and IPv6 on one port (UdpServer: new UdpServer(endPoint, dualMode: true))
+using var certificate = TestCertificate.CreateSelfSigned();          // self-signed certificate for TLS tests, nothing is added to a store
+new TcpServerSsl(0, certificate, SslProtocols.Tls12) { RequireClientCertificate = true };   // mutual TLS
+connection.Should().HaveUsedTls(SslProtocols.Tls12).And.HavePresentedClientCertificate();   // TLS details of a connection
 
 await using var server = new MockServer(new TcpServer(0));           // async lifecycle: also StartAsync(), StopAsync()
 ```
 TCP connections stay open, so a client can send many requests over one connection. Each connection is handled
 independently, and responses keep their order. `await using` and `StopAsync()` wait for the server's background work,
 so no callback or log line runs after the test.
-Details: [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers) · [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS) (including creating a test certificate in code and failing the handshake) ·
+Details: [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers) · [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS) (test certificate, mutual TLS, TLS assertions and failing the handshake) ·
 [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
 
 ## Message framing
@@ -169,6 +177,24 @@ server.Replay(Recording.Load("login.rony.json"));         // later, in tests: ru
 ```
 Details: [Record and Replay](https://github.com/archofthings/Rony.Net/wiki/Record-and-Replay)
 
+## Configuration files
+```csharp
+// mock.json: { "version": 1, "rules": [ { "request": "PING", "reply": "PONG" } ] }
+using var server = MockServer.FromFile("mock.json");   // listener and rules from the file
+server.Start();
+```
+Details: [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files)
+
+## Standalone server
+```console
+dotnet tool install --global Rony.Net.Cli
+rony run mock.json                                   # serve a configuration file (Ctrl+C stops it)
+rony record --target api.test:5000 --out login.json  # record a real server through a proxy
+rony replay login.json                               # serve the recording
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" rony   # the same as a Docker image (build it from the Dockerfile)
+```
+Details: [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
+
 ## Connections and pushed messages
 ```csharp
 server.Mock.OnConnect().Receive("220 mail.test ready\r\n");     // greet every client first
@@ -232,8 +258,16 @@ Details: [Test Framework Integration](https://github.com/archofthings/Rony.Net/w
 ## More
 - [Recipes](https://github.com/archofthings/Rony.Net/wiki/Recipes): testing a real client class with retries and timeouts; xUnit, NUnit and MSTest setup.
 - [Custom Listeners](https://github.com/archofthings/Rony.Net/wiki/Custom-Listeners): mock over your own transport, or with no network at all; optional interfaces add connections and failure simulation.
-- [API Reference](https://github.com/archofthings/Rony.Net/wiki/API-Reference) · [Troubleshooting](https://github.com/archofthings/Rony.Net/wiki/Troubleshooting)
+- [API Reference](https://github.com/archofthings/Rony.Net/wiki/API-Reference) · [Troubleshooting](https://github.com/archofthings/Rony.Net/wiki/Troubleshooting) · [Known Issues](https://github.com/archofthings/Rony.Net/wiki/Known-Issues)
 - [Runnable samples](https://github.com/archofthings/Rony.Net/tree/main/samples/Rony.Samples): every wiki example as a passing test.
+
+## Known issues
+- The `rony` tool and servers from a configuration file are for development and test networks: no connection or idle limits, and memory grows with the traffic.
+- Mutual TLS accepts any presented client certificate unless you set `ClientCertificateValidator`; when a rejected client notices depends on the OS.
+- Replay is order-dependent, does not replay recorded delays and has no UDP; recordings and logs contain everything on the wire, credentials included.
+- Unix domain sockets have no TLS and no RST; there is no published Docker image, only a `Dockerfile`.
+
+Details and the full list: [Known Issues and Limitations](https://github.com/archofthings/Rony.Net/wiki/Known-Issues)
 
 ## Upgrading from 0.x
 1.0 keeps TCP connections open after a response. If your client reads until the server closes the connection, set

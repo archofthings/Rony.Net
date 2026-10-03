@@ -1,3 +1,5 @@
+using Rony.Interfaces;
+using Rony.Models;
 using System;
 using System.IO;
 using System.Net;
@@ -6,6 +8,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Rony.Listeners
@@ -13,11 +16,13 @@ namespace Rony.Listeners
     /// <summary>
     /// A TCP server secured with SSL/TLS. Clients must complete a TLS handshake before sending requests.
     /// </summary>
-    public class TcpServerSsl : TcpServerBase
+    public class TcpServerSsl : TcpServerBase, ITlsListener
     {
         private readonly Lazy<X509Certificate> _certificate;
         private readonly SslProtocols _protocol;
         private volatile bool _failHandshake;
+        private volatile bool _requireClientCertificate;
+        private volatile Func<X509Certificate2, bool> _clientCertificateValidator;
 
         /// <summary>
         /// When true, every new TLS handshake fails: the server answers the client's hello with a fatal
@@ -28,6 +33,30 @@ namespace Rony.Listeners
         {
             get => _failHandshake;
             set => _failHandshake = value;
+        }
+
+        /// <summary>
+        /// When true the server asks for a client certificate (mutual TLS) and fails the handshake of a client that
+        /// sends none. A presented certificate is accepted whatever its chain or trust errors (test certificates are
+        /// self-signed), unless <see cref="ClientCertificateValidator"/> rejects it. Revocation is not checked.
+        /// Can be changed while the server runs; it applies to new connections.
+        /// </summary>
+        public bool RequireClientCertificate
+        {
+            get => _requireClientCertificate;
+            set => _requireClientCertificate = value;
+        }
+
+        /// <summary>
+        /// Decides whether a presented client certificate is accepted; null (the default) accepts every certificate.
+        /// The certificate it receives is the one later available as <c>connection.Tls.ClientCertificate</c>, so it must
+        /// not be disposed by the validator. A validator which throws rejects the certificate. Only used with <see cref="RequireClientCertificate"/>.
+        /// Can be changed while the server runs; it applies to new connections.
+        /// </summary>
+        public Func<X509Certificate2, bool> ClientCertificateValidator
+        {
+            get => _clientCertificateValidator;
+            set => _clientCertificateValidator = value;
         }
 
         /// <summary>
@@ -102,17 +131,97 @@ namespace Rony.Listeners
                 throw new AuthenticationException("The TLS handshake was failed on purpose (FailHandshake).");
             }
 
-            var sslStream = new SslStream(client.GetStream(), false);
+            var requireClientCertificate = RequireClientCertificate;
+            var validator = ClientCertificateValidator;
+            string rejection = null;
+            string serverName = null;
+            X509Certificate2 validatedCertificate = null;
+            var sslStream = new TlsStream(client.GetStream());
             try
             {
-                await sslStream.AuthenticateAsServerAsync(_certificate.Value, false, _protocol, false).ConfigureAwait(false);
+                var certificate = _certificate.Value;
+                var options = new SslServerAuthenticationOptions
+                {
+                    ServerCertificateSelectionCallback = (_, hostName) =>
+                    {
+                        serverName = string.IsNullOrEmpty(hostName) ? null : hostName;
+                        return certificate;
+                    },
+                    ClientCertificateRequired = requireClientCertificate,
+                    EnabledSslProtocols = _protocol,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                };
+                if (requireClientCertificate)
+                {
+                    options.RemoteCertificateValidationCallback = (_, clientCertificate, _, _) =>
+                    {
+                        if (clientCertificate == null)
+                        {
+                            rejection = "The client sent no certificate, but RequireClientCertificate is set.";
+                            return false;
+                        }
+
+                        if (validator == null) return true;
+                        // The callback may run more than once per handshake: keep only the latest copy.
+                        validatedCertificate?.Dispose();
+                        validatedCertificate = null;
+                        X509Certificate2 copy = null;
+                        try
+                        {
+                            copy = new X509Certificate2(clientCertificate);
+                            if (validator(copy))
+                            {
+                                validatedCertificate = copy;
+                                return true;
+                            }
+
+                            rejection = "The client certificate was rejected by ClientCertificateValidator.";
+                        }
+                        catch (Exception exception)
+                        {
+                            rejection = "The client certificate was rejected because ClientCertificateValidator threw: " + exception.Message;
+                        }
+
+                        copy?.Dispose();
+                        return false;
+                    };
+                }
+
+                try
+                {
+                    await sslStream.AuthenticateAsServerAsync(options, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (rejection != null)
+                {
+                    throw new AuthenticationException(rejection, exception);
+                }
+
+                var remoteCertificate = sslStream.RemoteCertificate;
+                var clientCertificateCopy = validatedCertificate
+                    ?? (remoteCertificate == null ? null : new X509Certificate2(remoteCertificate));
+                validatedCertificate = null;
+                sslStream.Info = new TlsConnectionInfo(sslStream.SslProtocol, serverName, clientCertificateCopy);
                 return sslStream;
             }
             catch
             {
+                validatedCertificate?.Dispose();
                 sslStream.Dispose();
                 throw;
             }
+        }
+
+        /// <inheritdoc />
+        public TlsConnectionInfo GetTlsInfo(object sender) => ((sender as TcpConnection)?.Stream as TlsStream)?.Info;
+
+        /// <summary>An <see cref="SslStream"/> which carries the TLS details captured after its handshake.</summary>
+        private sealed class TlsStream : SslStream
+        {
+            public TlsStream(Stream innerStream) : base(innerStream, false)
+            {
+            }
+
+            public TlsConnectionInfo Info { get; set; }
         }
 
         /// <summary>Fills <paramref name="buffer"/> from the stream; false when the stream ended first.</summary>

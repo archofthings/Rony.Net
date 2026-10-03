@@ -33,8 +33,8 @@ and read by message on the client: up to the delimiter, or by length.
 
 ### The TLS handshake fails
 The [log](Logging-and-Diagnostics) shows the server-side error, for example `connection from 127.0.0.1:50125 failed: AuthenticationException: ...`.
-- When you pass a certificate object, it must have a private key (`certificate.HasPrivateKey`). Certificates created
-  in code need the export/re-import step shown in [SSL and TLS](SSL-and-TLS), especially on Windows.
+- When you pass a certificate object, it must have a private key (`certificate.HasPrivateKey`). `TestCertificate.CreateSelfSigned()`
+  does this for you; for your own, see [SSL and TLS](SSL-and-TLS).
 - When you pass a certificate *name*, a certificate with that subject name and a readable private key must exist in the
   `CurrentUser` or `LocalMachine` "My" store. If none is found, the server can't complete the handshake and closes the connection.
   Passing a certificate object avoids this.
@@ -57,4 +57,6 @@ The request may still be on its way, for example when your code sends in the bac
 - Replace `Thread.Sleep` with [`WaitForRequestAsync`](Waiting-for-Requests).
 
 ### Still stuck?
+Check the [known issues and limitations](Known-Issues) first.
+
 [Open an issue](https://github.com/archofthings/Rony.Net/issues) with a small test that shows the problem.

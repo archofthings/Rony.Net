@@ -15,6 +15,8 @@
 - [Simulating Failures](Simulating-Failures)
 - [Stateful Scenarios](Stateful-Scenarios)
 - [Record and Replay](Record-and-Replay)
+- [Configuration Files](Configuration-Files)
+- [Standalone Server](Standalone-Server)
 
 **Assertions**
 - [Verifying Requests](Verifying-Requests)
@@ -27,4 +29,5 @@
 - [Custom Listeners](Custom-Listeners)
 - [API Reference](API-Reference)
 - [Troubleshooting](Troubleshooting)
+- [Known Issues](Known-Issues)
 - [Upgrading to 1.0](Upgrading-to-1.0)

@@ -1,6 +1,8 @@
 using Rony.Models;
 using System;
 using System.Linq;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Rony.Net
 {
@@ -102,5 +104,49 @@ namespace Rony.Net
                 throw new MockVerificationException($"Expected connection {_connection} to be closed, but it is open.");
             return this;
         }
+
+        /// <summary>The connection negotiated <paramref name="protocol"/> (see <see cref="TlsConnectionInfo.Protocol"/>).</summary>
+        public ClientConnectionAssertions HaveUsedTls(SslProtocols protocol)
+        {
+            var tls = RequireTls();
+            if (tls.Protocol != protocol)
+                throw new MockVerificationException($"Expected connection {_connection} to have used {protocol}, but it used {tls.Protocol}.");
+            return this;
+        }
+
+        /// <summary>The client sent <paramref name="serverName"/> as its SNI host name (compared ignoring case).</summary>
+        public ClientConnectionAssertions HaveServerName(string serverName)
+        {
+            var tls = RequireTls();
+            if (!string.Equals(tls.ServerName, serverName, StringComparison.OrdinalIgnoreCase))
+                throw new MockVerificationException(
+                    $"Expected connection {_connection} to have server name \"{serverName}\", but the client sent {(tls.ServerName == null ? "none" : $"\"{tls.ServerName}\"")}.");
+            return this;
+        }
+
+        /// <summary>The client presented a certificate (mutual TLS).</summary>
+        public ClientConnectionAssertions HavePresentedClientCertificate()
+        {
+            if (RequireTls().ClientCertificate == null)
+                throw new MockVerificationException($"Expected connection {_connection} to have presented a client certificate, but it presented none.");
+            return this;
+        }
+
+        /// <summary>The client presented this certificate (compared by hash).</summary>
+        /// <exception cref="ArgumentNullException"><paramref name="certificate"/> is null.</exception>
+        public ClientConnectionAssertions HavePresentedClientCertificate(X509Certificate certificate)
+        {
+            if (certificate == null) throw new ArgumentNullException(nameof(certificate));
+            var actual = RequireTls().ClientCertificate;
+            if (actual == null)
+                throw new MockVerificationException($"Expected connection {_connection} to have presented the client certificate {certificate.Subject}, but it presented none.");
+            if (actual.GetCertHashString() != certificate.GetCertHashString())
+                throw new MockVerificationException(
+                    $"Expected connection {_connection} to have presented the client certificate {certificate.Subject} ({certificate.GetCertHashString()}), but it presented {actual.Subject} ({actual.GetCertHashString()}).");
+            return this;
+        }
+
+        private TlsConnectionInfo RequireTls() =>
+            _connection.Tls ?? throw new MockVerificationException($"Expected connection {_connection} to have used TLS, but it did not use TLS.");
     }
 }

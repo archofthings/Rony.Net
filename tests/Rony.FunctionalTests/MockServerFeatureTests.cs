@@ -48,7 +48,7 @@ namespace Rony.FunctionalTests
         public async Task Ssl_Connection_Should_Stay_Open_For_Multiple_Requests()
         {
             //Arrange
-            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None));
             server.Mock.Send("ping").Receive("pong");
             server.Mock.Send("pong").Receive("ping");
             server.Start();
@@ -213,6 +213,54 @@ namespace Rony.FunctionalTests
             Assert.Equal("", badResponse);
             Assert.Equal(new byte[] { 0x00, 0x03, 0x02 }, response);
             Assert.Contains(lines, line => line.Contains("failed"));
+        }
+
+        [Fact]
+        public async Task MaxBufferedBytes_Should_Close_Only_The_Connection_That_Buffers_Too_Much()
+        {
+            //Arrange
+            var tcpServer = new TcpServer(0) { Framing = MessageFraming.Delimiter("\n"), MaxBufferedBytes = 1024 };
+            var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            using var server = new MockServer(tcpServer) { Log = lines.Enqueue };
+            server.Mock.Send("ping").Receive("pong");
+            server.Start();
+            var failed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+            tcpServer.ConnectionFailed += (_, exception) => failed.TrySetResult(exception);
+            using var bad = await ConnectAsync(server);
+            using var good = await ConnectAsync(server);
+
+            //Act
+            await bad.GetStream().WriteAsync(new byte[4096]);
+            var exception = await failed.Task.WaitAsync(ReadTimeout);
+            var badResponse = await ReadToEndAsync(bad.GetStream());
+            var response = await SendAndReadAsync(good.GetStream(), "ping\n");
+
+            //Assert
+            Assert.IsType<InvalidDataException>(exception);
+            Assert.Equal("", badResponse);
+            Assert.Equal("pong\n", response);
+            Assert.Contains(lines, line => line.Contains("failed") && line.Contains("MaxBufferedBytes"));
+        }
+
+        [Fact]
+        public async Task LengthPrefix_Should_Close_The_Connection_For_A_Negative_Length()
+        {
+            //Arrange
+            var tcpServer = new TcpServer(0) { Framing = MessageFraming.LengthPrefix() };
+            using var server = new MockServer(tcpServer);
+            server.Start();
+            var failed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+            tcpServer.ConnectionFailed += (_, exception) => failed.TrySetResult(exception);
+            using var client = await ConnectAsync(server);
+
+            //Act
+            await client.GetStream().WriteAsync(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF });
+            var exception = await failed.Task.WaitAsync(ReadTimeout);
+            var response = await ReadToEndAsync(client.GetStream());
+
+            //Assert
+            Assert.IsType<InvalidDataException>(exception);
+            Assert.Equal("", response);
         }
 
         [Fact]
@@ -486,7 +534,7 @@ namespace Rony.FunctionalTests
             //Arrange
             var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
             await using var server = new MockServer(tls
-                ? new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None)
+                ? new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None)
                 : new TcpServer(0));
             server.Log = lines.Enqueue;
             server.Mock.Send("slow").Receive("done").After(TimeSpan.FromSeconds(30));
@@ -540,7 +588,7 @@ namespace Rony.FunctionalTests
         {
             //Arrange
             using var server = new MockServer(tls
-                ? new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None)
+                ? new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None)
                 : new TcpServer(0));
             server.Mock.Send("X").ResetConnection();
             server.Start();
@@ -830,7 +878,7 @@ namespace Rony.FunctionalTests
         public async Task FailHandshake_Should_Fail_The_Client_Handshake_And_Keep_The_Connection_Out_Of_The_Server()
         {
             //Arrange
-            var listener = new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None) { FailHandshake = true };
+            var listener = new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None) { FailHandshake = true };
             var failed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             listener.ConnectionFailed += (_, _) => failed.TrySetResult(true);
             using var server = new MockServer(listener);
@@ -879,8 +927,8 @@ namespace Rony.FunctionalTests
         private static async Task<SslStream> AuthenticateAsync(TcpClient client)
         {
             var stream = new SslStream(client.GetStream(), false,
-                (sender, certificate, chain, errors) => certificate?.GetCertHashString() == TestCertificate.Instance.GetCertHashString());
-            await stream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
+                (sender, certificate, chain, errors) => certificate?.GetCertHashString() == SharedCertificate.Instance.GetCertHashString());
+            await stream.AuthenticateAsClientAsync(SharedCertificate.SubjectName);
             return stream;
         }
 

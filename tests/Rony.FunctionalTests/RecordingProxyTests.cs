@@ -37,8 +37,8 @@ namespace Rony.FunctionalTests
             Stream stream = client.GetStream();
             if (tls)
             {
-                var ssl = new SslStream(stream, false, (_, certificate, _, _) => certificate?.GetCertHashString() == TestCertificate.Instance.GetCertHashString());
-                await ssl.AuthenticateAsClientAsync(TestCertificate.SubjectName);
+                var ssl = new SslStream(stream, false, (_, certificate, _, _) => certificate?.GetCertHashString() == SharedCertificate.Instance.GetCertHashString());
+                await ssl.AuthenticateAsClientAsync(SharedCertificate.SubjectName);
                 stream = ssl;
             }
             return new RecordingTestClient(client, stream);
@@ -155,15 +155,15 @@ namespace Rony.FunctionalTests
         public async Task Proxy_Should_Speak_Tls_On_Both_Sides()
         {
             //Arrange
-            using var real = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None) { Framing = MessageFraming.Delimiter("\n") });
+            using var real = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None) { Framing = MessageFraming.Delimiter("\n") });
             real.Mock.Send("PING").Receive("PONG");
             real.Start();
             using var proxy = new RecordingProxy("localhost", real.Port)
             {
                 Framing = MessageFraming.Delimiter("\n"),
-                Certificate = TestCertificate.Instance,
+                Certificate = SharedCertificate.Instance,
                 TargetTls = true,
-                TargetCertificateValidation = (_, certificate, _, _) => certificate?.GetCertHashString() == TestCertificate.Instance.GetCertHashString()
+                TargetCertificateValidation = (_, certificate, _, _) => certificate?.GetCertHashString() == SharedCertificate.Instance.GetCertHashString()
             };
             proxy.Start();
 

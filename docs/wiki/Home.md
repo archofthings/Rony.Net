@@ -31,6 +31,7 @@ dotnet add package Rony.Net
 Works with .NET Core 3.x, .NET 5 and every later version (the package targets `netstandard2.1` and `net8.0`).
 It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional packages
 (`Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`) remove the setup code; see [Test Framework Integration](Test-Framework-Integration).
+To run a mock server without writing code, install the `rony` tool (`Rony.Net.Cli`): see [Standalone Server](Standalone-Server).
 
 ## Documentation
 
@@ -51,6 +52,8 @@ It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional 
 | [Simulating Failures](Simulating-Failures) | Delays, disconnects, silence, flaky servers |
 | [Stateful Scenarios](Stateful-Scenarios) | Rules that depend on what happened before (`InState`, `GoTo`) |
 | [Record and Replay](Record-and-Replay) | Record a real server with `RecordingProxy`, replay it with `server.Replay(...)` |
+| [Configuration Files](Configuration-Files) | Describe the server and its rules in a JSON file, load it with `MockServer.FromFile(...)` |
+| [Standalone Server](Standalone-Server) | The `rony` command-line tool and a Dockerfile to build an image: run a configuration file, record and replay without code |
 
 | Check your client | |
 |---|---|
@@ -65,6 +68,7 @@ It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional 
 | [Custom Listeners](Custom-Listeners) | Plug in your own transport |
 | [API Reference](API-Reference) | Every public type and member |
 | [Troubleshooting](Troubleshooting) | Common problems and answers |
+| [Known Issues](Known-Issues) | What the library and the `rony` tool do not do, or do in a surprising way |
 | [Upgrading to 1.0](Upgrading-to-1.0) | Changes from 0.x |
 
 ## Runnable examples

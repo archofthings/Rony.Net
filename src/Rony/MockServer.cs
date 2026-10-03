@@ -6,6 +6,7 @@ using Rony.Models;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -35,6 +36,7 @@ namespace Rony.Net
         private readonly IConnectionListener _connectionListener;
         private readonly IFaultInjectionListener _faultListener;
         private readonly object _syncRoot = new object();
+        private readonly List<IDisposable> _owned = new List<IDisposable>();
         private bool _refusingConnections;
         private readonly Dictionary<object, Task> _conversations = new Dictionary<object, Task>();
         private readonly Journal<ClientConnection> _connections = new Journal<ClientConnection>();
@@ -100,6 +102,38 @@ namespace Rony.Net
                 _connectionListener.ConnectionClosed += OnConnectionClosed;
                 _connectionListener.ConnectionFailed += OnConnectionFailed;
             }
+        }
+
+        /// <summary>
+        /// Creates a server (listener and rules) from a configuration in JSON (file format version 1, see the wiki page
+        /// "Configuration Files"). The server is not started. Relative paths inside the configuration (the TLS certificate)
+        /// are resolved against the current directory.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
+        /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid; the message names the problem and where it is.</exception>
+        public static MockServer FromJson(string json) => FromJson(json, null);
+
+        /// <summary>
+        /// Like <see cref="FromJson(string)"/>, resolving relative paths inside the configuration against <paramref name="baseDirectory"/>
+        /// (null means the current directory).
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
+        /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid; the message names the problem and where it is.</exception>
+        public static MockServer FromJson(string json, string baseDirectory) => MockConfiguration.Create(json, baseDirectory);
+
+        /// <summary>
+        /// Like <see cref="FromJson(string)"/>, reading the JSON from a file. Relative paths inside the file (the TLS certificate)
+        /// are resolved against the directory of the file.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
+        /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+        /// <exception cref="DirectoryNotFoundException">The directory of the file does not exist.</exception>
+        /// <exception cref="FormatException">The content is not valid JSON or the configuration is invalid.</exception>
+        public static MockServer FromFile(string path)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var fullPath = Path.GetFullPath(path);
+            return FromJson(File.ReadAllText(fullPath), Path.GetDirectoryName(fullPath));
         }
 
         /// <summary>Starts listening. Calling it again while started does nothing; a stopped server can be started again.</summary>
@@ -236,14 +270,35 @@ namespace Rony.Net
         /// <summary>Stops the server and releases the listener.</summary>
         public void Dispose()
         {
-            Stop();
-            if (_connectionListener != null)
+            try
             {
-                _connectionListener.ConnectionOpened -= OnConnectionOpened;
-                _connectionListener.ConnectionClosed -= OnConnectionClosed;
-                _connectionListener.ConnectionFailed -= OnConnectionFailed;
+                Stop();
+                if (_connectionListener != null)
+                {
+                    _connectionListener.ConnectionOpened -= OnConnectionOpened;
+                    _connectionListener.ConnectionClosed -= OnConnectionClosed;
+                    _connectionListener.ConnectionFailed -= OnConnectionFailed;
+                }
+                _listener.Dispose();
             }
-            _listener.Dispose();
+            finally
+            {
+                IDisposable[] owned;
+                lock (_owned)
+                {
+                    owned = _owned.ToArray();
+                    _owned.Clear();
+                }
+                foreach (var resource in owned)
+                    resource.Dispose();
+            }
+        }
+
+        /// <summary>Disposes <paramref name="resource"/> (a certificate created for the server) when the server is disposed.</summary>
+        internal void Own(IDisposable resource)
+        {
+            lock (_owned)
+                _owned.Add(resource);
         }
 
         /// <summary>
@@ -253,8 +308,14 @@ namespace Rony.Net
         /// </summary>
         public async ValueTask DisposeAsync()
         {
-            await StopAsync().ConfigureAwait(false);
-            Dispose();
+            try
+            {
+                await StopAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                Dispose();
+            }
         }
 
         private static async Task WaitQuietlyAsync(Task task)
@@ -402,10 +463,23 @@ namespace Rony.Net
 
         private void OnConnectionOpened(object sender, EndPoint remoteEndPoint)
         {
-            var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint);
+            TlsConnectionInfo tls = null;
+            if (_connectionListener is ITlsListener tlsListener)
+            {
+                try
+                {
+                    tls = tlsListener.GetTlsInfo(sender);
+                }
+                catch (Exception)
+                {
+                    // A broken custom listener must not break the connection; it just has no TLS details.
+                }
+            }
+
+            var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint, tls);
             _connectionsBySender[sender] = connection;
             _connections.Record(connection);
-            Trace($"{Label(connection)} connected from {remoteEndPoint}");
+            Trace($"{Label(connection)} connected from {(string.IsNullOrEmpty(remoteEndPoint?.ToString()) ? "unknown address" : LogText.Safe(remoteEndPoint.ToString()))}{DescribeTls(tls)}");
             Raise(ConnectionOpened, connection);
 
             CancellationToken cancellationToken;
@@ -421,6 +495,23 @@ namespace Rony.Net
             Dispatch(sender, () => RespondAsync(greeting.Step, Empty, sender, Label(connection), "greeting", cancellationToken));
         }
 
+        private string DescribeTls(TlsConnectionInfo tls)
+        {
+            if (tls == null || Log == null) return string.Empty;
+            try
+            {
+                var parts = new List<string> { tls.Protocol.ToString() };
+                if (tls.ServerName != null) parts.Add($"server name {LogText.Safe(tls.ServerName)}");
+                if (tls.ClientCertificate != null) parts.Add($"client certificate {LogText.Safe(tls.ClientCertificate.Subject)}");
+                return $" ({string.Join(", ", parts)})";
+            }
+            catch (Exception)
+            {
+                // A custom listener may return a disposed certificate; the log line just has no TLS details.
+                return string.Empty;
+            }
+        }
+
         private void OnConnectionClosed(object sender)
         {
             if (!_connectionsBySender.TryGetValue(sender, out var connection)) return;
@@ -432,7 +523,7 @@ namespace Rony.Net
 
         private void OnConnectionFailed(EndPoint remoteEndPoint, Exception exception)
         {
-            Trace($"connection from {remoteEndPoint?.ToString() ?? "unknown address"} failed: {Describe(exception)}");
+            Trace($"connection from {(remoteEndPoint == null ? "unknown address" : LogText.Safe(remoteEndPoint.ToString()))} failed: {Describe(exception)}");
         }
 
         private void Raise(EventHandler<ClientConnection> handler, ClientConnection connection)
@@ -505,7 +596,7 @@ namespace Rony.Net
             ClientConnection connection = null;
             if (received.Sender != null)
                 _connectionsBySender.TryGetValue(received.Sender, out connection);
-            var label = connection != null ? Label(connection) : received.RemoteEndPoint?.ToString() ?? "client";
+            var label = connection != null ? Label(connection) : received.RemoteEndPoint != null ? LogText.Safe(received.RemoteEndPoint.ToString()) : "client";
             var body = received.Body ?? Empty;
 
             try
@@ -708,6 +799,6 @@ namespace Rony.Net
 
         private static string Label(ClientConnection connection) => $"#{connection.Id}";
 
-        private static string Describe(Exception exception) => $"{exception.GetType().Name}: {exception.Message}";
+        private static string Describe(Exception exception) => LogText.Describe(exception);
     }
 }
