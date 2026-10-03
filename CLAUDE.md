@@ -9,7 +9,8 @@
 - Open work: `BACKLOG.md` (proposed features and follow-ups; update it when an item is finished or added).
 - Library projects target `netstandard2.1;net8.0` (so no APIs newer than .NET Standard 2.1 without a `#if`);
   test and sample projects target `net8.0`.
-- CI (`.github/workflows/ci.yml`): `dotnet build` and `dotnet test` in Release on Ubuntu and Windows, .NET 8 SDK.
+- CI (`.github/workflows/ci.yml`): `dotnet build` and `dotnet test` in Release on Ubuntu and Windows, .NET 8 SDK; a
+  `docker` job builds the image from the `Dockerfile`, runs the wiki's Docker example in it and checks the reply.
 - Local environment: any SDK from .NET 8 up. If only a newer runtime is installed, tests need
   `DOTNET_ROLL_FORWARD=Major`; `.claude/settings.json` sets it for every session. Check a fresh checkout with the
   `setup-dev` skill (`.claude/skills/setup-dev/scripts/setup_dev.sh`).

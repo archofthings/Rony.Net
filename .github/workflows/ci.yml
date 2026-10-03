@@ -45,3 +45,46 @@ jobs:
         with:
           name: nuget-package
           path: artifacts/*.nupkg
+
+  # Builds the image from the Dockerfile and uses it the way the wiki describes (Standalone Server, "Docker")
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the image
+        run: docker build -t rony .
+
+      - name: Write the configuration of the wiki's Docker example
+        run: |
+          mkdir mock
+          cat > mock/mock.json <<'JSON'
+          { "version": 1, "server": { "address": "0.0.0.0", "port": 4000 }, "rules": [ { "request": "PING", "reply": "PONG" } ] }
+          JSON
+
+      - name: Validate the configuration in a container
+        run: docker run --rm -v "$PWD/mock:/config:ro" rony validate /config/mock.json
+
+      - name: Run the server in a container and talk to it
+        run: |
+          docker run -d --name rony -p 127.0.0.1:4000:4000 -v "$PWD/mock:/config:ro" rony
+          for attempt in $(seq 1 30); do
+            docker logs rony 2>&1 | grep -q "Listening on" && break
+            sleep 1
+          done
+          docker logs rony
+          docker logs rony 2>&1 | grep -q "Listening on tcp 0.0.0.0:4000"
+
+          exec 3<>/dev/tcp/127.0.0.1/4000
+          printf 'PING' >&3
+          read -t 10 -r -n 4 reply <&3
+          exec 3>&-
+          echo "reply: $reply"
+          [ "$reply" = "PONG" ]
+
+      - name: The container runs as a non-root user and stops cleanly on SIGTERM
+        run: |
+          [ "$(docker exec rony id -u)" != "0" ]
+          docker stop rony
+          docker logs rony
+          [ "$(docker inspect --format '{{.State.ExitCode}}' rony)" = "0" ]
