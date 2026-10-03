@@ -115,12 +115,30 @@ namespace Rony.Listeners
             }
         }
 
-        /// <summary>Called under the lock after the listening socket was closed by <see cref="Stop"/>.</summary>
-        private protected virtual void OnListenerStopped()
+        /// <summary>Called under the lock after the listening socket was closed, by <see cref="RefuseConnections"/> or <see cref="Stop"/>. Must not throw.</summary>
+        private protected virtual void OnListenerClosed()
         {
         }
 
-        private static TcpClient Wrap(Socket socket) => new TcpClient { Client = socket };
+        private static TcpClient Wrap(Socket socket)
+        {
+            TcpClient client;
+            try
+            {
+                client = new TcpClient();
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+
+            // The Client setter does not dispose the placeholder socket it replaces.
+            var placeholder = client.Client;
+            client.Client = socket;
+            placeholder?.Dispose();
+            return client;
+        }
 
         /// <summary>The remote end of a socket, or null when the platform has none (for example an unnamed Unix socket client).</summary>
         internal static EndPoint GetRemoteEndPoint(Socket socket)
@@ -172,6 +190,7 @@ namespace Rony.Listeners
                 AcceptPendingConnections(_listener, _messages, _cancellation.Token);
                 _listener.Dispose();
                 _refusing = true;
+                OnListenerClosed();
             }
         }
 
@@ -292,7 +311,7 @@ namespace Rony.Listeners
                 _listener.Dispose();
                 _listener = null;
                 _refusing = false;
-                OnListenerStopped();
+                OnListenerClosed();
             }
 
             foreach (var connection in _connections.Keys)

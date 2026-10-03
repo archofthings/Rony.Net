@@ -106,9 +106,24 @@ namespace Rony.FunctionalTests
             var viaIPv4 = udp ? await UdpRoundTripAsync(IPAddress.Loopback, server.Port, "ping") : await TcpRoundTripAsync(IPAddress.Loopback, server.Port, "ping");
             var viaIPv6 = udp ? await UdpRoundTripAsync(IPAddress.IPv6Loopback, server.Port, "ping") : await TcpRoundTripAsync(IPAddress.IPv6Loopback, server.Port, "ping");
 
+            // Dual mode must survive a re-bind.
+            if (udp)
+            {
+                server.Stop();
+                server.Start();
+            }
+            else
+            {
+                server.RefuseConnections();
+                server.AcceptConnections();
+            }
+
+            var viaIPv4Again = udp ? await UdpRoundTripAsync(IPAddress.Loopback, server.Port, "ping") : await TcpRoundTripAsync(IPAddress.Loopback, server.Port, "ping");
+
             //Assert
             Assert.Equal("pong", viaIPv4);
             Assert.Equal("pong", viaIPv6);
+            Assert.Equal("pong", viaIPv4Again);
         }
 
         [Fact]
@@ -258,6 +273,34 @@ namespace Rony.FunctionalTests
 
                 //Act + Assert
                 Assert.Throws<SocketException>(() => server.Start());
+                Assert.Equal("mine", File.ReadAllText(path));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
+        public void UnixSocket_Should_Not_Delete_A_File_Placed_At_The_Path_While_Refusing()
+        {
+            if (!Socket.OSSupportsUnixDomainSockets) return; // no dynamic skip in xUnit v2
+
+            //Arrange
+            var (server, listener) = UnixServer();
+            var path = listener.Path;
+            try
+            {
+                using (server)
+                {
+                    server.Start();
+                    server.RefuseConnections();
+                    File.WriteAllText(path, "mine");
+
+                    //Act + Assert
+                    Assert.Throws<SocketException>(() => server.AcceptConnections());
+                }
+
                 Assert.Equal("mine", File.ReadAllText(path));
             }
             finally

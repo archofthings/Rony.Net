@@ -11,8 +11,10 @@ namespace Rony.Listeners
     /// framing, push, fault injection. There is no TLS. <see cref="TcpServerBase.Address"/> is <see cref="IPAddress.None"/>,
     /// <see cref="TcpServerBase.Port"/> is 0 and <see cref="TcpServerBase.DualMode"/> has no effect. A reset
     /// (<c>ResetConnection</c>) just closes the connection, because a Unix socket has no RST.
-    /// The socket file is created by <c>Start()</c> and deleted by <c>Stop()</c>/<c>Dispose()</c>; a file which already exists at the path
-    /// is never deleted and makes <c>Start()</c> fail with the platform's "address in use" <see cref="SocketException"/>.
+    /// The socket file exists only while the server accepts connections: <c>Start()</c> and <c>AcceptConnections()</c> create it,
+    /// <c>Stop()</c>/<c>Dispose()</c> and <c>RefuseConnections()</c> remove it. A file which already exists at the path
+    /// is never deleted and makes <c>Start()</c> or <c>AcceptConnections()</c> fail with the platform's "address in use" <see cref="SocketException"/>.
+    /// A path that is too long makes <c>Start()</c> throw <see cref="ArgumentOutOfRangeException"/>.
     /// <c>Start()</c> throws a <see cref="PlatformNotSupportedException"/> where Unix domain sockets are not available.
     /// </summary>
     public class UnixSocketServer : TcpServerBase
@@ -49,15 +51,13 @@ namespace Rony.Listeners
             if (!Socket.OSSupportsUnixDomainSockets)
                 throw new PlatformNotSupportedException("Unix domain sockets are not supported on this platform.");
 #endif
-            // A re-bind after RefuseConnections: the closed socket left our own file behind.
-            DeleteOwnFile();
-
             Socket socket;
             try
             {
                 socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             }
-            catch (SocketException exception)
+            catch (SocketException exception) when (exception.SocketErrorCode == SocketError.AddressFamilyNotSupported
+                                                    || exception.SocketErrorCode == SocketError.ProtocolNotSupported)
             {
                 throw new PlatformNotSupportedException("Unix domain sockets are not supported on this platform.", exception);
             }
@@ -77,7 +77,7 @@ namespace Rony.Listeners
             }
         }
 
-        private protected override void OnListenerStopped() => DeleteOwnFile();
+        private protected override void OnListenerClosed() => DeleteOwnFile();
 
         private void DeleteOwnFile()
         {

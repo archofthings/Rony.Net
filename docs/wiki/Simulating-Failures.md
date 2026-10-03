@@ -163,6 +163,9 @@ A Unix domain socket ([`UnixSocketServer`](Servers#unix-domain-sockets)) has no 
 `connection.ResetAsync()` close the connection abruptly, and the client sees the end of the stream or a reset error,
 depending on the platform.
 
+For a `UnixSocketServer`, `RefuseConnections()` removes the socket file, so a refused client fails with a platform-dependent
+`SocketException` (not necessarily `ConnectionRefused`).
+
 `.ThenResetConnection()` does the same inside a [sequence](Response-Sequences), and `.AndResetConnection()` resets right
 after a response was written. **A reset discards data that has not been delivered yet, so the client may not see that
 response.** To reset at a moment of your choosing, call `await connection.ResetAsync()`:

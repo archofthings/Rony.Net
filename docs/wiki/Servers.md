@@ -126,12 +126,12 @@ new UnixSocketServer()                  // a unique file: <temp>/rony-xxxxxxxx.s
 new UnixSocketServer("/tmp/my.sock")    // your own path
 ```
 
-- **File lifecycle:** `Start()` creates the file, `Stop()` and `Dispose()` delete it, and a restart binds the same path
-  again. A file which already exists at the path is **never deleted**: `Start()` fails with the platform's "address in
-  use" `SocketException`. `RefuseConnections()` makes new clients fail to connect; `AcceptConnections()` brings the same
-  path back.
-- **Paths are short:** Unix socket paths are limited to about 104 bytes. A longer path fails at `Start()` with the
-  platform's exception.
+- **File lifecycle:** the socket file exists only while the server accepts connections. `Start()` creates it; `Stop()` and
+  `Dispose()` delete it, and so does `RefuseConnections()` (new clients then fail to connect); `AcceptConnections()` creates
+  it again at the same path, and a restart binds the same path. A file which already exists at the path is **never
+  deleted**: `Start()` or `AcceptConnections()` fails with the platform's "address in use" `SocketException`.
+- **Paths are short:** Unix socket paths are limited to about 104 bytes. A longer path makes `Start()` throw
+  `ArgumentOutOfRangeException`.
 - **Differences from TCP:** `Address` is `IPAddress.None` and `Port` is `0` (meaningless here; `DualMode` has no effect).
   `ResetConnection()` / `connection.ResetAsync()` cannot send a TCP RST: the connection is just closed, so the client sees
   the end of the stream or a reset error, depending on the platform. A client's `RemoteEndPoint` has no useful address;

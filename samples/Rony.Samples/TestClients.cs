@@ -37,7 +37,16 @@ public sealed class TcpTestClient : IDisposable
     public static async Task<TcpTestClient> ConnectUnixAsync(string path)
     {
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        await socket.ConnectAsync(new UnixDomainSocketEndPoint(path));
+        try
+        {
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(path));
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+
         return new TcpTestClient(socket, new NetworkStream(socket));
     }
 
