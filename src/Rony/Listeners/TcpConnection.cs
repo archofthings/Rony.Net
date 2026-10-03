@@ -25,7 +25,7 @@ namespace Rony.Listeners
             _onClosed = onClosed;
             Client = client;
             Stream = stream;
-            RemoteEndPoint = client.Client?.RemoteEndPoint;
+            RemoteEndPoint = TcpServerBase.GetRemoteEndPoint(client.Client);
         }
 
         public TcpClient Client { get; }
@@ -55,7 +55,8 @@ namespace Rony.Listeners
             {
                 // Small pieces must not wait for the Nagle algorithm.
                 var socket = Client.Client;
-                if (socket != null) socket.NoDelay = true;
+                // A Unix domain socket has no Nagle algorithm and no NoDelay option.
+                if (socket != null && socket.AddressFamily != AddressFamily.Unix) socket.NoDelay = true;
 
                 for (var offset = 0; offset < data.Length; offset += chunkSize)
                 {
@@ -89,7 +90,7 @@ namespace Rony.Listeners
 
         public void Close() => Release(false);
 
-        /// <summary>Aborts the connection with a TCP RST. The socket is closed before the stream, so TLS sends no close_notify.</summary>
+        /// <summary>Aborts the connection with a TCP RST (a Unix domain socket has none: it is just closed). The socket is closed before the stream, so TLS sends no close_notify.</summary>
         public void Reset() => Release(true);
 
         private void Release(bool abort)
@@ -102,7 +103,8 @@ namespace Rony.Listeners
                     var socket = Client.Client;
                     if (socket != null)
                     {
-                        socket.LingerState = new LingerOption(true, 0);
+                        if (socket.AddressFamily != AddressFamily.Unix)
+                            socket.LingerState = new LingerOption(true, 0);
                         socket.Dispose();
                     }
                 }

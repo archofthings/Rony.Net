@@ -14,20 +14,31 @@ namespace Rony.Samples;
 public sealed class TcpTestClient : IDisposable
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
-    private readonly TcpClient _client;
+    private readonly IDisposable _client;
     private readonly Stream _stream;
 
-    private TcpTestClient(TcpClient client, Stream stream)
+    private TcpTestClient(IDisposable client, Stream stream)
     {
         _client = client;
         _stream = stream;
     }
 
-    public static async Task<TcpTestClient> ConnectAsync(int port)
+    public static Task<TcpTestClient> ConnectAsync(int port) => ConnectAsync(IPAddress.Loopback, port);
+
+    /// <summary>Connects to <paramref name="address"/>, for example <see cref="IPAddress.IPv6Loopback"/>.</summary>
+    public static async Task<TcpTestClient> ConnectAsync(IPAddress address, int port)
     {
-        var client = new TcpClient();
-        await client.ConnectAsync(IPAddress.Loopback, port);
+        var client = new TcpClient(address.AddressFamily);
+        await client.ConnectAsync(address, port);
         return new TcpTestClient(client, client.GetStream());
+    }
+
+    /// <summary>Connects to a Unix domain socket file.</summary>
+    public static async Task<TcpTestClient> ConnectUnixAsync(string path)
+    {
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(path));
+        return new TcpTestClient(socket, new NetworkStream(socket));
     }
 
     /// <summary>
@@ -103,11 +114,14 @@ public sealed class TcpTestClient : IDisposable
 public static class UdpTestClient
 {
     /// <summary>Sends one datagram and waits up to 5 seconds for the reply.</summary>
-    public static async Task<string> SendAndReceiveAsync(int port, string request)
+    public static Task<string> SendAndReceiveAsync(int port, string request) => SendAndReceiveAsync(IPAddress.Loopback, port, request);
+
+    /// <summary>Sends one datagram to <paramref name="address"/> and waits up to 5 seconds for the reply.</summary>
+    public static async Task<string> SendAndReceiveAsync(IPAddress address, int port, string request)
     {
-        using var client = new UdpClient();
+        using var client = new UdpClient(address.AddressFamily);
         var data = request.GetBytes();
-        await client.SendAsync(data, data.Length, new IPEndPoint(IPAddress.Loopback, port));
+        await client.SendAsync(data, data.Length, new IPEndPoint(address, port));
         var response = await client.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
         return response.Buffer.GetString();
     }

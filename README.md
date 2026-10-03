@@ -24,7 +24,7 @@ server.Should().HaveReceived("PING", Times.Once());
 📖 **Full documentation, with an example for every feature, is in the [wiki](https://github.com/archofthings/Rony.Net/wiki).**
 
 ## Features
-- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. Includes TLS with a built-in test certificate and mutual TLS. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
+- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. Includes TLS with a built-in test certificate and mutual TLS, IPv6, dual-stack and Unix domain sockets. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
 - **Free ports and a clean lifecycle.** Port `0` means tests never fight over ports, even in parallel; start and stop synchronously or with `await using`. → [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
 - **Any protocol.** Text or binary; persistent connections; delimited, length-prefixed, fixed-length, STX/ETX or custom messages. → [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
 - **Flexible matching.** Exact requests, regular expressions with capture groups, JSON fields, predicates, a default response and a handler for unmatched requests. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
@@ -78,6 +78,8 @@ More in [Getting Started](https://github.com/archofthings/Rony.Net/wiki/Getting-
 new MockServer(new TcpServer(0));                                    // TCP on 127.0.0.1
 new MockServer(new TcpServerSsl(0, certificate, SslProtocols.None)); // TCP + SSL/TLS
 new MockServer(new UdpServer("127.0.0.1", 0));                       // UDP
+new MockServer(new UnixSocketServer());                              // Unix domain socket; the file is listener.Path
+new TcpServer(IPAddress.IPv6Any, 0) { DualMode = true };             // IPv4 and IPv6 on one port (UdpServer: new UdpServer(endPoint, dualMode: true))
 using var certificate = TestCertificate.CreateSelfSigned();          // in-memory certificate for TLS tests
 new TcpServerSsl(0, certificate, SslProtocols.Tls12) { RequireClientCertificate = true };   // mutual TLS
 connection.Should().HaveUsedTls(SslProtocols.Tls12).And.HavePresentedClientCertificate();   // TLS details of a connection

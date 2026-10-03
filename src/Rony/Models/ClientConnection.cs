@@ -113,6 +113,6 @@ namespace Rony.Models
             _closed.TrySetResult(true);
         }
 
-        public override string ToString() => $"#{Id} from {RemoteEndPoint?.ToString() ?? "unknown address"} ({(IsOpen ? "open" : "closed")})";
+        public override string ToString() => $"#{Id} from {(string.IsNullOrEmpty(RemoteEndPoint?.ToString()) ? "unknown address" : RemoteEndPoint.ToString())} ({(IsOpen ? "open" : "closed")})";
     }
 }

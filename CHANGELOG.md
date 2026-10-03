@@ -12,6 +12,10 @@ No breaking changes.
   fails the handshake and is logged); `connection.Tls` (`TlsConnectionInfo`: protocol, SNI server name, client
   certificate) and the assertions `HaveUsedTls`, `HaveServerName` and `HavePresentedClientCertificate` check them. Custom
   listeners opt in with the new `ITlsListener`.
+- **More endpoints:** IPv6 is official (`new TcpServer(IPAddress.IPv6Loopback, 0)`, also for TLS and UDP); `TcpServerBase.DualMode`
+  and `new UdpServer(endPoint, dualMode: true)` serve IPv4 and IPv6 clients on one port (IPv4 clients appear as IPv4-mapped
+  addresses); the new `UnixSocketServer` listens on a Unix domain socket file with the features of `TcpServer`
+  (no TLS; a reset just closes the connection).
 
 ## 1.3.0
 

@@ -1,7 +1,6 @@
 using Rony.Helpers;
 using Rony.Interfaces;
 using Rony.Models;
-using Rony.Wrappers;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -22,7 +21,7 @@ namespace Rony.Listeners
         private readonly object _syncRoot = new object();
         private readonly ConcurrentDictionary<TcpConnection, byte> _connections = new ConcurrentDictionary<TcpConnection, byte>();
         private readonly ConcurrentDictionary<Task, CancellationToken> _background = new ConcurrentDictionary<Task, CancellationToken>();
-        private TcpListenerWrapper _listener;
+        private Socket _listener;
         private CancellationTokenSource _cancellation;
         private CancellationTokenSource _acceptCancellation;
         private bool _refusing;
@@ -34,13 +33,21 @@ namespace Rony.Listeners
         /// <inheritdoc />
         public int Port { get; set; }
 
+        /// <summary>
+        /// When true and <see cref="Address"/> is an IPv6 address (typically <see cref="IPAddress.IPv6Any"/>), the listening
+        /// socket also accepts IPv4 clients (dual-stack); they appear with IPv4-mapped IPv6 addresses such as
+        /// <c>::ffff:127.0.0.1</c>. Set it before <see cref="Start"/>; the default is false. <see cref="Start"/> throws an
+        /// <see cref="InvalidOperationException"/> when it is true and <see cref="Address"/> is an IPv4 address.
+        /// </summary>
+        public bool DualMode { get; set; }
+
         /// <summary>Whether the server is started.</summary>
         public bool Active
         {
             get
             {
                 lock (_syncRoot)
-                    return _listener != null && (_refusing || _listener.Active);
+                    return _listener != null;
             }
         }
 
@@ -81,16 +88,60 @@ namespace Rony.Listeners
         /// </summary>
         protected virtual bool HasPendingData(Stream stream) => stream is NetworkStream networkStream && networkStream.DataAvailable;
 
+        /// <summary>
+        /// Creates the listening socket, already bound and listening. Called by <see cref="Start"/> and again when
+        /// <see cref="AcceptConnections"/> re-binds. Call under the lock.
+        /// </summary>
+        private protected virtual Socket CreateListeningSocket()
+        {
+            if (DualMode && Address.AddressFamily != AddressFamily.InterNetworkV6)
+                throw new InvalidOperationException("DualMode needs an IPv6 address, for example IPAddress.IPv6Any, but the address is " + Address + ".");
+
+            // TcpListener sets the socket options a restart on the same port relies on (address reuse on Unix).
+            var listener = new TcpListener(Address, Port);
+            var socket = listener.Server;
+            try
+            {
+                if (DualMode) socket.DualMode = true;
+                listener.Start();
+                // Remember the port the OS picked for port 0, so a restart listens on the same port.
+                Port = ((IPEndPoint)socket.LocalEndPoint).Port;
+                return socket;
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>Called under the lock after the listening socket was closed by <see cref="Stop"/>.</summary>
+        private protected virtual void OnListenerStopped()
+        {
+        }
+
+        private static TcpClient Wrap(Socket socket) => new TcpClient { Client = socket };
+
+        /// <summary>The remote end of a socket, or null when the platform has none (for example an unnamed Unix socket client).</summary>
+        internal static EndPoint GetRemoteEndPoint(Socket socket)
+        {
+            try
+            {
+                return socket?.RemoteEndPoint;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         public void Start()
         {
             lock (_syncRoot)
             {
                 if (_listener != null) return;
 
-                var listener = new TcpListenerWrapper(Address, Port);
-                listener.Start();
-                // Remember the port the OS picked for port 0, so a restart listens on the same port.
-                Port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                var listener = CreateListeningSocket();
 
                 _listener = listener;
                 _cancellation = new CancellationTokenSource();
@@ -100,7 +151,7 @@ namespace Rony.Listeners
         }
 
         /// <summary>Starts an accept loop for <paramref name="listener"/> that ends with the server or when connections are refused. Call under the lock.</summary>
-        private void StartAccepting(TcpListenerWrapper listener)
+        private void StartAccepting(Socket listener)
         {
             _acceptCancellation = CancellationTokenSource.CreateLinkedTokenSource(_cancellation.Token);
             Track(AcceptLoopAsync(listener, _messages, _cancellation.Token, _acceptCancellation.Token), _acceptCancellation.Token);
@@ -119,7 +170,7 @@ namespace Rony.Listeners
                 _acceptCancellation.Cancel();
                 _acceptCancellation.Dispose();
                 AcceptPendingConnections(_listener, _messages, _cancellation.Token);
-                _listener.Stop();
+                _listener.Dispose();
                 _refusing = true;
             }
         }
@@ -129,16 +180,16 @@ namespace Rony.Listeners
         /// socket does not drop them. A client the accept loop obtained at the same time is handled by the loop itself,
         /// because it tracks every client it gets, also after its accept token was cancelled. Call under the lock.
         /// </summary>
-        private void AcceptPendingConnections(TcpListenerWrapper listener, AsyncQueue<Message> messages, CancellationToken cancellationToken)
+        private void AcceptPendingConnections(Socket listener, AsyncQueue<Message> messages, CancellationToken cancellationToken)
         {
             try
             {
                 // Never block while holding the lock, e.g. when the loop takes the last pending connection first.
-                listener.Server.Blocking = false;
-                while (listener.Pending())
+                listener.Blocking = false;
+                while (listener.Poll(0, SelectMode.SelectRead))
                 {
                     // Read off the caller's stack: connection events and user callbacks must not run under the lock.
-                    var client = listener.AcceptTcpClient();
+                    var client = Wrap(listener.Accept());
                     Track(Task.Run(() => ReadConnectionAsync(client, messages, cancellationToken)), cancellationToken);
                 }
             }
@@ -159,8 +210,7 @@ namespace Rony.Listeners
             {
                 if (_listener == null || !_refusing) return;
 
-                var listener = new TcpListenerWrapper(Address, Port);
-                listener.Start();
+                var listener = CreateListeningSocket();
                 _listener = listener;
                 _refusing = false;
                 StartAccepting(listener);
@@ -239,9 +289,10 @@ namespace Rony.Listeners
 
                 _cancellation.Cancel();
                 _acceptCancellation?.Dispose();
-                _listener.Stop();
+                _listener.Dispose();
                 _listener = null;
                 _refusing = false;
+                OnListenerStopped();
             }
 
             foreach (var connection in _connections.Keys)
@@ -311,14 +362,14 @@ namespace Rony.Listeners
             ((TcpConnection)sender).MessageHandled();
         }
 
-        private async Task AcceptLoopAsync(TcpListenerWrapper listener, AsyncQueue<Message> messages, CancellationToken cancellationToken, CancellationToken acceptToken)
+        private async Task AcceptLoopAsync(Socket listener, AsyncQueue<Message> messages, CancellationToken cancellationToken, CancellationToken acceptToken)
         {
             while (!acceptToken.IsCancellationRequested)
             {
                 TcpClient client;
                 try
                 {
-                    client = await listener.AcceptTcpClientAsync().ConfigureAwait(false);
+                    client = Wrap(await listener.AcceptAsync().ConfigureAwait(false));
                 }
                 catch (Exception) when (acceptToken.IsCancellationRequested)
                 {
@@ -343,7 +394,7 @@ namespace Rony.Listeners
             EndPoint remoteEndPoint = null;
             try
             {
-                remoteEndPoint = client.Client?.RemoteEndPoint;
+                remoteEndPoint = GetRemoteEndPoint(client.Client);
                 Stream stream;
                 // A client still in its handshake is not a known connection yet: abort it when the server stops.
                 using (cancellationToken.Register(() => client.Dispose()))

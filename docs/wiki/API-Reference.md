@@ -132,14 +132,16 @@ The last response in a sequence repeats once the sequence ends.
 |---|---|
 | `TcpServer` | `(int port = 3000)`, `(string address, int port = 3000)`, `(IPAddress address, int port = 3000)` |
 | `TcpServerSsl` | `(int port, X509Certificate certificate, SslProtocols protocol)`, plus `string address` / `IPAddress address` overloads; the same three with `string certificateName` instead of a certificate |
-| `UdpServer` | `(int port = 3000)`, `(string address, int port = 3000)`, `(IPEndPoint localEndPoint)` |
+| `UdpServer` | `(int port = 3000)`, `(string address, int port = 3000)`, `(IPEndPoint localEndPoint)`, `(IPEndPoint localEndPoint, bool dualMode)` (an IPv6 address plus `dualMode` also receives IPv4 datagrams, as IPv4-mapped addresses; `ArgumentException` for an IPv4 address) |
+| `UnixSocketServer` | `()` (a new unique socket file in the temp directory), `(string path)`; `string Path` is the socket file. See [Unix domain sockets](Servers#unix-domain-sockets) |
 
-`TcpServer` and `TcpServerSsl` derive from **`TcpServerBase`**:
+`TcpServer`, `TcpServerSsl` and `UnixSocketServer` derive from **`TcpServerBase`**:
 
 | Member | Description |
 |---|---|
 | `IMessageFraming Framing` | How the stream is split into messages. Default: `MessageFraming.None`. Set before `Start()`. |
 | `bool KeepAlive` | Keep connections open after a response. Default: `true`. |
+| `bool DualMode` | With an IPv6 `Address` (typically `IPAddress.IPv6Any`) the server also accepts IPv4 clients, as IPv4-mapped IPv6 addresses. Set before `Start()`; default `false`; `Start()` throws `InvalidOperationException` for an IPv4 address. No effect on `UnixSocketServer`. See [IPv6 and dual-stack](Servers#ipv6-and-dual-stack) |
 | `bool FailHandshake` | (`TcpServerSsl` only) Every new TLS handshake fails. Can change while running. |
 | `bool RequireClientCertificate` | (`TcpServerSsl` only) Asks for a client certificate; a client that sends none fails the handshake. Can change while running. See [Mutual TLS](SSL-and-TLS#mutual-tls-client-certificates) |
 | `Func<X509Certificate2, bool> ClientCertificateValidator` | (`TcpServerSsl` only) Decides whether a presented client certificate is accepted; `null` accepts all; a throwing validator rejects. Used with `RequireClientCertificate` |
@@ -149,7 +151,7 @@ The last response in a sequence repeats once the sequence ends.
 | `byte[] Frame(byte[] message)` | Frames a message with `Framing` |
 | `Task SendRawAsync(byte[] data, object sender)` | Writes bytes to a connection as they are, without framing |
 | `Task SendRawAsync(byte[] data, object sender, int chunkSize, TimeSpan delay, CancellationToken cancellationToken)` | Writes bytes as they are in pieces, `delay` apart, holding the connection's write lock so nothing is written in between |
-| `Task ResetAsync(object sender)` | Aborts a connection with a TCP reset (RST) |
+| `Task ResetAsync(object sender)` | Aborts a connection with a TCP reset (RST); on a Unix domain socket, which has no RST, it closes the connection |
 | `protected abstract Task<Stream> OpenStreamAsync(TcpClient client)` | Prepares the stream for a new connection |
 | `protected virtual bool HasPendingData(Stream stream)` | Whether more data can be read right away |
 
@@ -249,7 +251,7 @@ One exact-request configuration: `CallCount`, and `GetResponse(string or byte[])
 The transport contract, its extension for transports with connections, the optional extension for TLS details
 (`GetTlsInfo`), and the optional extension for failure
 simulation (`ResetAsync`, `Frame`, `SendRawAsync` (also the chunked overload), `RefuseConnections`, `AcceptConnections`); see [Custom Listeners](Custom-Listeners).
-`TcpServer` and `TcpServerSsl` implement `IConnectionListener` and `IFaultInjectionListener`; `TcpServerSsl` also implements `ITlsListener`.
+`TcpServer`, `TcpServerSsl` and `UnixSocketServer` implement `IConnectionListener` and `IFaultInjectionListener`; `TcpServerSsl` also implements `ITlsListener`.
 
 ## Test framework packages
 `Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3, same types and namespace), `Rony.Net.NUnit` and `Rony.Net.MSTest`: a `MockServerTest` base class (`Server`,

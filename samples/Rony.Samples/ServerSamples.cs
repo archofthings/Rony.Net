@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Authentication;
 using Rony.Listeners;
 using Rony.Net;
@@ -27,6 +29,66 @@ public class ServerSamples
         server.Start();
 
         Assert.Equal("world", await UdpTestClient.SendAndReceiveAsync(server.Port, "hello"));
+    }
+
+    [Fact]
+    public async Task IPv6_loopback_server()   // Servers
+    {
+        if (!Socket.OSSupportsIPv6) return;   // no dynamic skip in xUnit v2
+
+        using var server = new MockServer(new TcpServer(IPAddress.IPv6Loopback, 0));
+        server.Mock.Send("hello").Receive("world");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectAsync(IPAddress.IPv6Loopback, server.Port);
+        Assert.Equal("world", await client.SendAndReceiveAsync("hello"));
+        server.Should().HaveReceived("hello", Times.Once());
+    }
+
+    [Fact]
+    public async Task Dual_mode_tcp_server()   // Servers
+    {
+        if (!Socket.OSSupportsIPv6) return;   // no dynamic skip in xUnit v2
+
+        using var server = new MockServer(new TcpServer(IPAddress.IPv6Any, 0) { DualMode = true });
+        server.Mock.Send("hello").Receive("world");
+        server.Start();
+
+        using var viaIPv4 = await TcpTestClient.ConnectAsync(IPAddress.Loopback, server.Port);
+        using var viaIPv6 = await TcpTestClient.ConnectAsync(IPAddress.IPv6Loopback, server.Port);
+        Assert.Equal("world", await viaIPv4.SendAndReceiveAsync("hello"));
+        Assert.Equal("world", await viaIPv6.SendAndReceiveAsync("hello"));
+        server.Should().HaveReceived("hello", Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Dual_mode_udp_server()   // Servers
+    {
+        if (!Socket.OSSupportsIPv6) return;   // no dynamic skip in xUnit v2
+
+        using var server = new MockServer(new UdpServer(new IPEndPoint(IPAddress.IPv6Any, 0), dualMode: true));
+        server.Mock.Send("hello").Receive("world");
+        server.Start();
+
+        Assert.Equal("world", await UdpTestClient.SendAndReceiveAsync(IPAddress.Loopback, server.Port, "hello"));
+        Assert.Equal("world", await UdpTestClient.SendAndReceiveAsync(IPAddress.IPv6Loopback, server.Port, "hello"));
+        server.Should().HaveReceived("hello", Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Unix_domain_socket_server()   // Servers
+    {
+        if (!Socket.OSSupportsUnixDomainSockets) return;   // no dynamic skip in xUnit v2
+
+        var listener = new UnixSocketServer();   // a new socket file in the temp directory; read it from listener.Path
+        using var server = new MockServer(listener);
+        server.Mock.Send("hello").Receive("world");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectUnixAsync(listener.Path);
+        Assert.Equal("world", await client.SendAndReceiveAsync("hello"));
+        server.Should().HaveReceived("hello", Times.Once());
+        Assert.True(File.Exists(listener.Path));
     }
 
     [Fact]

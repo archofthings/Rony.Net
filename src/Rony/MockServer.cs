@@ -418,7 +418,7 @@ namespace Rony.Net
             var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint, tls);
             _connectionsBySender[sender] = connection;
             _connections.Record(connection);
-            Trace($"{Label(connection)} connected from {remoteEndPoint}{DescribeTls(tls)}");
+            Trace($"{Label(connection)} connected from {(string.IsNullOrEmpty(remoteEndPoint?.ToString()) ? "unknown address" : remoteEndPoint.ToString())}{DescribeTls(tls)}");
             Raise(ConnectionOpened, connection);
 
             CancellationToken cancellationToken;
