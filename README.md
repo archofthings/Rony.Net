@@ -83,7 +83,7 @@ new MockServer(new TcpServerSsl(0, certificate, SslProtocols.None)); // TCP + SS
 new MockServer(new UdpServer("127.0.0.1", 0));                       // UDP
 new MockServer(new UnixSocketServer());                              // Unix domain socket; the file is listener.Path
 new TcpServer(IPAddress.IPv6Any, 0) { DualMode = true };             // IPv4 and IPv6 on one port (UdpServer: new UdpServer(endPoint, dualMode: true))
-using var certificate = TestCertificate.CreateSelfSigned();          // in-memory certificate for TLS tests
+using var certificate = TestCertificate.CreateSelfSigned();          // self-signed certificate for TLS tests, nothing is added to a store
 new TcpServerSsl(0, certificate, SslProtocols.Tls12) { RequireClientCertificate = true };   // mutual TLS
 connection.Should().HaveUsedTls(SslProtocols.Tls12).And.HavePresentedClientCertificate();   // TLS details of a connection
 
@@ -191,7 +191,7 @@ dotnet tool install --global Rony.Net.Cli
 rony run mock.json                                   # serve a configuration file (Ctrl+C stops it)
 rony record --target api.test:5000 --out login.json  # record a real server through a proxy
 rony replay login.json                               # serve the recording
-docker run --rm -p 4000:4000 -v "$PWD:/config" rony   # the same as a Docker image (build it from the Dockerfile)
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" rony   # the same as a Docker image (build it from the Dockerfile)
 ```
 Details: [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
 

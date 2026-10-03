@@ -60,7 +60,8 @@ rony record --target api.test:5000 --out login.json --delimiter "\n"
 ```
 Starts a [`RecordingProxy`](Record-and-Replay) to the target, prints `Recording on 127.0.0.1:41208 -> api.test:5000`, and
 relays and logs everything until Ctrl+C or SIGTERM. Then it stops the proxy and saves the recording to `--out`. Point your
-client at the printed port while it runs.
+client at the printed port while it runs. The recording and the log contain everything sent through the proxy, including
+credentials and tokens: review them before committing or sharing them. On Linux and macOS the output file is created readable by its owner only.
 
 | Option | Description |
 |---|---|
@@ -97,7 +98,7 @@ The repository has a `Dockerfile` for the tool (an SDK image builds it, the smal
 non-root user of the image):
 ```console
 docker build -t rony .
-docker run --rm -p 4000:4000 -v "$PWD:/config" rony             # runs /config/mock.json
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" rony             # runs /config/mock.json
 docker run --rm -v "$PWD:/config" rony validate /config/mock.json
 ```
 The default command is `run /config/mock.json`; mount the folder with your files at `/config`. The server must listen on
@@ -105,12 +106,25 @@ all interfaces inside the container, because the default `127.0.0.1` cannot be r
 ```json
 { "version": 1, "server": { "address": "0.0.0.0", "port": 4000 }, "rules": [ { "request": "PING", "reply": "PONG" } ] }
 ```
-The image exposes no port by itself because the port comes from the file: publish it with `-p <host port>:<port in the file>`.
-A fixed port is needed here, not `0`. Stop the container with `docker stop` (SIGTERM) or Ctrl+C.
+The image exposes no port by itself because the port comes from the file: publish it with `-p 127.0.0.1:<host port>:<port in the file>`,
+which keeps it on the host's loopback. Drop the `127.0.0.1:` part (`-p 4000:4000`) only when other machines should reach it, and
+see [Limits and security](#limits-and-security) first. A fixed port is needed here, not `0`. Stop the container with `docker stop` (SIGTERM) or Ctrl+C.
 
 To record inside a container, pass `--address 0.0.0.0` so the proxy is reachable from outside, and mount a writable folder
-for `--out`. The tool checks before it starts that `--out` can be written (exit 2 otherwise) and saves through a temporary
-file `<out>.tmp`, so a failed save never destroys an existing file.
+for `--out`. The tool checks before it starts that `--out` can be written (exit 2 otherwise) and saves through a new temporary
+file with a random name next to `--out` (`<out>.<random>.tmp`, created exclusively and readable by its owner only on Linux and macOS), which is
+then moved over `--out`, so a failed save never destroys an existing file and a file or symlink that already exists is never followed.
+
+## Limits and security
+The tool is for development and test networks, not for hostile ones.
+- It listens on loopback unless the file or `--address` says otherwise.
+- It keeps every received request and every connection record in memory for its whole run, and `record` keeps the whole
+  recording in memory until it stops, so a long-running or exposed instance grows. There is no limit on the number of
+  connections, on idle time or on the handshake time.
+- A server from a configuration file limits a single buffered message to 16 MiB (`server.maxBufferedBytes`); `rony replay` does the same.
+- The log contains the full request and response bodies unless you pass `--quiet`.
+- With `--tls`, or `tls` and `requireClientCertificate` in a file, any client certificate is accepted.
+- `rony record` on a non-loopback address is an open relay to the target.
 
 ## What the tool cannot do
 It can only do what a configuration file or a recording can express. Response functions and predicates, truncated, corrupted,

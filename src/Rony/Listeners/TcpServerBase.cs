@@ -26,6 +26,7 @@ namespace Rony.Listeners
         private CancellationTokenSource _acceptCancellation;
         private bool _refusing;
         private AsyncQueue<Message> _messages;
+        private int _maxBufferedBytes;
 
         /// <summary>The address the server listens on.</summary>
         public IPAddress Address { get; set; }
@@ -55,6 +56,18 @@ namespace Rony.Listeners
         /// How the TCP stream is split into messages. Defaults to <see cref="MessageFraming.None"/>.
         /// </summary>
         public IMessageFraming Framing { get; set; } = MessageFraming.None;
+
+        /// <summary>
+        /// The most bytes a connection may buffer while it waits for the rest of a message; 0 (the default) means unlimited.
+        /// A connection that exceeds it is closed and reported through <c>ConnectionFailed</c>; other connections are
+        /// unaffected. A single message larger than the limit is refused as well. Set it before <see cref="Start"/>.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+        public int MaxBufferedBytes
+        {
+            get => _maxBufferedBytes;
+            set => _maxBufferedBytes = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(value), "The limit must not be negative.");
+        }
 
         /// <summary>
         /// Keep the connection open after a response so the client can send more requests (default).
@@ -400,6 +413,16 @@ namespace Rony.Listeners
                 }
                 catch (SocketException)
                 {
+                    // For example no file descriptors left: do not spin.
+                    try
+                    {
+                        await Task.Delay(50, acceptToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+
                     continue;
                 }
 
@@ -450,6 +473,9 @@ namespace Rony.Listeners
                         Buffer.BlockCopy(pending, consumed, pending, 0, pendingLength - consumed);
                         pendingLength -= consumed;
                     }
+
+                    if (_maxBufferedBytes > 0 && pendingLength > _maxBufferedBytes)
+                        throw new InvalidDataException($"The connection buffered {pendingLength} bytes without a complete message, more than MaxBufferedBytes ({_maxBufferedBytes}).");
 
                     foreach (var frame in frames)
                     {

@@ -107,6 +107,8 @@ Recorded times are not replayed as delays: add `.After(...)` yourself if a test 
 The `rony record` and `rony replay` commands do the same without code, see [Standalone Server](Standalone-Server).
 
 ## Limitations
+- A recording and the proxy's log contain everything sent through the proxy, including credentials and tokens: review them
+  before committing or sharing them.
 - TCP and TLS only. The proxy does not relay UDP.
 - Every request is matched on its own. A protocol whose reply depends on earlier requests replays correctly only when the client
   sends its requests in the recorded order. For anything smarter, edit the rules afterwards or use [stateful scenarios](Stateful-Scenarios).

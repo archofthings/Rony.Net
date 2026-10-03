@@ -284,6 +284,16 @@ namespace Rony.Net
                 }
                 catch (SocketException)
                 {
+                    // For example no file descriptors left: do not spin.
+                    try
+                    {
+                        await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+
                     continue;
                 }
 
@@ -382,14 +392,14 @@ namespace Rony.Net
                     {
                         try
                         {
-                            _proxy.Trace($"{Label} client connected from {_client.Client?.RemoteEndPoint}");
+                            _proxy.Trace($"{Label} client connected from {LogText.Safe(_client.Client?.RemoteEndPoint?.ToString())}");
                             await ConnectAsync().ConfigureAwait(false);
                         }
                         catch (Exception exception)
                         {
                             if (Volatile.Read(ref _aborted) == 0 && !cancellationToken.IsCancellationRequested)
                             {
-                                _proxy.Trace($"{Label} failed: {exception.GetType().Name}: {exception.Message}");
+                                _proxy.Trace($"{Label} failed: {LogText.Describe(exception)}");
                                 // The real server could not be reached (or a handshake failed): the client sees the connection end.
                                 _closer = (int)RecordedSource.Server;
                                 _closeOffset = _clock.Elapsed;
@@ -488,7 +498,7 @@ namespace Rony.Net
                         catch (Exception exception)
                         {
                             // The bytes are still relayed: record what is pending as one raw message and stop framing this direction.
-                            _proxy.Trace($"{Label} {(source == RecordedSource.Client ? "client" : "server")} framing failed: {exception.GetType().Name}: {exception.Message}, recording the rest of this direction unframed");
+                            _proxy.Trace($"{Label} {(source == RecordedSource.Client ? "client" : "server")} framing failed: {LogText.Describe(exception)}, recording the rest of this direction unframed");
                             framing = MessageFraming.None;
                             frames = new[] { CopyPending(pending, pendingLength) };
                             consumed = pendingLength;
@@ -530,7 +540,7 @@ namespace Rony.Net
                 {
                     // This side reset the connection or it was closed by the other pump.
                     if (Volatile.Read(ref _closer) < 0)
-                        _proxy.Trace($"{Label} {(source == RecordedSource.Client ? "client" : "server")} connection ended: {exception.GetType().Name}: {exception.Message}");
+                        _proxy.Trace($"{Label} {(source == RecordedSource.Client ? "client" : "server")} connection ended: {LogText.Describe(exception)}");
                 }
                 catch (Exception)
                 {

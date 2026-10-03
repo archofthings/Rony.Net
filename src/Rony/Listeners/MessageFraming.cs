@@ -143,7 +143,9 @@ namespace Rony.Listeners
                         length -= _prefixLength;
                     }
 
-                    if (length < 0 || data.Length - consumed - _prefixLength < length) break;
+                    if (length < 0)
+                        throw new InvalidDataException($"Invalid frame: the length prefix declares a negative length ({length}).");
+                    if (data.Length - consumed - _prefixLength < length) break;
                     messages.Add(data.Slice(consumed + _prefixLength, (int)length).ToArray());
                     consumed += _prefixLength + (int)length;
                 }

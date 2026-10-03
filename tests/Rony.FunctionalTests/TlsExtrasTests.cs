@@ -57,6 +57,36 @@ namespace Rony.FunctionalTests
             Assert.Throws<MockVerificationException>(() => connection.Should().HavePresentedClientCertificate(other));
         }
 
+        [Fact]
+        public async Task Log_Lines_Should_Escape_Control_Characters_In_A_Client_Certificate_Subject()
+        {
+            //Arrange
+            using var rsa = System.Security.Cryptography.RSA.Create(2048);
+            var certificateRequest = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                new X500DistinguishedName("CN=\"evil\nfake log line\u001b[31m\""), rsa,
+                System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+            using var selfSigned = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+            using var clientCertificate = new X509Certificate2(selfSigned.Export(X509ContentType.Pfx));
+            var lines = new ConcurrentQueue<string>();
+            using var server = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.Tls12) { RequireClientCertificate = true });
+            server.Log = lines.Enqueue;
+            server.Mock.Send("ping").Receive("pong");
+            server.Start();
+
+            //Act
+            using var client = await ConnectAsync(server);
+            await using var stream = await AuthenticateAsync(client, clientCertificate);
+            await SendAndReadAsync(stream, "ping");
+            await server.WaitForConnectionAsync();
+
+            //Assert
+            Assert.Contains("\n", server.Connections[0].Tls.ClientCertificate.Subject);
+            var line = Assert.Single(lines, l => l.Contains("connected from"));
+            Assert.DoesNotContain('\n', line);
+            Assert.DoesNotContain('\u001b', line);
+            Assert.Contains("\\x0A", line);
+        }
+
         [Theory]
         [InlineData("no certificate", "sent no certificate")]
         [InlineData("validator false", "rejected by ClientCertificateValidator")]

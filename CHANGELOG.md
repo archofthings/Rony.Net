@@ -24,6 +24,13 @@ No breaking changes.
 - **Standalone server:** the new `Rony.Net.Cli` package is the `rony` .NET tool (`dotnet tool install --global Rony.Net.Cli`)
   and a Dockerfile: `rony run <config.json>` serves a configuration file, `rony validate` checks it, `rony record` records a
   real server through a proxy (TLS to and from the proxy, framing options) and `rony replay` serves the recording.
+- **Buffer limit:** `TcpServerBase.MaxBufferedBytes` limits the bytes a connection buffers while waiting for a complete message
+  (`0`, the default, is unlimited); configuration files have `server.maxBufferedBytes`, default 16 MiB, and `rony replay` uses 16 MiB.
+
+### Changed
+- A length-prefixed message with an invalid (negative) 4-byte length now closes that connection and reports it instead of
+  buffering without end. Connection details in log lines (server name, certificate subject, remote endpoint, exception
+  messages) are escaped and cut at 256 characters, so a client cannot inject lines or terminal sequences into the log.
 
 ## 1.3.0
 

@@ -7,7 +7,9 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,6 +19,7 @@ namespace Rony.Cli
     internal static class Commands
     {
         private static readonly HashSet<string> NoValues = new HashSet<string>();
+        private const int MaxBufferedBytes = 16 * 1024 * 1024;
         private static readonly string[] FramingValues = { "delimiter", "length-prefix" };
 
         public static async Task<int> RunAsync(string[] args, Sink sink, CancellationToken stop)
@@ -147,11 +150,11 @@ namespace Rony.Cli
                 if (line.Has("tls"))
                 {
                     certificate = TestCertificate.CreateSelfSigned();
-                    listener = new TcpServerSsl(address, port, certificate, SslProtocols.None) { Framing = framing };
+                    listener = new TcpServerSsl(address, port, certificate, SslProtocols.None) { Framing = framing, MaxBufferedBytes = MaxBufferedBytes };
                 }
                 else
                 {
-                    listener = new TcpServer(address, port) { Framing = framing };
+                    listener = new TcpServer(address, port) { Framing = framing, MaxBufferedBytes = MaxBufferedBytes };
                 }
 
                 using (var server = new MockServer(listener))
@@ -237,7 +240,14 @@ namespace Rony.Cli
             var existed = File.Exists(outPath);
             try
             {
-                using (new FileStream(outPath, existed ? FileMode.Open : FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite))
+                var options = new FileStreamOptions
+                {
+                    Mode = existed ? FileMode.Open : FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.ReadWrite
+                };
+                if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                using (new FileStream(outPath, options))
                 {
                 }
             }
@@ -250,13 +260,23 @@ namespace Rony.Cli
             return !existed;
         }
 
-        /// <summary>Saves to <c>&lt;out&gt;.tmp</c> and moves it over the target, so a failed save never destroys an existing file.</summary>
+        /// <summary>
+        /// Saves to a new file with a random name next to <paramref name="outPath"/> and moves it over the target, so a failed save
+        /// never destroys an existing file and a file or symlink at a predictable name is never followed.
+        /// </summary>
         private static void Save(Recording recording, string outPath)
         {
-            var temporary = outPath + ".tmp";
+            var bytes = new UTF8Encoding(false).GetBytes(recording.ToJson());
+            var suffix = new byte[4];
+            using (var random = RandomNumberGenerator.Create())
+                random.GetBytes(suffix);
+            var temporary = outPath + "." + BitConverter.ToString(suffix).Replace("-", "").ToLowerInvariant() + ".tmp";
             try
             {
-                recording.Save(temporary);
+                var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+                if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                using (var stream = new FileStream(temporary, options))
+                    stream.Write(bytes, 0, bytes.Length);
                 File.Move(temporary, outPath, true);
             }
             catch

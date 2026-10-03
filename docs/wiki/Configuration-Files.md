@@ -69,6 +69,7 @@ Any other property is an error, so a typo (`"replys"`) is found instead of silen
 | `path` | unix | The socket file. Omitted: a unique file in the temp directory. |
 | `keepAlive` | tcp, tls, unix | Keep connections open after a response; default `true`. |
 | `framing` | tcp, tls, unix | How the stream is split into messages, see [Framing](#framing). Default: none. |
+| `maxBufferedBytes` | tcp, tls, unix | The most bytes a connection may buffer while waiting for a complete message (`TcpServerBase.MaxBufferedBytes`); a non-negative whole number, `0` is unlimited. Default `16777216` (16 MiB) because such servers typically run standalone; a connection over the limit is closed and logged. |
 | `tls` | tls | Optional object, see [TLS](#tls). |
 
 A property that does not apply to the chosen transport is an error (`server.path: not allowed with transport "tcp"`).
@@ -94,10 +95,10 @@ They are the framings of `MessageFraming`; custom framings are not available in 
 ```
 | Property | Description |
 |---|---|
-| `certificate` | A PFX file with a private key, relative to the config file. Omitted: a self-signed `localhost` certificate is generated with `TestCertificate.CreateSelfSigned()`. |
-| `password` | Password of the PFX file. Needs `certificate`. |
+| `certificate` | A PFX file with a private key, relative to the config file (an absolute path works too). It must be a regular file of at most 1 MiB. Omitted: a self-signed `localhost` certificate is generated with `TestCertificate.CreateSelfSigned()`. |
+| `password` | Password of the PFX file. Needs `certificate`. It is stored in plain text in the configuration file. |
 | `protocol` | `"none"` (default, the OS decides), `"tls12"` or `"tls13"`. |
-| `requireClientCertificate` | `true` asks for a client certificate (mutual TLS); default `false`. |
+| `requireClientCertificate` | `true` asks for a client certificate (mutual TLS); default `false`. Any presented certificate is accepted, because a file cannot set a validator. |
 
 The generated certificate is not reachable from the returned server, so a test client either accepts any certificate or
 you use a PFX file you created and trust yourself. The certificate (generated or loaded) is disposed with the server.
@@ -112,6 +113,8 @@ A rule has **exactly one matcher**, optionally a `state`, and a [response](#resp
 | `"match"` | a regular expression (unanchored, so use `^` and `$`) on the request text; `$1`, `${name}` and `$0` in a text `reply` are replaced with the capture groups (.NET substitution syntax: a literal dollar before a digit or brace is written `$$`) | `Mock.Send(Regex)` with `ReceiveMatch` |
 | `"json"` | a request that is JSON and contains every property given, recursively for objects; arrays and scalars must be equal; extra properties are fine | `Mock.SendJson(...)` |
 | `"state"` | not a matcher: limits the rule to a scenario state | `Mock.InState("...")` |
+
+Rules are matched one request at a time, so a slow regular expression delays every client until its 1 second timeout.
 
 ```json
 {

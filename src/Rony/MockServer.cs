@@ -479,7 +479,7 @@ namespace Rony.Net
             var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint, tls);
             _connectionsBySender[sender] = connection;
             _connections.Record(connection);
-            Trace($"{Label(connection)} connected from {(string.IsNullOrEmpty(remoteEndPoint?.ToString()) ? "unknown address" : remoteEndPoint.ToString())}{DescribeTls(tls)}");
+            Trace($"{Label(connection)} connected from {(string.IsNullOrEmpty(remoteEndPoint?.ToString()) ? "unknown address" : LogText.Safe(remoteEndPoint.ToString()))}{DescribeTls(tls)}");
             Raise(ConnectionOpened, connection);
 
             CancellationToken cancellationToken;
@@ -501,8 +501,8 @@ namespace Rony.Net
             try
             {
                 var parts = new List<string> { tls.Protocol.ToString() };
-                if (tls.ServerName != null) parts.Add($"server name {tls.ServerName}");
-                if (tls.ClientCertificate != null) parts.Add($"client certificate {tls.ClientCertificate.Subject}");
+                if (tls.ServerName != null) parts.Add($"server name {LogText.Safe(tls.ServerName)}");
+                if (tls.ClientCertificate != null) parts.Add($"client certificate {LogText.Safe(tls.ClientCertificate.Subject)}");
                 return $" ({string.Join(", ", parts)})";
             }
             catch (Exception)
@@ -523,7 +523,7 @@ namespace Rony.Net
 
         private void OnConnectionFailed(EndPoint remoteEndPoint, Exception exception)
         {
-            Trace($"connection from {remoteEndPoint?.ToString() ?? "unknown address"} failed: {Describe(exception)}");
+            Trace($"connection from {(remoteEndPoint == null ? "unknown address" : LogText.Safe(remoteEndPoint.ToString()))} failed: {Describe(exception)}");
         }
 
         private void Raise(EventHandler<ClientConnection> handler, ClientConnection connection)
@@ -596,7 +596,7 @@ namespace Rony.Net
             ClientConnection connection = null;
             if (received.Sender != null)
                 _connectionsBySender.TryGetValue(received.Sender, out connection);
-            var label = connection != null ? Label(connection) : received.RemoteEndPoint?.ToString() ?? "client";
+            var label = connection != null ? Label(connection) : received.RemoteEndPoint != null ? LogText.Safe(received.RemoteEndPoint.ToString()) : "client";
             var body = received.Body ?? Empty;
 
             try
@@ -799,6 +799,6 @@ namespace Rony.Net
 
         private static string Label(ClientConnection connection) => $"#{connection.Id}";
 
-        private static string Describe(Exception exception) => $"{exception.GetType().Name}: {exception.Message}";
+        private static string Describe(Exception exception) => LogText.Describe(exception);
     }
 }

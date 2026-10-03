@@ -216,6 +216,54 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task MaxBufferedBytes_Should_Close_Only_The_Connection_That_Buffers_Too_Much()
+        {
+            //Arrange
+            var tcpServer = new TcpServer(0) { Framing = MessageFraming.Delimiter("\n"), MaxBufferedBytes = 1024 };
+            var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            using var server = new MockServer(tcpServer) { Log = lines.Enqueue };
+            server.Mock.Send("ping").Receive("pong");
+            server.Start();
+            var failed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+            tcpServer.ConnectionFailed += (_, exception) => failed.TrySetResult(exception);
+            using var bad = await ConnectAsync(server);
+            using var good = await ConnectAsync(server);
+
+            //Act
+            await bad.GetStream().WriteAsync(new byte[4096]);
+            var exception = await failed.Task.WaitAsync(ReadTimeout);
+            var badResponse = await ReadToEndAsync(bad.GetStream());
+            var response = await SendAndReadAsync(good.GetStream(), "ping\n");
+
+            //Assert
+            Assert.IsType<InvalidDataException>(exception);
+            Assert.Equal("", badResponse);
+            Assert.Equal("pong\n", response);
+            Assert.Contains(lines, line => line.Contains("failed") && line.Contains("MaxBufferedBytes"));
+        }
+
+        [Fact]
+        public async Task LengthPrefix_Should_Close_The_Connection_For_A_Negative_Length()
+        {
+            //Arrange
+            var tcpServer = new TcpServer(0) { Framing = MessageFraming.LengthPrefix() };
+            using var server = new MockServer(tcpServer);
+            server.Start();
+            var failed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+            tcpServer.ConnectionFailed += (_, exception) => failed.TrySetResult(exception);
+            using var client = await ConnectAsync(server);
+
+            //Act
+            await client.GetStream().WriteAsync(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF });
+            var exception = await failed.Task.WaitAsync(ReadTimeout);
+            var response = await ReadToEndAsync(client.GetStream());
+
+            //Assert
+            Assert.IsType<InvalidDataException>(exception);
+            Assert.Equal("", response);
+        }
+
+        [Fact]
         public async Task Sequence_Should_Return_Responses_In_Order_On_One_Connection()
         {
             //Arrange

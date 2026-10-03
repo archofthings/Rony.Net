@@ -197,6 +197,9 @@ namespace Rony.Cli.Tests
             Assert.Equal(0, await record.WaitAsync(Limit));
             Assert.Contains("Saved 1 connection to", recordOutput.Text);
             Assert.Single(Rony.Models.Recording.Load(recordingFile).Connections);
+            Assert.Empty(Directory.GetFiles(directory.Path, "*.tmp"));
+            if (!OperatingSystem.IsWindows())
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(recordingFile));
 
             // an existing --out is not overwritten without --force
             var error = new LineWriter();

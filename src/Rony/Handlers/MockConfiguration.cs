@@ -74,7 +74,11 @@ namespace Rony.Handlers
             public string CertificatePassword;
             public SslProtocols Protocol = SslProtocols.None;
             public bool RequireClientCertificate;
+            public int MaxBufferedBytes = DefaultMaxBufferedBytes;
         }
+
+        private const int DefaultMaxBufferedBytes = 16 * 1024 * 1024;
+        private const int MaxCertificateBytes = 1024 * 1024;
 
         public static MockServer Create(string json, string baseDirectory)
         {
@@ -125,23 +129,23 @@ namespace Rony.Handlers
             var settings = new ServerSettings();
             if (!server.Exists) return settings;
             if (server.Kind != JsonDataKind.Object) throw Error("server", "must be an object");
-            CheckProperties(server, "server", "transport", "address", "port", "dualMode", "path", "keepAlive", "framing", "tls");
+            CheckProperties(server, "server", "transport", "address", "port", "dualMode", "path", "keepAlive", "framing", "maxBufferedBytes", "tls");
 
             settings.Transport = OptString(server, "transport", "server") ?? "tcp";
             string[] allowed;
             switch (settings.Transport)
             {
                 case "tcp":
-                    allowed = new[] { "address", "port", "dualMode", "keepAlive", "framing" };
+                    allowed = new[] { "address", "port", "dualMode", "keepAlive", "framing", "maxBufferedBytes" };
                     break;
                 case "tls":
-                    allowed = new[] { "address", "port", "dualMode", "keepAlive", "framing", "tls" };
+                    allowed = new[] { "address", "port", "dualMode", "keepAlive", "framing", "maxBufferedBytes", "tls" };
                     break;
                 case "udp":
                     allowed = new[] { "address", "port", "dualMode" };
                     break;
                 case "unix":
-                    allowed = new[] { "path", "keepAlive", "framing" };
+                    allowed = new[] { "path", "keepAlive", "framing", "maxBufferedBytes" };
                     break;
                 default:
                     throw Error("server.transport", $"\"{settings.Transport}\" is not valid; use \"tcp\", \"tls\", \"udp\" or \"unix\"");
@@ -168,6 +172,7 @@ namespace Rony.Handlers
             settings.Path = OptString(server, "path", "server");
             if (settings.Path != null && settings.Path.Length == 0) throw Error("server.path", "must not be empty");
             settings.KeepAlive = OptBool(server, "keepAlive", "server") ?? true;
+            settings.MaxBufferedBytes = OptInt(server, "maxBufferedBytes", "server", 0, int.MaxValue) ?? DefaultMaxBufferedBytes;
             if (server["framing"].Exists) settings.Framing = ParseFraming(server["framing"], "server.framing");
             if (settings.Transport == "tls") ParseTls(server["tls"], settings, baseDirectory);
             return settings;
@@ -457,8 +462,8 @@ namespace Rony.Handlers
                         break;
                     case "unix":
                         listener = settings.Path == null
-                            ? new UnixSocketServer { KeepAlive = settings.KeepAlive, Framing = settings.Framing }
-                            : new UnixSocketServer(settings.Path) { KeepAlive = settings.KeepAlive, Framing = settings.Framing };
+                            ? new UnixSocketServer { KeepAlive = settings.KeepAlive, Framing = settings.Framing, MaxBufferedBytes = settings.MaxBufferedBytes }
+                            : new UnixSocketServer(settings.Path) { KeepAlive = settings.KeepAlive, Framing = settings.Framing, MaxBufferedBytes = settings.MaxBufferedBytes };
                         break;
                     case "tls":
                         certificate = settings.CertificatePath == null
@@ -469,6 +474,7 @@ namespace Rony.Handlers
                             DualMode = settings.DualMode,
                             KeepAlive = settings.KeepAlive,
                             Framing = settings.Framing,
+                            MaxBufferedBytes = settings.MaxBufferedBytes,
                             RequireClientCertificate = settings.RequireClientCertificate
                         };
                         break;
@@ -477,7 +483,8 @@ namespace Rony.Handlers
                         {
                             DualMode = settings.DualMode,
                             KeepAlive = settings.KeepAlive,
-                            Framing = settings.Framing
+                            Framing = settings.Framing,
+                            MaxBufferedBytes = settings.MaxBufferedBytes
                         };
                         break;
                 }
@@ -508,7 +515,7 @@ namespace Rony.Handlers
             X509Certificate2 certificate;
             try
             {
-                certificate = new X509Certificate2(File.ReadAllBytes(path), password);
+                certificate = new X509Certificate2(ReadCertificateFile(path), password);
             }
             catch (Exception exception) when (exception is CryptographicException || exception is IOException || exception is UnauthorizedAccessException)
             {
@@ -521,6 +528,30 @@ namespace Rony.Handlers
                 throw Error("server.tls.certificate", $"the certificate {path} has no private key");
             }
             return certificate;
+        }
+
+        /// <summary>Reads a certificate file that is a regular file of at most 1 MiB; never reads more than 1 MiB + 1 byte.</summary>
+        private static byte[] ReadCertificateFile(string path)
+        {
+            var full = Path.GetFullPath(path);
+            var info = new FileInfo(full);
+            if (!info.Exists || (info.Attributes & (FileAttributes.Directory | FileAttributes.Device)) != 0)
+                throw Error("server.tls.certificate", $"{full}: not a regular file");
+            if (info.Length > MaxCertificateBytes)
+                throw Error("server.tls.certificate", $"{full}: larger than 1 MiB");
+
+            // The reported length is 0 for devices and pipes, so the read itself is bounded too.
+            using (var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var content = new MemoryStream())
+            {
+                var buffer = new byte[8192];
+                int read;
+                while (content.Length <= MaxCertificateBytes && (read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, MaxCertificateBytes + 1 - content.Length))) > 0)
+                    content.Write(buffer, 0, read);
+                if (content.Length > MaxCertificateBytes)
+                    throw Error("server.tls.certificate", $"{full}: larger than 1 MiB");
+                return content.ToArray();
+            }
         }
 
         /// <summary>Runs <paramref name="action"/> and reports a rule the mock rejects (for example a duplicate request) as a format error.</summary>

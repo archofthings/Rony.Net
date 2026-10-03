@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -20,13 +21,24 @@ namespace Rony.Helpers
             {
                 var text = StrictUtf8.GetString(data);
                 if (text.All(c => !char.IsControl(c) || c == '\r' || c == '\n' || c == '\t'))
-                    return "\"" + text.Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"";
+                    return "\"" + EscapeFormatCharacters(text.Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t")) + "\"";
             }
             catch (DecoderFallbackException)
             {
             }
 
             return string.Join(" ", data.Select(b => "0x" + b.ToString("X2")));
+        }
+
+        // Format characters (for example U+202E, right-to-left override) can disguise a log line.
+        private static string EscapeFormatCharacters(string text)
+        {
+            if (!text.Any(c => CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format)) return text;
+
+            var result = new StringBuilder(text.Length);
+            foreach (var c in text)
+                result.Append(CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format ? "\\u" + ((int)c).ToString("X4") : c.ToString());
+            return result.ToString();
         }
     }
 }

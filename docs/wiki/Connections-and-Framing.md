@@ -146,6 +146,17 @@ through `ConnectionFailed` and the log; other connections and the server keep ru
 in the prefix throws `InvalidOperationException`.
 
 When a length is invalid, messages decoded earlier in the same burst are dropped together with the connection.
+A 4-byte length that is negative (for example `FF FF FF FF`) is invalid as well: that connection is closed and reported the
+same way, instead of the server waiting for a message that never completes.
+
+### Limiting the buffered bytes
+A connection keeps the bytes it received until they form a complete message. `MaxBufferedBytes` (default `0`, unlimited) limits
+that: a connection that holds more bytes than the limit without a complete message is closed and reported through
+`ConnectionFailed` and the log (`InvalidDataException`), while other connections keep working. A single message larger than
+the limit is refused too. Servers created from a [configuration file](Configuration-Files#server) use 16 MiB unless the file says otherwise.
+```csharp
+new TcpServer(0) { Framing = MessageFraming.Delimiter("\n"), MaxBufferedBytes = 64 * 1024 };
+```
 
 ### Fixed-length messages
 `MessageFraming.FixedLength(length, padding)` treats every `length` bytes as one message. Requests are delivered

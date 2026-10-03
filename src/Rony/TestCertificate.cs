@@ -6,7 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 namespace Rony.Net
 {
     /// <summary>
-    /// Creates certificates for TLS tests, in memory. Nothing gets installed.
+    /// Creates certificates for TLS tests. Nothing is added to a certificate store; the .NET runtime may keep the private key in a temporary keychain (macOS) or key container (Windows).
     /// </summary>
     public static class TestCertificate
     {

@@ -144,6 +144,7 @@ The last response in a sequence repeats once the sequence ends.
 |---|---|
 | `IMessageFraming Framing` | How the stream is split into messages. Default: `MessageFraming.None`. Set before `Start()`. |
 | `bool KeepAlive` | Keep connections open after a response. Default: `true`. |
+| `int MaxBufferedBytes` | The most bytes a connection may buffer while waiting for a complete message; `0` (default) is unlimited, negative throws `ArgumentOutOfRangeException`. A connection over the limit is closed and reported through `ConnectionFailed` and the log. A negative 4-byte length prefix closes the connection as well. See [Limiting the buffered bytes](Connections-and-Framing#limiting-the-buffered-bytes) |
 | `bool DualMode` | With an IPv6 `Address` (typically `IPAddress.IPv6Any`) the server also accepts IPv4 clients, as IPv4-mapped IPv6 addresses. Set before `Start()`; default `false`; `Start()` throws `InvalidOperationException` for an IPv4 address. No effect on `UnixSocketServer`. See [IPv6 and dual-stack](Servers#ipv6-and-dual-stack) |
 | `bool FailHandshake` | (`TcpServerSsl` only) Every new TLS handshake fails. Can change while running. |
 | `bool RequireClientCertificate` | (`TcpServerSsl` only) Asks for a client certificate; a client that sends none fails the handshake. Can change while running. See [Mutual TLS](SSL-and-TLS#mutual-tls-client-certificates) |
@@ -212,7 +213,7 @@ See [Assertions on one connection](Verifying-Requests#assertions-on-one-connecti
 
 ## `Rony.Net.TestCertificate`, `Rony.Models.TlsConnectionInfo`
 `TestCertificate.CreateSelfSigned(string subjectName = "localhost")` creates a self-signed certificate with a private key
-for servers and clients, in memory; throws `ArgumentException` for a null or empty name. See [SSL and TLS](SSL-and-TLS).
+for servers and clients (nothing is added to a certificate store); throws `ArgumentException` for a null or empty name. See [SSL and TLS](SSL-and-TLS).
 `TlsConnectionInfo`: `Protocol` (`SslProtocols`), `ServerName` (SNI, may be `null`), `ClientCertificate` (`X509Certificate2`,
 may be `null`); constructor `(SslProtocols, string, X509Certificate2)`.
 

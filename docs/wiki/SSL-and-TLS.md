@@ -15,7 +15,7 @@ Assert.Equal("secure world", await client.SendAndReceiveAsync("hello"));
 ```
 
 The certificate needs a private key. It can come from:
-- A certificate created during the test (below). Nothing gets installed.
+- A certificate created during the test (below). Nothing is added to a certificate store; the .NET runtime may keep the private key in a temporary keychain (macOS) or key container (Windows).
 - A file: `new X509Certificate2("server.pfx", "password")`.
 - Your own certificate store.
 
@@ -25,7 +25,7 @@ new TcpServerSsl(0, certificate, SslProtocols.Tls12)
 ```
 
 ## Creating a certificate in the test
-`TestCertificate.CreateSelfSigned()` creates a self-signed certificate for `localhost` in memory. Nothing gets installed.
+`TestCertificate.CreateSelfSigned()` creates a self-signed certificate for `localhost`. Nothing is added to a certificate store; the .NET runtime may keep the private key in a temporary keychain (macOS) or key container (Windows).
 The name must be a plain host name or IP address, because it is used as the common name without escaping:
 
 ```csharp
