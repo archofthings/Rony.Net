@@ -1,0 +1,19 @@
+# Version updates for what the repository pins by hand. NuGet packages are left out on purpose: the framework packages
+# reference the lowest supported version of their test framework. Vulnerable NuGet packages are still reported by
+# Dependabot alerts and fixed by Dependabot security updates, which are repository settings and need no entry here.
+version: 2
+updates:
+  # The workflows pin actions to commit SHAs; Dependabot moves the SHA and the version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: [ "*" ]
+
+  # The base images of the Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
