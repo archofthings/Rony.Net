@@ -132,6 +132,19 @@ public interface IConnectionListener : IListener
 - **`CompleteWithoutReply`** is called instead of `ReplyAsync` for requests that get no reply, in case you count
   pending requests (as `TcpServerBase` does, to close a connection once the client is done and every request is handled).
 
+## TLS details in a custom listener
+A listener which also implements the optional `ITlsListener` (it extends `IConnectionListener`) fills
+`connection.Tls` and makes the TLS assertions and the TLS part of the connection log line work. `MockServer` calls
+`GetTlsInfo` once, when a connection opens, with the same sender handle; return `null` when you don't know. Without the
+interface `connection.Tls` is `null`. `TcpServerSsl` implements it.
+
+```csharp
+public interface ITlsListener : IConnectionListener
+{
+    TlsConnectionInfo GetTlsInfo(object sender);   // protocol, SNI host name and client certificate; null when unknown
+}
+```
+
 ## Simulating failures in a custom listener
 `ResetConnection()`, `Truncated(...)`, `Corrupted(...)`, `InChunks(...)`, `Throttled(...)`, `connection.ResetAsync()` and `server.RefuseConnections()` need a
 listener that implements the optional `IFaultInjectionListener` (which extends `IConnectionListener`; `TcpServer` and

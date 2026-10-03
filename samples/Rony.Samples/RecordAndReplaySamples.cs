@@ -87,7 +87,7 @@ public class RecordAndReplaySamples
     [Fact]
     public async Task Record_a_tls_server()
     {
-        using var certificate = TestCertificates.CreateSelfSigned();
+        using var certificate = TestCertificate.CreateSelfSigned();
         using var real = new MockServer(new TcpServerSsl(0, certificate, SslProtocols.None));
         real.Mock.Send("PING").Receive("PONG");
         real.Start();

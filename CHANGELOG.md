@@ -2,6 +2,17 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.4.0
+
+No breaking changes.
+
+### Added
+- **TLS extras:** `TestCertificate.CreateSelfSigned(subjectName)` creates an in-memory self-signed certificate for servers
+  and clients; `TcpServerSsl.RequireClientCertificate` and `ClientCertificateValidator` add mutual TLS (a rejected client
+  fails the handshake and is logged); `connection.Tls` (`TlsConnectionInfo`: protocol, SNI server name, client
+  certificate) and the assertions `HaveUsedTls`, `HaveServerName` and `HavePresentedClientCertificate` check them. Custom
+  listeners opt in with the new `ITlsListener`.
+
 ## 1.3.0
 
 No breaking changes.

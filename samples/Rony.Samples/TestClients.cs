@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Rony;
 
@@ -29,14 +30,19 @@ public sealed class TcpTestClient : IDisposable
         return new TcpTestClient(client, client.GetStream());
     }
 
-    /// <summary>Connects with TLS, trusting exactly <paramref name="serverCertificate"/>.</summary>
-    public static async Task<TcpTestClient> ConnectSslAsync(int port, X509Certificate2 serverCertificate)
+    /// <summary>
+    /// Connects with TLS, trusting exactly <paramref name="serverCertificate"/>, and presents
+    /// <paramref name="clientCertificate"/> when given.
+    /// </summary>
+    public static async Task<TcpTestClient> ConnectSslAsync(int port, X509Certificate2 serverCertificate,
+        X509Certificate2 clientCertificate = null)
     {
         var client = new TcpClient();
         await client.ConnectAsync(IPAddress.Loopback, port);
         var ssl = new SslStream(client.GetStream(), false,
             (_, certificate, _, _) => certificate?.GetCertHashString() == serverCertificate.GetCertHashString());
-        await ssl.AuthenticateAsClientAsync("localhost");
+        var clientCertificates = clientCertificate == null ? null : new X509CertificateCollection { clientCertificate };
+        await ssl.AuthenticateAsClientAsync("localhost", clientCertificates, SslProtocols.None, false);
         return new TcpTestClient(client, ssl);
     }
 

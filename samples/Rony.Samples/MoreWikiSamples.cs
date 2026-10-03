@@ -122,7 +122,7 @@ public class MoreWikiSamples
         using var all = new TcpServer("0.0.0.0", 0);
         using var udpAll = new UdpServer(0);
         using var udpEndPoint = new UdpServer(new IPEndPoint(IPAddress.Loopback, 0));
-        using var certificate = TestCertificates.CreateSelfSigned();
+        using var certificate = TestCertificate.CreateSelfSigned();
         using var ssl = new TcpServerSsl("0.0.0.0", 0, certificate, System.Security.Authentication.SslProtocols.None);
         using var sslByName = new TcpServerSsl(0, "localhost", System.Security.Authentication.SslProtocols.None);
 

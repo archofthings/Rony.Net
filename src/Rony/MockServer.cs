@@ -402,10 +402,23 @@ namespace Rony.Net
 
         private void OnConnectionOpened(object sender, EndPoint remoteEndPoint)
         {
-            var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint);
+            TlsConnectionInfo tls = null;
+            if (_connectionListener is ITlsListener tlsListener)
+            {
+                try
+                {
+                    tls = tlsListener.GetTlsInfo(sender);
+                }
+                catch (Exception)
+                {
+                    // A broken custom listener must not break the connection; it just has no TLS details.
+                }
+            }
+
+            var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint, tls);
             _connectionsBySender[sender] = connection;
             _connections.Record(connection);
-            Trace($"{Label(connection)} connected from {remoteEndPoint}");
+            Trace($"{Label(connection)} connected from {remoteEndPoint}{DescribeTls(tls)}");
             Raise(ConnectionOpened, connection);
 
             CancellationToken cancellationToken;
@@ -419,6 +432,15 @@ namespace Rony.Net
             if (greeting.Step == null) return;
             LogStateChange(Label(connection), greeting);
             Dispatch(sender, () => RespondAsync(greeting.Step, Empty, sender, Label(connection), "greeting", cancellationToken));
+        }
+
+        private static string DescribeTls(TlsConnectionInfo tls)
+        {
+            if (tls == null) return string.Empty;
+            var parts = new List<string> { tls.Protocol.ToString() };
+            if (tls.ServerName != null) parts.Add($"server name {tls.ServerName}");
+            if (tls.ClientCertificate != null) parts.Add($"client certificate {tls.ClientCertificate.Subject}");
+            return $" ({string.Join(", ", parts)})";
         }
 
         private void OnConnectionClosed(object sender)

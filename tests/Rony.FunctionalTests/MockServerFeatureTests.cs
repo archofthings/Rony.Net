@@ -48,7 +48,7 @@ namespace Rony.FunctionalTests
         public async Task Ssl_Connection_Should_Stay_Open_For_Multiple_Requests()
         {
             //Arrange
-            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None));
+            using var server = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None));
             server.Mock.Send("ping").Receive("pong");
             server.Mock.Send("pong").Receive("ping");
             server.Start();
@@ -486,7 +486,7 @@ namespace Rony.FunctionalTests
             //Arrange
             var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
             await using var server = new MockServer(tls
-                ? new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None)
+                ? new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None)
                 : new TcpServer(0));
             server.Log = lines.Enqueue;
             server.Mock.Send("slow").Receive("done").After(TimeSpan.FromSeconds(30));
@@ -540,7 +540,7 @@ namespace Rony.FunctionalTests
         {
             //Arrange
             using var server = new MockServer(tls
-                ? new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None)
+                ? new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None)
                 : new TcpServer(0));
             server.Mock.Send("X").ResetConnection();
             server.Start();
@@ -830,7 +830,7 @@ namespace Rony.FunctionalTests
         public async Task FailHandshake_Should_Fail_The_Client_Handshake_And_Keep_The_Connection_Out_Of_The_Server()
         {
             //Arrange
-            var listener = new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None) { FailHandshake = true };
+            var listener = new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None) { FailHandshake = true };
             var failed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             listener.ConnectionFailed += (_, _) => failed.TrySetResult(true);
             using var server = new MockServer(listener);
@@ -879,8 +879,8 @@ namespace Rony.FunctionalTests
         private static async Task<SslStream> AuthenticateAsync(TcpClient client)
         {
             var stream = new SslStream(client.GetStream(), false,
-                (sender, certificate, chain, errors) => certificate?.GetCertHashString() == TestCertificate.Instance.GetCertHashString());
-            await stream.AuthenticateAsClientAsync(TestCertificate.SubjectName);
+                (sender, certificate, chain, errors) => certificate?.GetCertHashString() == SharedCertificate.Instance.GetCertHashString());
+            await stream.AuthenticateAsClientAsync(SharedCertificate.SubjectName);
             return stream;
         }
 

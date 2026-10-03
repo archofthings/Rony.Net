@@ -141,6 +141,9 @@ The last response in a sequence repeats once the sequence ends.
 | `IMessageFraming Framing` | How the stream is split into messages. Default: `MessageFraming.None`. Set before `Start()`. |
 | `bool KeepAlive` | Keep connections open after a response. Default: `true`. |
 | `bool FailHandshake` | (`TcpServerSsl` only) Every new TLS handshake fails. Can change while running. |
+| `bool RequireClientCertificate` | (`TcpServerSsl` only) Asks for a client certificate; a client that sends none fails the handshake. Can change while running. See [Mutual TLS](SSL-and-TLS#mutual-tls-client-certificates) |
+| `Func<X509Certificate2, bool> ClientCertificateValidator` | (`TcpServerSsl` only) Decides whether a presented client certificate is accepted; `null` accepts all; a throwing validator rejects. Used with `RequireClientCertificate` |
+| `TlsConnectionInfo GetTlsInfo(object sender)` | (`TcpServerSsl` only, from `ITlsListener`) The TLS details of a connection |
 | `void RefuseConnections()` | Stops accepting new connections (clients get "connection refused"); accepted connections keep working |
 | `void AcceptConnections()` | Listens again on the same port; does nothing when not refusing. Throws `SocketException` if the port cannot be bound again |
 | `byte[] Frame(byte[] message)` | Frames a message with `Framing` |
@@ -185,6 +188,7 @@ A TCP connection the server accepted; see [Connections and Push](Connections-and
 | `Task CloseAsync()` | Closes it from the server side |
 | `Task ResetAsync()` | Aborts it with a TCP reset (RST); throws `NotSupportedException` without `IFaultInjectionListener` |
 | `Task WaitForCloseAsync(TimeSpan? timeout)` | Waits until it is closed |
+| `TlsConnectionInfo Tls` | TLS details; `null` without TLS |
 | `ClientConnectionAssertions Should()` | Fluent assertions on this connection |
 
 ## `Rony.Net.MockServerAssertions`
@@ -196,8 +200,16 @@ See [Fluent assertions](Verifying-Requests#fluent-assertions).
 ## `Rony.Net.ClientConnectionAssertions`
 Returned by `connection.Should()`; every method returns the assertions again, and `And` reads well between them.
 `HaveReceived(request or predicate[, Times])`, `NotHaveReceived(...)` and `HaveReceivedInOrder(...)` count only
-requests received on that connection; `BeInState(string)`, `BeOpen()`, `BeClosed()`.
+requests received on that connection; `BeInState(string)`, `BeOpen()`, `BeClosed()`;
+`HaveUsedTls(SslProtocols)`, `HaveServerName(string)`, `HavePresentedClientCertificate()` and
+`HavePresentedClientCertificate(X509Certificate)` check the [TLS details](SSL-and-TLS#checking-protocol-server-name-and-client-certificate).
 See [Assertions on one connection](Verifying-Requests#assertions-on-one-connection).
+
+## `Rony.Net.TestCertificate`, `Rony.Models.TlsConnectionInfo`
+`TestCertificate.CreateSelfSigned(string subjectName = "localhost")` creates a self-signed certificate with a private key
+for servers and clients, in memory; throws `ArgumentException` for a null or empty name. See [SSL and TLS](SSL-and-TLS).
+`TlsConnectionInfo`: `Protocol` (`SslProtocols`), `ServerName` (SNI, may be `null`), `ClientCertificate` (`X509Certificate2`,
+may be `null`); constructor `(SslProtocols, string, X509Certificate2)`.
 
 ## `Rony.Models.JsonData`, `JsonDataKind`
 A small immutable JSON value parsed by the library (no dependency), passed to `SendJson(...)` predicates.
@@ -233,10 +245,11 @@ A TCP/TLS relay that records the traffic between a client and a real server (no 
 ## `Rony.Models.Config`
 One exact-request configuration: `CallCount`, and `GetResponse(string or byte[])`, which returns the next response and moves the sequence forward.
 
-## `Rony.Interfaces.IListener`, `IConnectionListener`, `IFaultInjectionListener`
-The transport contract, its extension for transports with connections, and the optional extension for failure
+## `Rony.Interfaces.IListener`, `IConnectionListener`, `IFaultInjectionListener`, `ITlsListener`
+The transport contract, its extension for transports with connections, the optional extension for TLS details
+(`GetTlsInfo`), and the optional extension for failure
 simulation (`ResetAsync`, `Frame`, `SendRawAsync` (also the chunked overload), `RefuseConnections`, `AcceptConnections`); see [Custom Listeners](Custom-Listeners).
-`TcpServer` and `TcpServerSsl` implement `IConnectionListener` and `IFaultInjectionListener`.
+`TcpServer` and `TcpServerSsl` implement `IConnectionListener` and `IFaultInjectionListener`; `TcpServerSsl` also implements `ITlsListener`.
 
 ## Test framework packages
 `Rony.Net.Xunit` (xUnit v2), `Rony.Net.Xunit.v3` (xUnit v3, same types and namespace), `Rony.Net.NUnit` and `Rony.Net.MSTest`: a `MockServerTest` base class (`Server`,

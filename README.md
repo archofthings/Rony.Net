@@ -24,7 +24,7 @@ server.Should().HaveReceived("PING", Times.Once());
 📖 **Full documentation, with an example for every feature, is in the [wiki](https://github.com/archofthings/Rony.Net/wiki).**
 
 ## Features
-- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
+- **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. Includes TLS with a built-in test certificate and mutual TLS. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
 - **Free ports and a clean lifecycle.** Port `0` means tests never fight over ports, even in parallel; start and stop synchronously or with `await using`. → [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
 - **Any protocol.** Text or binary; persistent connections; delimited, length-prefixed, fixed-length, STX/ETX or custom messages. → [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
 - **Flexible matching.** Exact requests, regular expressions with capture groups, JSON fields, predicates, a default response and a handler for unmatched requests. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
@@ -32,7 +32,7 @@ server.Should().HaveReceived("PING", Times.Once());
 - **Server-initiated messages.** Greetings on connect, pushed messages and broadcasts; connection list and events. → [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
 - **Stateful scenarios.** "`LIST` only works after `LOGIN`", for the whole server or per connection. → [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
 - **Failure testing.** Delays, chunked and throttled responses, dropped and reset connections, truncated or corrupted responses, refused connections, failing TLS handshakes, silence and flaky servers. → [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
-- **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, and waiting for requests and connections without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
+- **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, TLS details (protocol, server name, client certificate), and waiting for requests and connections without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
 - **Record and replay.** Record the conversation with a real server through a proxy, save it as an editable JSON file and replay it as a mock server. → [Record and Replay](https://github.com/archofthings/Rony.Net/wiki/Record-and-Replay)
 - **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
 - **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit v2 or v3, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
@@ -78,13 +78,16 @@ More in [Getting Started](https://github.com/archofthings/Rony.Net/wiki/Getting-
 new MockServer(new TcpServer(0));                                    // TCP on 127.0.0.1
 new MockServer(new TcpServerSsl(0, certificate, SslProtocols.None)); // TCP + SSL/TLS
 new MockServer(new UdpServer("127.0.0.1", 0));                       // UDP
+using var certificate = TestCertificate.CreateSelfSigned();          // in-memory certificate for TLS tests
+new TcpServerSsl(0, certificate, SslProtocols.Tls12) { RequireClientCertificate = true };   // mutual TLS
+connection.Should().HaveUsedTls(SslProtocols.Tls12).And.HavePresentedClientCertificate();   // TLS details of a connection
 
 await using var server = new MockServer(new TcpServer(0));           // async lifecycle: also StartAsync(), StopAsync()
 ```
 TCP connections stay open, so a client can send many requests over one connection. Each connection is handled
 independently, and responses keep their order. `await using` and `StopAsync()` wait for the server's background work,
 so no callback or log line runs after the test.
-Details: [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers) · [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS) (including creating a test certificate in code and failing the handshake) ·
+Details: [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers) · [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS) (test certificate, mutual TLS, TLS assertions and failing the handshake) ·
 [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
 
 ## Message framing

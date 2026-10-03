@@ -20,12 +20,13 @@ namespace Rony.Models
         private readonly object _syncRoot = new object();
         private DateTimeOffset? _closedAt;
 
-        internal ClientConnection(MockServer server, int id, object sender, EndPoint remoteEndPoint)
+        internal ClientConnection(MockServer server, int id, object sender, EndPoint remoteEndPoint, TlsConnectionInfo tls = null)
         {
             _server = server;
             Id = id;
             Sender = sender;
             RemoteEndPoint = remoteEndPoint;
+            Tls = tls;
             ConnectedAt = DateTimeOffset.Now;
         }
 
@@ -34,6 +35,9 @@ namespace Rony.Models
 
         /// <summary>The client's address.</summary>
         public EndPoint RemoteEndPoint { get; }
+
+        /// <summary>The TLS details of this connection (protocol, server name, client certificate); null for a connection without TLS.</summary>
+        public TlsConnectionInfo Tls { get; }
 
         /// <summary>When the server accepted the connection.</summary>
         public DateTimeOffset ConnectedAt { get; }

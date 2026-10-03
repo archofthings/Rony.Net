@@ -209,7 +209,7 @@ namespace Rony.FunctionalTests
         public async Task Pushing_Over_Ssl_While_Responding_Should_Not_Corrupt_The_Stream()
         {
             //Arrange
-            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None) { Framing = MessageFraming.Delimiter("\n") });
+            using var server = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None) { Framing = MessageFraming.Delimiter("\n") });
             server.Mock.Send("").Receive(text => "re:" + text);
             server.Start();
             using var client = await LineClient.ConnectSslAsync(server.Port);
@@ -397,7 +397,7 @@ namespace Rony.FunctionalTests
             //Arrange
             var log = new ConcurrentQueue<string>();
             var failed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var server = new MockServer(new TcpServerSsl(0, TestCertificate.Instance, SslProtocols.None))
+            using var server = new MockServer(new TcpServerSsl(0, SharedCertificate.Instance, SslProtocols.None))
             {
                 Log = line =>
                 {
@@ -563,8 +563,8 @@ namespace Rony.FunctionalTests
                 var client = new TcpClient();
                 await client.ConnectAsync(IPAddress.Loopback, port);
                 var ssl = new SslStream(client.GetStream(), false,
-                    (_, certificate, _, _) => certificate?.GetCertHashString() == TestCertificate.Instance.GetCertHashString());
-                await ssl.AuthenticateAsClientAsync(TestCertificate.SubjectName);
+                    (_, certificate, _, _) => certificate?.GetCertHashString() == SharedCertificate.Instance.GetCertHashString());
+                await ssl.AuthenticateAsClientAsync(SharedCertificate.SubjectName);
                 return new LineClient(client, ssl);
             }
 

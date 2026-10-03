@@ -155,6 +155,7 @@ connection.Should().HaveReceived("LOGIN bob", Times.Once())
 The failure messages name the connection ("... on connection #1") and list only its requests. `BeInState(state)`
 checks the connection's [scenario state](Stateful-Scenarios), and `BeOpen()` and `BeClosed()` check whether it is
 still open; wait with `connection.WaitForCloseAsync()` first when the client may still be disconnecting.
+`HaveUsedTls(...)`, `HaveServerName(...)` and `HavePresentedClientCertificate(...)` check the [TLS details](SSL-and-TLS#checking-protocol-server-name-and-client-certificate).
 With [`FailOnUnmatched`](#fail-fast-on-unexpected-requests) the check stays server-wide: an unmatched request on any
 connection makes the assertion throw.
 

@@ -32,7 +32,7 @@ public class ServerSamples
     [Fact]
     public async Task Ssl_server_with_a_generated_certificate()
     {
-        using var certificate = TestCertificates.CreateSelfSigned();
+        using var certificate = TestCertificate.CreateSelfSigned();
         using var server = new MockServer(new TcpServerSsl(0, certificate, SslProtocols.None));
         server.Mock.Send("hello").Receive("secure world");
         server.Start();
@@ -44,13 +44,69 @@ public class ServerSamples
     [Fact]
     public async Task Ssl_server_with_a_specific_protocol()
     {
-        using var certificate = TestCertificates.CreateSelfSigned();
+        using var certificate = TestCertificate.CreateSelfSigned();
         using var server = new MockServer(new TcpServerSsl(0, certificate, SslProtocols.Tls12));
         server.Mock.Send("hello").Receive("TLS 1.2");
         server.Start();
 
         using var client = await TcpTestClient.ConnectSslAsync(server.Port, certificate);
         Assert.Equal("TLS 1.2", await client.SendAndReceiveAsync("hello"));
+    }
+
+    [Fact]
+    public async Task Mutual_tls_and_tls_details()   // SSL-and-TLS
+    {
+        using var serverCertificate = TestCertificate.CreateSelfSigned();
+        using var clientCertificate = TestCertificate.CreateSelfSigned("my-client");
+        using var server = new MockServer(new TcpServerSsl(0, serverCertificate, SslProtocols.Tls12) { RequireClientCertificate = true });
+        server.Mock.Send("hello").Receive("secure world");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectSslAsync(server.Port, serverCertificate, clientCertificate);
+        Assert.Equal("secure world", await client.SendAndReceiveAsync("hello"));
+
+        var connection = await server.WaitForConnectionAsync();
+        connection.Should().HaveUsedTls(SslProtocols.Tls12)
+            .And.HaveServerName("localhost")
+            .And.HavePresentedClientCertificate(clientCertificate);
+    }
+
+    [Fact]
+    public async Task Mutual_tls_with_a_validator()   // SSL-and-TLS
+    {
+        using var serverCertificate = TestCertificate.CreateSelfSigned();
+        using var clientCertificate = TestCertificate.CreateSelfSigned("my-client");
+        using var server = new MockServer(new TcpServerSsl(0, serverCertificate, SslProtocols.Tls12)
+        {
+            RequireClientCertificate = true,
+            ClientCertificateValidator = certificate => certificate.Subject == "CN=my-client"
+        });
+        server.Mock.Send("hello").Receive("secure world");
+        server.Start();
+
+        using var client = await TcpTestClient.ConnectSslAsync(server.Port, serverCertificate, clientCertificate);
+        Assert.Equal("secure world", await client.SendAndReceiveAsync("hello"));
+    }
+
+    [Fact]
+    public async Task Mutual_tls_rejects_a_client_without_a_certificate()   // SSL-and-TLS
+    {
+        using var serverCertificate = TestCertificate.CreateSelfSigned();
+        var listener = new TcpServerSsl(0, serverCertificate, SslProtocols.Tls12) { RequireClientCertificate = true };
+        var failed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+        listener.ConnectionFailed += (_, error) => failed.TrySetResult(error);
+        using var server = new MockServer(listener);
+        server.Start();
+
+        // Depending on the OS and TLS version, the client sees the rejection while connecting or on its first read.
+        await Record.ExceptionAsync(async () =>
+        {
+            using var client = await TcpTestClient.ConnectSslAsync(server.Port, serverCertificate);
+        });
+
+        var error = await failed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains("no certificate", error.Message);
+        server.Should().HaveAcceptedConnections(Times.Never());
     }
 
     [Fact]
@@ -69,7 +125,7 @@ public class ServerSamples
     [Fact]
     public async Task Failing_the_tls_handshake()
     {
-        using var certificate = TestCertificates.CreateSelfSigned();
+        using var certificate = TestCertificate.CreateSelfSigned();
         using var server = new MockServer(new TcpServerSsl(0, certificate, SslProtocols.Tls12) { FailHandshake = true });
         server.Start();
 
