@@ -146,7 +146,8 @@ namespace Rony.Cli.Tests
         public async Task Validate_Should_Report_A_Udp_Port_In_Use_With_Exit_Code_1()
         {
             using var directory = new TempDirectory();
-            using var busy = new MockServer(new UdpServer(0));
+            // The same address as the file's default: Windows lets 127.0.0.1 bind next to a socket on 0.0.0.0.
+            using var busy = new MockServer(new UdpServer("127.0.0.1", 0));
             busy.Start();
             var file = directory.Write("mock.json", "{\"version\":1,\"server\":{\"transport\":\"udp\",\"port\":" + busy.Port + "},\"rules\":[]}");
             var error = new LineWriter();
