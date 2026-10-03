@@ -410,5 +410,68 @@ namespace Rony.FunctionalTests
             //Assert: reading while recording never threw, and the final snapshot is consistent
             Assert.Equal(41, proxy.Recording.Connections.Single().Messages.Count);
         }
+
+        [Fact]
+        public async Task Failing_Framing_Should_Not_Cut_The_Connection_And_Record_The_Bytes_Raw()
+        {
+            //Arrange: a length byte of 0 is invalid for this framing and makes Decode throw
+            using var real = new MockServer(new TcpServer(0));
+            real.Mock.SendMatching(_ => true).Receive("ok");
+            real.Start();
+            using var proxy = new RecordingProxy("127.0.0.1", real.Port) { Framing = MessageFraming.LengthPrefix(1, true, includesPrefix: true) };
+            proxy.Start();
+
+            //Act
+            using (var client = new TcpClient())
+            {
+                await client.ConnectAsync(IPAddress.Loopback, proxy.Port);
+                var stream = client.GetStream();
+                var reply = new byte[2];
+                foreach (var request in new[] { new byte[] { 0 }, new byte[] { 7, 7 } })
+                {
+                    await stream.WriteAsync(request);
+                    await stream.ReadExactlyAsync(reply).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+                    Assert.Equal("ok", Encoding.UTF8.GetString(reply));
+                }
+            }
+            await proxy.WaitForConnectionsClosedAsync();
+
+            //Assert
+            var requests = proxy.Recording.Connections.Single().Messages.Where(m => m.Source == RecordedSource.Client && !m.IsClose).ToList();
+            Assert.Equal(new[] { new byte[] { 0 }, new byte[] { 7, 7 } }, requests.Select(m => m.Body));
+        }
+
+        [Fact]
+        public async Task Bytes_Without_A_Complete_Message_Should_Be_Recorded_Raw_Above_The_Cap()
+        {
+            //Arrange: the prefix announces 32 MiB, so the message never completes before the cap
+            // (a length prefix decodes in constant time per read, unlike a delimiter that rescans the buffer)
+            using var real = new MockServer(new TcpServer(0));
+            real.Mock.SendMatching(_ => true).Receive("ok");
+            real.Start();
+            using var proxy = new RecordingProxy("127.0.0.1", real.Port) { Framing = MessageFraming.LengthPrefix(4) };
+            proxy.Start();
+            var data = new byte[16 * 1024 * 1024 + 1];
+            data[0] = 0x02; // big-endian length 0x02000000 = 32 MiB
+
+            //Act
+            using (var client = new TcpClient())
+            {
+                await client.ConnectAsync(IPAddress.Loopback, proxy.Port);
+                var stream = client.GetStream();
+                await stream.WriteAsync(data);
+                // Finish sending and read every reply to the end, so closing never resets the connection
+                // while bytes are still on their way to the real server.
+                client.Client.Shutdown(SocketShutdown.Send);
+                await stream.CopyToAsync(Stream.Null).WaitAsync(TimeSpan.FromSeconds(30));
+            }
+            await proxy.WaitForConnectionsClosedAsync();
+            await real.WaitForAllConnectionsClosedAsync();
+
+            //Assert
+            Assert.Equal(16 * 1024 * 1024 + 1, real.Mock.ReceivedRequests.Sum(r => r.Body.Length));
+            var requests = proxy.Recording.Connections.Single().Messages.Where(m => m.Source == RecordedSource.Client && !m.IsClose).ToList();
+            Assert.Equal(16 * 1024 * 1024 + 1, requests.Sum(m => m.Body.Length));
+        }
     }
 }

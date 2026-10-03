@@ -36,7 +36,7 @@ server.Mock.SendMatchingBytes(bytes => bytes.Length > 0 && bytes[0] == 0xFF).Rec
 A predicate that throws, for example `bytes[10]` on a shorter request, simply doesn't match.
 
 ## JSON requests
-`SendJson` matches requests that are valid JSON and satisfy a function on the parsed document. `JsonValue` is read-only and
+`SendJson` matches requests that are valid JSON and satisfy a function on the parsed document. `JsonData` is read-only and
 indexing never throws, so a missing field is just `Undefined`:
 
 ```csharp
@@ -53,12 +53,12 @@ There is no `ReceiveJson`: to build a response from the request, parse it yourse
 
 ```csharp
 server.Mock.SendJson(j => j["id"].Exists)
-    .Receive(request => "{\"echo\":" + JsonValue.Parse(request)["id"] + "}");
+    .Receive(request => "{\"echo\":" + JsonData.Parse(request)["id"] + "}");
 
 Assert.Equal("{\"echo\":42}", server.Mock.Match("{\"id\":42}").GetString());
 ```
 
-`JsonValue.Parse(text)` throws `FormatException` for invalid JSON, and `TryParse` returns false.
+`JsonData.Parse(text)` throws `FormatException` for invalid JSON, and `TryParse` returns false.
 
 ## Echoing part of the request
 Combine a pattern with a response function:

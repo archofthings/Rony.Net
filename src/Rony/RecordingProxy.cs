@@ -33,6 +33,7 @@ namespace Rony.Net
     public sealed class RecordingProxy : IDisposable, IAsyncDisposable
     {
         private static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(5);
+        private const int MaxPendingBytes = 16 * 1024 * 1024;
 
         private readonly string _targetHost;
         private readonly int _targetPort;
@@ -95,6 +96,7 @@ namespace Rony.Net
 
         /// <summary>
         /// Receives a line for every connection, relayed message and error. Exceptions thrown by the callback are ignored.
+        /// Do not call <see cref="Stop"/> or <see cref="Dispose"/> from this callback: it runs on a relay that they wait for.
         /// </summary>
         public Action<string> Log { get; set; }
 
@@ -107,6 +109,7 @@ namespace Rony.Net
         /// <summary>Starts accepting connections. Calling it again while started does nothing.</summary>
         public void Start()
         {
+            string started;
             lock (_syncRoot)
             {
                 if (_listener != null) return;
@@ -117,58 +120,74 @@ namespace Rony.Net
                 _listener = listener;
                 _cancellation = new CancellationTokenSource();
                 var cancellationToken = _cancellation.Token;
-                Trace($"recording proxy listening on {Address}:{Port}, relaying to {_targetHost}:{_targetPort}");
+                started = $"recording proxy listening on {Address}:{Port}, relaying to {_targetHost}:{_targetPort}";
                 var acceptStopped = _acceptStopped = new ManualResetEventSlim(false);
                 _acceptTask = Task.Run(() => AcceptLoopAsync(listener, acceptStopped, cancellationToken));
             }
+
+            Trace(started);
         }
 
-        /// <summary>Stops accepting, closes every relayed connection on both sides and waits until they have ended. Calling it again does nothing.</summary>
+        /// <summary>
+        /// Stops accepting, closes every relayed connection on both sides and waits until they have ended. Calling it again does nothing.
+        /// Do not call <see cref="Stop"/> or <see cref="Dispose"/> from the <see cref="Log"/> callback: it runs on a relay that this call waits for.
+        /// </summary>
         public void Stop()
         {
-            if (!StopCore(out _, out var acceptStopped)) return;
+            if (!StopCore(out _, out var acceptStopped, out var cancellation)) return;
 
             acceptStopped.Wait();
+            acceptStopped.Dispose();
             while (true)
             {
                 var relays = _relays.Keys.ToArray();
-                if (relays.Length == 0) return;
+                if (relays.Length == 0) break;
                 foreach (var relay in relays)
+                {
                     relay.Finished.Wait();
+                    relay.Finished.Dispose();
+                }
             }
+
+            cancellation.Dispose();
         }
 
         /// <summary>Like <see cref="Stop"/>, without blocking the caller.</summary>
         public Task StopAsync()
         {
-            return StopCore(out var accept, out _) ? WaitForEndAsync(accept) : Task.CompletedTask;
+            return StopCore(out var accept, out _, out var cancellation) ? WaitForEndAsync(accept, cancellation) : Task.CompletedTask;
         }
 
         /// <summary>Stops accepting and aborts the relays. False if the proxy was not started.</summary>
-        private bool StopCore(out Task accept, out ManualResetEventSlim acceptStopped)
+        private bool StopCore(out Task accept, out ManualResetEventSlim acceptStopped, out CancellationTokenSource cancellation)
         {
+            TcpListener listener;
             lock (_syncRoot)
             {
                 if (_listener == null)
                 {
                     accept = null;
                     acceptStopped = null;
+                    cancellation = null;
                     return false;
                 }
 
-                _cancellation.Cancel();
-                _listener.Stop();
+                listener = _listener;
                 _listener = null;
+                listener.Stop();
+                cancellation = _cancellation;
                 accept = _acceptTask;
                 acceptStopped = _acceptStopped;
             }
 
+            // Outside the lock: cancelling runs the Abort callback of every relay.
+            cancellation.Cancel();
             foreach (var relay in _relays.Keys)
                 relay.Abort();
             return true;
         }
 
-        private async Task WaitForEndAsync(Task accept)
+        private async Task WaitForEndAsync(Task accept, CancellationTokenSource cancellation)
         {
             try
             {
@@ -184,9 +203,11 @@ namespace Rony.Net
                 var running = new List<Task>();
                 foreach (var relay in _relays.Keys)
                     running.Add(relay.Done);
-                if (running.Count == 0) return;
+                if (running.Count == 0) break;
                 await Task.WhenAll(running).ConfigureAwait(false);
             }
+
+            cancellation.Dispose();
         }
 
         /// <summary>Stops the proxy.</summary>
@@ -412,7 +433,8 @@ namespace Rony.Net
                 }
 
                 var target = new TcpClient();
-                _target = target;
+                // A full fence: an Abort that runs now either sees the target and closes it, or is seen by the check below.
+                Interlocked.Exchange(ref _target, target);
                 if (Volatile.Read(ref _aborted) == 1) throw new OperationCanceledException();
                 await target.ConnectAsync(_proxy._targetHost, _proxy._targetPort).ConfigureAwait(false);
                 _targetStream = target.GetStream();
@@ -436,6 +458,7 @@ namespace Rony.Net
                 var pendingLength = 0;
                 var closer = source;
                 var endOfStream = false;
+                var framing = _framing;
                 try
                 {
                     while (true)
@@ -454,16 +477,41 @@ namespace Rony.Net
 
                         // Same burst handling as TcpServerBase.
                         var endOfBurst = !(from is NetworkStream network && network.DataAvailable);
-                        var frames = _framing.Decode(new ReadOnlySpan<byte>(pending, 0, pendingLength), endOfBurst, out var consumed);
+                        IReadOnlyList<byte[]> frames;
+                        int consumed;
+                        try
+                        {
+                            frames = framing.Decode(new ReadOnlySpan<byte>(pending, 0, pendingLength), endOfBurst, out consumed);
+                            if (frames == null || consumed < 0 || consumed > pendingLength)
+                                throw new InvalidDataException("The framing returned an invalid result.");
+                        }
+                        catch (Exception exception)
+                        {
+                            // The bytes are still relayed: record what is pending as one raw message and stop framing this direction.
+                            _proxy.Trace($"{Label} {(source == RecordedSource.Client ? "client" : "server")} framing failed: {exception.GetType().Name}: {exception.Message}, recording the rest of this direction unframed");
+                            framing = MessageFraming.None;
+                            frames = new[] { CopyPending(pending, pendingLength) };
+                            consumed = pendingLength;
+                        }
+
                         if (consumed > 0)
                         {
                             Buffer.BlockCopy(pending, consumed, pending, 0, pendingLength - consumed);
                             pendingLength -= consumed;
                         }
 
-                        // Recorded before it is forwarded, so a reply can never be recorded ahead of its request.
+                        // Recorded before the bytes are forwarded, so a reply is normally recorded after its request. A framing that
+                        // holds bytes back until a message is complete can still record a request after a reply to its first bytes.
                         foreach (var frame in frames)
                             Record(source, frame);
+
+                        if (pendingLength > MaxPendingBytes)
+                        {
+                            _proxy.Trace($"{Label} {(source == RecordedSource.Client ? "client" : "server")}: more than 16 MiB without a complete message, recording the rest of this direction unframed");
+                            framing = MessageFraming.None;
+                            Record(source, CopyPending(pending, pendingLength));
+                            pendingLength = 0;
+                        }
 
                         try
                         {
@@ -491,11 +539,7 @@ namespace Rony.Net
 
                 // Bytes the framing never completed are recorded as a last message of this side, so nothing is lost.
                 if (pendingLength > 0)
-                {
-                    var rest = new byte[pendingLength];
-                    Buffer.BlockCopy(pending, 0, rest, 0, pendingLength);
-                    Record(source, rest);
-                }
+                    Record(source, CopyPending(pending, pendingLength));
 
                 if (Volatile.Read(ref _aborted) != 0) return;
 
@@ -510,6 +554,13 @@ namespace Rony.Net
                 }
 
                 CloseBoth();
+            }
+
+            private static byte[] CopyPending(byte[] pending, int length)
+            {
+                var copy = new byte[length];
+                Buffer.BlockCopy(pending, 0, copy, 0, length);
+                return copy;
             }
 
             private static bool TryShutdownSend(TcpClient client)

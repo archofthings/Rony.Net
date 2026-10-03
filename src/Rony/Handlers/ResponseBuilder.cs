@@ -149,10 +149,13 @@ namespace Rony.Handlers
             return this;
         }
 
+        /// <summary>The modifier kind added by <see cref="AppendFrames"/>.</summary>
+        internal const string ReplayedFramesKind = "replayed frames";
+
         /// <summary>Sends <paramref name="extra"/> payloads, framed like any response, right after the previous response (used by <c>MockServer.Replay</c>).</summary>
         internal void AppendFrames(IReadOnlyList<byte[]> extra, Func<byte[], byte[]> frame)
         {
-            _config.LastStep.AddModifier("replayed frames", first =>
+            _config.LastStep.AddModifier(ReplayedFramesKind, first =>
             {
                 var frames = extra.Select(frame).ToList();
                 var all = new byte[first.Length + frames.Sum(f => f.Length)];

@@ -51,7 +51,7 @@ Available as `server.Mock`.
 | `Send(Regex pattern)` | Requests whose text matches the pattern |
 | `SendMatching(Func<string, bool> predicate)` | Requests whose text satisfies the predicate |
 | `SendMatchingBytes(Func<byte[], bool> predicate)` | Requests whose bytes satisfy the predicate |
-| `SendJson(Func<JsonValue, bool> predicate)` | Requests that are valid JSON and satisfy the predicate; other requests don't match |
+| `SendJson(Func<JsonData, bool> predicate)` | Requests that are valid JSON and satisfy the predicate; other requests don't match |
 | `InState(string state).Send...(...)` | Any of the above, only in that [scenario state](Stateful-Scenarios) |
 | `OnConnect()` | A new TCP connection: the response is a [greeting](Connections-and-Push#greetings-talk-first) |
 | `OnUnmatched()` | Requests no other rule matches; they stay [unmatched](Request-Matching#unmatched-requests) |
@@ -199,12 +199,13 @@ Returned by `connection.Should()`; every method returns the assertions again, an
 requests received on that connection; `BeInState(string)`, `BeOpen()`, `BeClosed()`.
 See [Assertions on one connection](Verifying-Requests#assertions-on-one-connection).
 
-## `Rony.Models.JsonValue`, `JsonKind`
+## `Rony.Models.JsonData`, `JsonDataKind`
 A small immutable JSON value parsed by the library (no dependency), passed to `SendJson(...)` predicates.
-`JsonValue.Parse(string)` (throws `FormatException`) and `TryParse(string, out JsonValue)`; `Kind` (`Undefined`, `Null`, `Boolean`,
+`JsonData.Parse(string)` (throws `FormatException`) and `TryParse(string, out JsonData)`; `Kind` (`Undefined`, `Null`, `Boolean`,
 `Number`, `String`, `Array`, `Object`), `Exists`, indexers `[string name]` and `[int index]` (never throw; a missing part is
 `Undefined`), `Count`, `Items`, `Properties`, `AsString()`, `AsNumber()`, `AsBoolean()` (null for another kind) and `ToString()`
-(compact JSON). See [JSON requests](Request-Matching#json-requests).
+(compact JSON). A number outside the range of `double` is ±Infinity on .NET Core and .NET 5+; `ToString()` keeps the number as
+written. See [JSON requests](Request-Matching#json-requests).
 
 ## `Rony.Net.RecordingProxy`, `Rony.Models.Recording`
 A TCP/TLS relay that records the traffic between a client and a real server (no UDP); see [Record and Replay](Record-and-Replay).
@@ -253,9 +254,9 @@ UTF-8 extension methods: `string.GetBytes()` and `byte[].GetString()`.
 | Exception | Thrown by |
 |---|---|
 | `MockVerificationException` | `Verify...(...)`, `VerifyInOrder(...)`, `VerifyAllRequestsMatched()`, `VerifyConnections(...)`, `Should()` assertions; waits with `FailOnUnmatched` |
-| `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)`, `WaitForConnection(s)Async(...)`, `WaitForCloseAsync(...)` |
-| `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter |
+| `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)`, `WaitForConnection(s)Async(...)`, `WaitForCloseAsync(...)`, `RecordingProxy.WaitForConnectionsClosedAsync(...)` |
+| `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter; `MockServer.Replay(...)` when a recorded request or greeting is already configured |
 | `InvalidOperationException` | `Receive(...)` without `Send(...)`; `ReceiveMatch(...)` / `ThenMatch(...)` on a rule that was not started with `Send(Regex)`; a response too long for its length prefix; pushing to a closed connection |
 | `NotSupportedException` | Connection members on a listener without connections, such as `UdpServer` |
-| `FormatException` | `JsonValue.Parse(...)` with invalid JSON |
+| `FormatException` | `Recording.Parse(...)` / `Recording.Load(...)` with an invalid recording; `JsonData.Parse(...)` with invalid JSON |
 | `ArgumentOutOfRangeException` | A negative delay or count; a length prefix other than 1, 2 or 4 |

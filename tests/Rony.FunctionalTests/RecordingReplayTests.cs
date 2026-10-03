@@ -52,6 +52,24 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task Replay_Should_Give_Different_Greetings_To_The_Connections_In_Recorded_Order()
+        {
+            //Arrange
+            using var server = Replaying(Connection(Server("A")) + "," + Connection(Server("A")) + "," + Connection(Server("B")));
+
+            //Act
+            var greetings = new string[3];
+            for (var i = 0; i < greetings.Length; i++)
+            {
+                using var client = await RecordingTestClient.ConnectAsync(server.Port);
+                greetings[i] = await client.ReadLineAsync();
+            }
+
+            //Assert
+            Assert.Equal(new[] { "A", "A", "B" }, greetings);
+        }
+
+        [Fact]
         public async Task Replay_Should_Close_The_Connection_Where_The_Server_Did()
         {
             //Arrange

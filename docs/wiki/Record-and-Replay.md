@@ -20,7 +20,9 @@ can go through it at the same time.
 
 - **Framing.** `Framing` splits both directions into recorded messages, exactly as a `TcpServer` does. Use the framing of the
   protocol to get one recorded message per protocol message. The default (`MessageFraming.None`) records every read as
-  one message, which depends on how the bytes happen to arrive. Set it before `Start()`.
+  one message, which depends on how the bytes happen to arrive. Set it before `Start()`. If the framing throws, or more than 16 MiB arrive
+  without a complete message, the proxy records the pending bytes as one raw message and the rest of that direction
+  unframed; the bytes are still relayed.
 - **Waiting.** `WaitForConnectionsClosedAsync()` completes once at least one connection went through the proxy and all of
   them have ended (5 seconds by default, then `TimeoutException`), so you can save a complete recording without sleeping.
   `proxy.Recording` is always the same object, filled while traffic flows, and can be read or saved at any time.
@@ -31,6 +33,8 @@ can go through it at the same time.
   to `proxy.Log` (same idea as `server.Log`) and the proxy keeps accepting. The connection is still in the recording, with a
   close by the server.
 - **Stopping.** `Stop()` / `StopAsync()` / `Dispose()` close every relayed connection and wait for them to end.
+  Don't call `Stop()` or `Dispose()` from the `Log` callback (it waits for the relay that is logging); use `StopAsync()`
+  from elsewhere.
 
 ### TLS
 `Certificate` makes the proxy speak TLS to your client (like `TcpServerSsl`); `TargetTls` makes it speak TLS to the real
@@ -80,12 +84,14 @@ server.Start();
 ```
 Use the same framing on the server as the proxy used. `Replay` may be called before or after `Start()`. It adds rules to
 `server.Mock`; it does not reset them. Calling it again for the same requests (or with another greeting) throws `ArgumentException`,
-as for any request configured twice: call `server.Mock.Reset()` first to replace the rules.
+as for any request configured twice: call `server.Mock.Reset()` first to replace the rules. When `Replay` throws partway,
+the rules added before the exception stay; call `server.Mock.Reset()` to start over.
 
 How the recording becomes rules, connection by connection and message by message:
 
-1. **Greeting.** The server messages before the first client message become `OnConnect()`. A later connection's greeting
-   is added as the next step if it differs from the previous one. A connection without a greeting is ignored.
+1. **Greeting.** The server messages before the first client message become `OnConnect()`. A connection without a greeting is
+   ignored. As for requests, identical greetings give one step; otherwise every greeting becomes a step, in recorded order,
+   so the first connection gets the first greeting, the second the second, and so on.
 2. **Exchanges.** Each client message and the server messages that follow it become `Send(request).Receive(reply)`.
    The same request seen again, in this or a later connection, adds the next reply of a [sequence](Response-Sequences) in recorded
    order. If a request always got the same reply, one step is enough.
@@ -101,6 +107,7 @@ Recorded times are not replayed as delays: add `.After(...)` yourself if a test 
 - TCP and TLS only. The proxy does not relay UDP.
 - Every request is matched on its own. A protocol whose reply depends on earlier requests replays correctly only when the client
   sends its requests in the recorded order. For anything smarter, edit the rules afterwards or use [stateful scenarios](Stateful-Scenarios).
-- A recording made without the protocol's framing replays only if the client sends the bytes in the same pieces.
+- A recording made without the protocol's framing replays only if the client sends the bytes in the same pieces. Without
+  framing, a reply may also be recorded ahead of the request it answers when the client pipelines data.
 
 Runnable code: [`RecordAndReplaySamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/RecordAndReplaySamples.cs)

@@ -29,8 +29,7 @@ namespace Rony.Handlers
         // frame: frames a payload the way the listener sends it; used for the second and later payloads of a reaction.
         public static void Apply(RequestHandler mock, Recording recording, Func<byte[], byte[]> frame)
         {
-            ResponseBuilder greeting = null;
-            Reaction lastGreeting = null;
+            var greetings = new List<Reaction>();
             var requests = new List<byte[]>();
             var reactions = new Dictionary<byte[], List<Reaction>>(ByteArrayComparer.Instance);
 
@@ -46,14 +45,7 @@ namespace Rony.Handlers
                     AddPayload(payloads, messages[index]);
 
                 if (payloads.Count > 0)
-                {
-                    var reaction = new Reaction(payloads, serverClosed && index == messages.Count);
-                    if (greeting == null)
-                        greeting = Add(mock.OnConnect(), null, reaction, frame, true);
-                    else if (!reaction.SameAs(lastGreeting))
-                        greeting = Add(null, greeting, reaction, frame, false);
-                    lastGreeting = reaction;
-                }
+                    greetings.Add(new Reaction(payloads, serverClosed && index == messages.Count));
 
                 while (index < messages.Count)
                 {
@@ -71,6 +63,16 @@ namespace Rony.Handlers
                     }
                     list.Add(new Reaction(payloads, serverClosed && index == messages.Count));
                 }
+            }
+
+            if (greetings.Count > 0)
+            {
+                // Same rule as for requests: identical greetings need one step only.
+                if (greetings.All(g => g.SameAs(greetings[0]))) greetings = greetings.Take(1).ToList();
+
+                ResponseBuilder greeting = null;
+                foreach (var reaction in greetings)
+                    greeting = Add(greeting == null ? mock.OnConnect() : null, greeting, reaction, frame, greeting == null);
             }
 
             foreach (var request in requests)

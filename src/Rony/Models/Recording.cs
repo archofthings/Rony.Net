@@ -90,7 +90,7 @@ namespace Rony.Models
         private readonly object _syncRoot = new object();
         private readonly List<RecordedConnection> _connections = new List<RecordedConnection>();
 
-        /// <summary>Creates an empty recording, for example to build one by hand.</summary>
+        /// <summary>Creates an empty recording.</summary>
         public Recording()
         {
         }
@@ -178,11 +178,11 @@ namespace Rony.Models
         public static Recording Parse(string json)
         {
             if (json == null) throw new ArgumentNullException(nameof(json));
-            var root = JsonValue.Parse(json);
-            if (root.Kind != JsonKind.Object) throw new FormatException("The recording must be a JSON object.");
+            var root = JsonData.Parse(json);
+            if (root.Kind != JsonDataKind.Object) throw new FormatException("The recording must be a JSON object.");
             if (root["version"].AsNumber() != Version)
                 throw new FormatException($"Unsupported recording version {root["version"]}; only version {Version} is supported.");
-            if (root["connections"].Kind != JsonKind.Array)
+            if (root["connections"].Kind != JsonDataKind.Array)
                 throw new FormatException("The recording has no \"connections\" array.");
 
             var recording = new Recording();
@@ -190,10 +190,10 @@ namespace Rony.Models
             foreach (var item in root["connections"].Items)
             {
                 position++;
-                if (item.Kind != JsonKind.Object) throw new FormatException($"Connection {position} must be an object.");
+                if (item.Kind != JsonDataKind.Object) throw new FormatException($"Connection {position} must be an object.");
                 var connection = recording.AddConnection();
                 var name = $"connection {connection.Id}";
-                if (item["messages"].Kind != JsonKind.Array) throw new FormatException($"The {name} has no \"messages\" array.");
+                if (item["messages"].Kind != JsonDataKind.Array) throw new FormatException($"The {name} has no \"messages\" array.");
 
                 var index = 0;
                 var closed = false;
@@ -210,9 +210,9 @@ namespace Rony.Models
             return recording;
         }
 
-        private static RecordedMessage ParseMessage(JsonValue entry, string where)
+        private static RecordedMessage ParseMessage(JsonData entry, string where)
         {
-            if (entry.Kind != JsonKind.Object) throw new FormatException($"{where} must be an object.");
+            if (entry.Kind != JsonDataKind.Object) throw new FormatException($"{where} must be an object.");
 
             var from = entry["from"].AsString();
             if (from != "client" && from != "server")

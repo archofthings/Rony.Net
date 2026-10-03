@@ -106,7 +106,7 @@ namespace Rony.Handlers
         /// A request that is not valid JSON does not match, and the predicate is not called for it.
         /// </summary>
         /// <example><code>server.Mock.SendJson(j => j["type"].AsString() == "login").Receive("{\"ok\":true}");</code></example>
-        public RequestHandler SendJson(Func<JsonValue, bool> predicate) => SendJson(predicate, null);
+        public RequestHandler SendJson(Func<JsonData, bool> predicate) => SendJson(predicate, null);
 
         /// <summary>
         /// Starts a rule that only applies while the scenario is in <paramref name="state"/>. Responses move the
@@ -160,11 +160,11 @@ namespace Rony.Handlers
             return this;
         }
 
-        internal RequestHandler SendJson(Func<JsonValue, bool> predicate, string state)
+        internal RequestHandler SendJson(Func<JsonData, bool> predicate, string state)
         {
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));
             _pending = new PendingRequest(RuleKind.Request, null,
-                request => JsonValue.TryParse(request.GetString(), out var json) && predicate(json), state, "<json predicate>");
+                request => JsonData.TryParse(request.GetString(), out var json) && predicate(json), state, "<json predicate>");
             return this;
         }
 

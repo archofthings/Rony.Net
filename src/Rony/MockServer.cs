@@ -135,7 +135,8 @@ namespace Rony.Net
         /// request the replies that followed it, in recorded order (a request seen several times gets a sequence). It can be
         /// called before or after <see cref="Start"/>. Recorded times are not replayed, and rules that already exist for the same
         /// requests are not replaced (it throws <see cref="ArgumentException"/> for them), so call <c>Mock.Reset()</c> first to replace.
-        /// A reply of several messages needs a TCP listener.
+        /// A reply of several messages needs a TCP listener. If it throws, the rules added before the exception stay: call
+        /// <c>Mock.Reset()</c> to start over.
         /// </summary>
         /// <exception cref="ArgumentNullException"><paramref name="recording"/> is null.</exception>
         /// <exception cref="ArgumentException">A response is already configured for a recorded request or for <c>OnConnect()</c>.</exception>
@@ -563,7 +564,13 @@ namespace Rony.Net
                         exception => Trace($"error: the response function for {label} threw {Describe(exception)}; sending an empty response"));
                     var modifiers = step.Modifiers;
                     if (modifiers.Length > 0 && _faultListener == null)
-                        Trace($"{label} the listener does not support truncated or corrupted responses; sending the response unmodified");
+                    {
+                        var replayFrames = modifiers.Count(m => m.Kind == ResponseBuilder.ReplayedFramesKind);
+                        if (modifiers.Length > replayFrames)
+                            Trace($"{label} the listener does not support truncated or corrupted responses; sending the response unmodified");
+                        if (replayFrames > 0)
+                            Trace($"{label} sends only the first of the replayed messages: the listener cannot add frames");
+                    }
 
                     var chunking = step.Chunking;
                     var chunked = chunking.Size > 0 && response.Length > 0;

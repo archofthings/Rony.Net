@@ -24,7 +24,7 @@ public class PartialMatchingSamples
     {
         using var server = new MockServer(new TcpServer(0));
         server.Mock.SendJson(j => j["id"].Exists)
-            .Receive(request => "{\"echo\":" + JsonValue.Parse(request)["id"] + "}");
+            .Receive(request => "{\"echo\":" + JsonData.Parse(request)["id"] + "}");
 
         Assert.Equal("{\"echo\":42}", server.Mock.Match("{\"id\":42}").GetString());
     }

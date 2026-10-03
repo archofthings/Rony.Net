@@ -4,29 +4,30 @@ using Xunit;
 
 namespace Rony.Tests.Models
 {
-    public class JsonValueTests
+    public class JsonDataTests
     {
         [Theory]
-        [InlineData("null", JsonKind.Null)]
-        [InlineData(" true ", JsonKind.Boolean)]
-        [InlineData("-12.5e+2", JsonKind.Number)]
-        [InlineData("\"a\\n\\u00e9\\ud83d\\ude00\\\"\"", JsonKind.String)]
-        [InlineData("[1, [2], {}]", JsonKind.Array)]
-        [InlineData("{\"a\" : {\"b\":[true]}}", JsonKind.Object)]
-        public void Parse_Should_Read_Every_Kind(string json, JsonKind kind)
+        [InlineData("null", JsonDataKind.Null)]
+        [InlineData(" true ", JsonDataKind.Boolean)]
+        [InlineData("-12.5e+2", JsonDataKind.Number)]
+        [InlineData("\"a\\n\\u00e9\\ud83d\\ude00\\\"\"", JsonDataKind.String)]
+        [InlineData("1e400", JsonDataKind.Number)]
+        [InlineData("[1, [2], {}]", JsonDataKind.Array)]
+        [InlineData("{\"a\" : {\"b\":[true]}}", JsonDataKind.Object)]
+        public void Parse_Should_Read_Every_Kind(string json, JsonDataKind kind)
         {
-            var value = JsonValue.Parse(json);
+            var value = JsonData.Parse(json);
 
             Assert.Equal(kind, value.Kind);
             Assert.True(value.Exists);
-            Assert.True(JsonValue.TryParse(json, out var tried));
+            Assert.True(JsonData.TryParse(json, out var tried));
             Assert.Equal(kind, tried.Kind);
         }
 
         [Fact]
         public void Values_Should_Be_Readable()
         {
-            var json = JsonValue.Parse("{\"s\":\"a\\n\\u00e9\\ud83d\\ude00\",\"n\":-12.5e+2,\"b\":false,\"o\":{\"k\":[10,20]},\"d\":1,\"d\":2}");
+            var json = JsonData.Parse("{\"s\":\"a\\n\\u00e9\\ud83d\\ude00\",\"n\":-12.5e+2,\"b\":false,\"o\":{\"k\":[10,20]},\"d\":1,\"d\":2}");
 
             Assert.Equal("a\n\u00e9\U0001F600", json["s"].AsString());
             Assert.Equal(-1250d, json["n"].AsNumber());
@@ -42,12 +43,12 @@ namespace Rony.Tests.Models
         [Fact]
         public void Missing_Parts_Should_Be_Undefined_Without_Throwing()
         {
-            var json = JsonValue.Parse("{\"user\":{\"roles\":[]}}");
+            var json = JsonData.Parse("{\"user\":{\"roles\":[]}}");
 
             Assert.Null(json["user"]["roles"][0].AsString());
-            Assert.Equal(JsonKind.Undefined, json["nope"]["deeper"][3].Kind);
+            Assert.Equal(JsonDataKind.Undefined, json["nope"]["deeper"][3].Kind);
             Assert.False(json["User"].Exists);
-            Assert.Equal(JsonKind.Undefined, json[-1].Kind);
+            Assert.Equal(JsonDataKind.Undefined, json[-1].Kind);
             Assert.Equal(0, json["nope"].Count);
             Assert.Empty(json["nope"].Items);
             Assert.Empty(json["nope"].Properties);
@@ -59,7 +60,7 @@ namespace Rony.Tests.Models
         {
             var text = "{\"a\":[1,2.50,\"x\\\"y\\n\",null,true],\"b\":{}}";
 
-            Assert.Equal(text, JsonValue.Parse(" {\"a\" : [1, 2.50, \"x\\\"y\\n\", null, true], \"b\": { }} ").ToString());
+            Assert.Equal(text, JsonData.Parse(" {\"a\" : [1, 2.50, \"x\\\"y\\n\", null, true], \"b\": { }} ").ToString());
         }
 
         [Theory]
@@ -76,9 +77,9 @@ namespace Rony.Tests.Models
         [InlineData("// c\n1")]
         public void Invalid_Json_Should_Not_Parse(string json)
         {
-            Assert.False(JsonValue.TryParse(json, out var value));
-            Assert.Equal(JsonKind.Undefined, value.Kind);
-            Assert.Throws<FormatException>(() => JsonValue.Parse(json));
+            Assert.False(JsonData.TryParse(json, out var value));
+            Assert.Equal(JsonDataKind.Undefined, value.Kind);
+            Assert.Throws<FormatException>(() => JsonData.Parse(json));
         }
 
         [Fact]
@@ -86,16 +87,16 @@ namespace Rony.Tests.Models
         {
             var deep = new string('[', 300) + new string(']', 300);
 
-            Assert.False(JsonValue.TryParse(deep, out _));
-            Assert.Throws<FormatException>(() => JsonValue.Parse(deep));
-            Assert.True(JsonValue.TryParse(new string('[', 200) + new string(']', 200), out _));
+            Assert.False(JsonData.TryParse(deep, out _));
+            Assert.Throws<FormatException>(() => JsonData.Parse(deep));
+            Assert.True(JsonData.TryParse(new string('[', 200) + new string(']', 200), out _));
         }
 
         [Fact]
         public void Null_Input_Should_Be_Handled()
         {
-            Assert.False(JsonValue.TryParse(null, out _));
-            Assert.Throws<ArgumentNullException>(() => JsonValue.Parse(null));
+            Assert.False(JsonData.TryParse(null, out _));
+            Assert.Throws<ArgumentNullException>(() => JsonData.Parse(null));
         }
     }
 }

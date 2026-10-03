@@ -6,13 +6,13 @@ using System.Text;
 
 namespace Rony.Helpers
 {
-    /// <summary>Reads and writes JSON (RFC 8259) for <see cref="JsonValue"/>, without a dependency.</summary>
+    /// <summary>Reads and writes JSON (RFC 8259) for <see cref="JsonData"/>, without a dependency.</summary>
     internal static class JsonParser
     {
         private const int MaxDepth = 256;
 
         /// <summary>Parses a whole document; throws <see cref="FormatException"/> with the position if it is invalid.</summary>
-        public static JsonValue Parse(string json)
+        public static JsonData Parse(string json)
         {
             var reader = new Reader(json);
             reader.SkipWhitespace();
@@ -67,28 +67,28 @@ namespace Rony.Helpers
                     _position++;
             }
 
-            public JsonValue ReadValue(int depth)
+            public JsonData ReadValue(int depth)
             {
                 if (AtEnd) throw Error("Unexpected end of JSON");
                 switch (_text[_position])
                 {
                     case '{': return ReadObject(depth + 1);
                     case '[': return ReadArray(depth + 1);
-                    case '"': return JsonValue.FromString(ReadString());
-                    case 't': ReadLiteral("true"); return JsonValue.FromBoolean(true);
-                    case 'f': ReadLiteral("false"); return JsonValue.FromBoolean(false);
-                    case 'n': ReadLiteral("null"); return JsonValue.Null();
+                    case '"': return JsonData.FromString(ReadString());
+                    case 't': ReadLiteral("true"); return JsonData.FromBoolean(true);
+                    case 'f': ReadLiteral("false"); return JsonData.FromBoolean(false);
+                    case 'n': ReadLiteral("null"); return JsonData.Null();
                     default: return ReadNumber();
                 }
             }
 
-            private JsonValue ReadObject(int depth)
+            private JsonData ReadObject(int depth)
             {
                 if (depth > MaxDepth) throw Error("The JSON is nested too deeply");
                 _position++;
-                var properties = new Dictionary<string, JsonValue>();
+                var properties = new Dictionary<string, JsonData>();
                 SkipWhitespace();
-                if (Peek('}')) return JsonValue.FromObject(properties);
+                if (Peek('}')) return JsonData.FromObject(properties);
                 while (true)
                 {
                     SkipWhitespace();
@@ -100,25 +100,25 @@ namespace Rony.Helpers
                     SkipWhitespace();
                     properties[name] = ReadValue(depth);
                     SkipWhitespace();
-                    if (Peek('}')) return JsonValue.FromObject(properties);
+                    if (Peek('}')) return JsonData.FromObject(properties);
                     if (AtEnd || _text[_position] != ',') throw Error("Expected ',' or '}'");
                     _position++;
                 }
             }
 
-            private JsonValue ReadArray(int depth)
+            private JsonData ReadArray(int depth)
             {
                 if (depth > MaxDepth) throw Error("The JSON is nested too deeply");
                 _position++;
-                var items = new List<JsonValue>();
+                var items = new List<JsonData>();
                 SkipWhitespace();
-                if (Peek(']')) return JsonValue.FromArray(items);
+                if (Peek(']')) return JsonData.FromArray(items);
                 while (true)
                 {
                     SkipWhitespace();
                     items.Add(ReadValue(depth));
                     SkipWhitespace();
-                    if (Peek(']')) return JsonValue.FromArray(items);
+                    if (Peek(']')) return JsonData.FromArray(items);
                     if (AtEnd || _text[_position] != ',') throw Error("Expected ',' or ']'");
                     _position++;
                 }
@@ -186,7 +186,7 @@ namespace Rony.Helpers
                 }
             }
 
-            private JsonValue ReadNumber()
+            private JsonData ReadNumber()
             {
                 var start = _position;
                 Peek('-');
@@ -200,7 +200,9 @@ namespace Rony.Helpers
                 }
 
                 var text = _text.Substring(start, _position - start);
-                return JsonValue.FromNumber(double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture), text);
+                if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+                    throw Error("Invalid number");
+                return JsonData.FromNumber(number, text);
             }
 
             private bool ReadDigits()

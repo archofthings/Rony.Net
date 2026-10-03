@@ -8,7 +8,7 @@ No breaking changes.
 
 ### Added
 - **Partial matching:** `SendJson(j => j["type"].AsString() == "login")` matches requests by JSON content (the new
-  dependency-free `JsonValue`, also usable with `JsonValue.Parse`), and `ReceiveMatch(m => ...)` / `ThenMatch(m => ...)`
+  dependency-free `JsonData`, also usable with `JsonData.Parse`), and `ReceiveMatch(m => ...)` / `ThenMatch(m => ...)`
   build a response from the capture groups of a `Send(Regex)` rule.
 - **Record and replay:** `RecordingProxy` relays TCP or TLS traffic to a real server and records it into a `Recording`
   (`Save` / `Load` as JSON you can edit by hand); `server.Replay(recording)` turns it into rules: greeting, replies, sequences for
