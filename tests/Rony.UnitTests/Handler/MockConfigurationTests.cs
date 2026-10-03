@@ -115,6 +115,10 @@ namespace Rony.Tests.Handler
                 var broken = Assert.Throws<FormatException>(() => MockServer.FromJson(json, directory));
                 Assert.Contains("server.tls.certificate: cannot load the certificate", broken.Message);
 
+                File.WriteAllBytes(Path.Combine(directory, "server.pfx"), Array.Empty<byte>());
+                var empty = Assert.Throws<FormatException>(() => MockServer.FromJson(json, directory));
+                Assert.Contains("empty or not a regular file", empty.Message);
+
                 File.WriteAllBytes(Path.Combine(directory, "server.pfx"), new byte[1024 * 1024 + 1]);
                 var large = Assert.Throws<FormatException>(() => MockServer.FromJson(json, directory));
                 Assert.Contains("larger than 1 MiB", large.Message);

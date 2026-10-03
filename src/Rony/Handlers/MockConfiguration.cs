@@ -537,10 +537,13 @@ namespace Rony.Handlers
             var info = new FileInfo(full);
             if (!info.Exists || (info.Attributes & (FileAttributes.Directory | FileAttributes.Device)) != 0)
                 throw Error("server.tls.certificate", $"{full}: not a regular file");
+            // A pipe, device or socket reports length 0, and opening a pipe would block until something writes to it.
+            if (info.Length == 0)
+                throw Error("server.tls.certificate", $"{full}: empty or not a regular file");
             if (info.Length > MaxCertificateBytes)
                 throw Error("server.tls.certificate", $"{full}: larger than 1 MiB");
 
-            // The reported length is 0 for devices and pipes, so the read itself is bounded too.
+            // The file can grow after the check, so the read itself is bounded too.
             using (var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var content = new MemoryStream())
             {

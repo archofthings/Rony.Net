@@ -474,14 +474,15 @@ namespace Rony.Listeners
                         pendingLength -= consumed;
                     }
 
-                    if (_maxBufferedBytes > 0 && pendingLength > _maxBufferedBytes)
-                        throw new InvalidDataException($"The connection buffered {pendingLength} bytes without a complete message, more than MaxBufferedBytes ({_maxBufferedBytes}).");
-
                     foreach (var frame in frames)
                     {
                         connection.MessageQueued();
                         messages.Enqueue(new Message(frame, connection, connection.RemoteEndPoint));
                     }
+
+                    // After the complete messages of this read were queued: only what is left over counts.
+                    if (_maxBufferedBytes > 0 && pendingLength > _maxBufferedBytes)
+                        throw new InvalidDataException($"The connection buffered {pendingLength} bytes without a complete message, more than MaxBufferedBytes ({_maxBufferedBytes}).");
                 }
 
                 connection.ReadCompleted();
