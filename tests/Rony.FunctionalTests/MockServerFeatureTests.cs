@@ -853,6 +853,22 @@ namespace Rony.FunctionalTests
             Assert.Single(server.Connections);
         }
 
+        [Fact]
+        public async Task Json_And_Capture_Group_Rules_Should_Answer_Over_A_Socket()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.SendJson(j => j["type"].AsString() == "login").Receive("{\"ok\":true}");
+            server.Mock.Send(new Regex(@"^HELLO (\w+)$")).ReceiveMatch(m => $"HI {m.Groups[1].Value}");
+            server.Start();
+            using var client = await ConnectAsync(server);
+            var stream = client.GetStream();
+
+            //Act + Assert
+            Assert.Equal("{\"ok\":true}", await SendAndReadAsync(stream, "{\"type\":\"login\"}"));
+            Assert.Equal("HI bob", await SendAndReadAsync(stream, "HELLO bob"));
+        }
+
         private static async Task<TcpClient> ConnectAsync(MockServer server)
         {
             var client = new TcpClient();

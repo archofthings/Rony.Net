@@ -1,31 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
-    <LangVersion>latest</LangVersion>
     <PackageId>Rony.Net</PackageId>
-    <Authors>Mojtaba Kiani</Authors>
-    <Product>Rony.Net</Product>
     <Description>A TCP, TCP + SSL/TLS and UDP mock server for .NET tests. Configure request/response pairs and stateful scenarios, push messages to clients, simulate delays and failures, and verify what your client sent.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/archofthings/Rony.Net</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/archofthings/Rony.Net</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
     <PackageTags>mock;mock-server;tcp;udp;ssl;tls;socket;testing;unit-testing;integration-testing;functional-testing;xunit;nunit;mstest</PackageTags>
-    <PackageReleaseNotes>Async lifecycle (StartAsync, StopAsync, await using), connection resets, truncated, corrupted, chunked and throttled responses, refused connections, failing TLS handshakes, per-connection assertions and more message framings. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <NeutralLanguage>en</NeutralLanguage>
+    <PackageReleaseNotes>JSON matching (SendJson, JsonData), regex capture groups in responses (ReceiveMatch, ThenMatch), and record and replay (RecordingProxy, Recording, MockServer.Replay). See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
 
     <!-- IntelliSense documentation for package users; not every member has a doc comment yet -->
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
-
-    <!-- Source Link (built into the .NET 8 SDK) and a symbols package, so users can step into the library -->
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>

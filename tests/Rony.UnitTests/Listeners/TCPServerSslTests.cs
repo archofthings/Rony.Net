@@ -11,7 +11,7 @@ namespace Rony.Tests.Listeners
         public void Constructor_Should_Work_Correctly()
         {
             //Arrange
-            using var listener = new TcpServerSsl(5000,"localhost", SslProtocols.None);
+            using var listener = new TcpServerSsl(5000, "localhost", SslProtocols.None);
 
             //Assert
             Assert.NotNull(listener);
@@ -23,7 +23,7 @@ namespace Rony.Tests.Listeners
         public void Constructor_With_IP_Should_Work_Correctly()
         {
             //Arrange
-            using var listener = new TcpServerSsl("127.0.0.1",5000, "localhost", SslProtocols.None);
+            using var listener = new TcpServerSsl("127.0.0.1", 5000, "localhost", SslProtocols.None);
 
             //Assert
             Assert.NotNull(listener);

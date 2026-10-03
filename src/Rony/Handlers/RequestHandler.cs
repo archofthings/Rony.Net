@@ -102,6 +102,13 @@ namespace Rony.Handlers
         public RequestHandler SendMatchingBytes(Func<byte[], bool> predicate) => SendBytes(predicate, null);
 
         /// <summary>
+        /// Configures the response to every request that is valid JSON (UTF-8) and satisfies <paramref name="predicate"/>.
+        /// A request that is not valid JSON does not match, and the predicate is not called for it.
+        /// </summary>
+        /// <example><code>server.Mock.SendJson(j => j["type"].AsString() == "login").Receive("{\"ok\":true}");</code></example>
+        public RequestHandler SendJson(Func<JsonData, bool> predicate) => SendJson(predicate, null);
+
+        /// <summary>
         /// Starts a rule that only applies while the scenario is in <paramref name="state"/>. Responses move the
         /// scenario between states with <c>GoTo(...)</c>. For the same request, a rule for the current state wins
         /// over a rule without a state.
@@ -149,7 +156,15 @@ namespace Rony.Handlers
         internal RequestHandler SendPattern(Regex pattern, string state)
         {
             if (pattern == null) throw new ArgumentNullException(nameof(pattern));
-            _pending = new PendingRequest(RuleKind.Request, null, request => pattern.IsMatch(request.GetString()), state, $"/{pattern}/");
+            _pending = new PendingRequest(RuleKind.Request, null, request => pattern.IsMatch(request.GetString()), state, $"/{pattern}/", pattern);
+            return this;
+        }
+
+        internal RequestHandler SendJson(Func<JsonData, bool> predicate, string state)
+        {
+            if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+            _pending = new PendingRequest(RuleKind.Request, null,
+                request => JsonData.TryParse(request.GetString(), out var json) && predicate(json), state, "<json predicate>");
             return this;
         }
 
@@ -178,6 +193,25 @@ namespace Rony.Handlers
 
         /// <summary>Responds with the result of <paramref name="func"/>, called with the request bytes. If it throws, the response is empty.</summary>
         public ResponseBuilder Receive(Func<byte[], byte[]> func) => Add(ResponseStep.Reply(func));
+
+        /// <summary>
+        /// Responds with the result of <paramref name="func"/>, called with the regular expression match of the request,
+        /// so it can use capture groups. A null result is an empty response; if <paramref name="func"/> throws, the response is empty.
+        /// Only for a rule started with <c>Send(Regex)</c>.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="func"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">The rule was not started with <c>Send(Regex)</c>.</exception>
+        /// <example><code>server.Mock.Send(new Regex(@"^HELLO (\w+)$")).ReceiveMatch(m => $"HI {m.Groups[1].Value}");</code></example>
+        public ResponseBuilder ReceiveMatch(Func<Match, string> func)
+        {
+            if (func == null) throw new ArgumentNullException(nameof(func));
+            if (_pending != null && _pending.Pattern == null)
+                throw new InvalidOperationException(NeedsRegex(nameof(ReceiveMatch)));
+            return Add(ResponseStep.Reply(_pending?.Pattern, func));
+        }
+
+        internal static string NeedsRegex(string method) =>
+            $"{method}() needs a rule started with Send(Regex), because it uses the regular expression match.";
 
         /// <summary>Closes the connection without replying (TCP). For UDP this behaves like <see cref="NoReply"/>.</summary>
         public ResponseBuilder Disconnect() => Add(ResponseStep.CloseConnection());
@@ -555,7 +589,7 @@ namespace Rony.Handlers
             _pending = null;
 
             var description = pending.State == null ? pending.Description : $"{pending.Description} in state \"{pending.State}\"";
-            var config = new Config(step) { Description = description, State = pending.State };
+            var config = new Config(step) { Description = description, State = pending.State, Pattern = pending.Pattern };
             if (pending.Kind != RuleKind.Request)
             {
                 lock (_matchLock)
@@ -602,8 +636,9 @@ namespace Rony.Handlers
 
         private sealed class PendingRequest
         {
-            public PendingRequest(RuleKind kind, byte[] request, Func<byte[], bool> predicate, string state, string description)
+            public PendingRequest(RuleKind kind, byte[] request, Func<byte[], bool> predicate, string state, string description, Regex pattern = null)
             {
+                Pattern = pattern;
                 Kind = kind;
                 Request = request;
                 Predicate = predicate;
@@ -616,6 +651,7 @@ namespace Rony.Handlers
             public Func<byte[], bool> Predicate { get; }
             public string State { get; }
             public string Description { get; }
+            public Regex Pattern { get; }
         }
 
         private sealed class PredicateConfig

@@ -2,6 +2,18 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.3.0
+
+No breaking changes.
+
+### Added
+- **Partial matching:** `SendJson(j => j["type"].AsString() == "login")` matches requests by JSON content (the new
+  dependency-free `JsonData`, also usable with `JsonData.Parse`), and `ReceiveMatch(m => ...)` / `ThenMatch(m => ...)`
+  build a response from the capture groups of a `Send(Regex)` rule.
+- **Record and replay:** `RecordingProxy` relays TCP or TLS traffic to a real server and records it into a `Recording`
+  (`Save` / `Load` as JSON you can edit by hand); `server.Replay(recording)` turns it into rules: greeting, replies, sequences for
+  repeated requests, silence and disconnects.
+
 ## 1.2.0
 
 No breaking changes.

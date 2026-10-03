@@ -23,6 +23,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | Shortcut for `Mock.ReceivedRequests` |
 | `Action<string> Log` | Receives a [log](Logging-and-Diagnostics) line for everything the server does |
 | `MockServerAssertions Should()` | [Fluent assertions](Verifying-Requests#fluent-assertions) |
+| `void Replay(Recording recording)` | Adds rules that answer like the recorded server; see [Record and Replay](Record-and-Replay). Throws `ArgumentException` for requests that already have a rule |
 
 **Connections** (TCP; on other listeners `Connections` is empty and the methods throw `NotSupportedException`). See [Connections and Push](Connections-and-Push).
 
@@ -50,6 +51,7 @@ Available as `server.Mock`.
 | `Send(Regex pattern)` | Requests whose text matches the pattern |
 | `SendMatching(Func<string, bool> predicate)` | Requests whose text satisfies the predicate |
 | `SendMatchingBytes(Func<byte[], bool> predicate)` | Requests whose bytes satisfy the predicate |
+| `SendJson(Func<JsonData, bool> predicate)` | Requests that are valid JSON and satisfy the predicate; other requests don't match |
 | `InState(string state).Send...(...)` | Any of the above, only in that [scenario state](Stateful-Scenarios) |
 | `OnConnect()` | A new TCP connection: the response is a [greeting](Connections-and-Push#greetings-talk-first) |
 | `OnUnmatched()` | Requests no other rule matches; they stay [unmatched](Request-Matching#unmatched-requests) |
@@ -62,6 +64,7 @@ Available as `server.Mock`.
 | `Receive(byte[] response)` | Responds with these bytes |
 | `Receive(Func<string, string> func)` | Responds with `func(request text)` |
 | `Receive(Func<byte[], byte[]> func)` | Responds with `func(request bytes)` |
+| `ReceiveMatch(Func<Match, string> func)` | Responds with `func(regex match)`; only after `Send(Regex)` (otherwise `InvalidOperationException`) |
 | `Disconnect()` | Closes the TCP connection without replying |
 | `ResetConnection()` | Aborts the TCP connection with a reset (RST) without replying |
 | `NoReply()` | Never replies |
@@ -108,6 +111,7 @@ Returned by `Receive(...)`, `Disconnect()`, `ResetConnection()` and `NoReply()`.
 | Member | Effect |
 |---|---|
 | `Then(string / byte[] / Func<string, string> / Func<byte[], byte[]>)` | Adds the next response in the sequence |
+| `ThenMatch(Func<Match, string> func)` | Adds the next response, built from the regex match; only after `Send(Regex)` |
 | `ThenDisconnect()` | Next time: close without replying |
 | `ThenNoReply()` | Next time: no reply |
 | `After(TimeSpan delay)` | Delays the previous response |
@@ -195,6 +199,34 @@ Returned by `connection.Should()`; every method returns the assertions again, an
 requests received on that connection; `BeInState(string)`, `BeOpen()`, `BeClosed()`.
 See [Assertions on one connection](Verifying-Requests#assertions-on-one-connection).
 
+## `Rony.Models.JsonData`, `JsonDataKind`
+A small immutable JSON value parsed by the library (no dependency), passed to `SendJson(...)` predicates.
+`JsonData.Parse(string)` (throws `FormatException`) and `TryParse(string, out JsonData)`; `Kind` (`Undefined`, `Null`, `Boolean`,
+`Number`, `String`, `Array`, `Object`), `Exists`, indexers `[string name]` and `[int index]` (never throw; a missing part is
+`Undefined`), `Count`, `Items`, `Properties`, `AsString()`, `AsNumber()`, `AsBoolean()` (null for another kind) and `ToString()`
+(compact JSON). A number outside the range of `double` is ±Infinity on .NET Core and .NET 5+; `ToString()` keeps the number as
+written. See [JSON requests](Request-Matching#json-requests).
+
+## `Rony.Net.RecordingProxy`, `Rony.Models.Recording`
+A TCP/TLS relay that records the traffic between a client and a real server (no UDP); see [Record and Replay](Record-and-Replay).
+
+| Member | Description |
+|---|---|
+| `RecordingProxy(string targetHost, int targetPort, int port = 0)` | Listens on `127.0.0.1`; port `0` picks a free port on start |
+| `RecordingProxy(IPAddress address, int port, string targetHost, int targetPort)` | Listens on the given address |
+| `Address`, `Port`, `bool Active` | Where it listens (`Port` is the assigned one after `Start()`) and whether it is started |
+| `IMessageFraming Framing` | Splits both directions into recorded messages; default `MessageFraming.None`. Set before `Start()` |
+| `X509Certificate Certificate` | Speak TLS to the client with this certificate; default plain TCP |
+| `bool TargetTls`, `RemoteCertificateValidationCallback TargetCertificateValidation` | Speak TLS to the real server; optional certificate validation |
+| `Action<string> Log` | Receives a line per connection and relayed message; exceptions from it are ignored |
+| `Recording Recording` | The live recording; thread-safe to read or save at any time |
+| `void Start()`, `void Stop()`, `Task StopAsync()`, `Dispose()`, `DisposeAsync()` | Lifecycle; stopping closes every relayed connection and waits for it to end |
+| `Task WaitForConnectionsClosedAsync(TimeSpan? timeout = null, CancellationToken = default)` | Completes once a connection was relayed and all have ended; `TimeoutException` after 5 s by default |
+
+`Recording`: `new Recording()`, `IReadOnlyList<RecordedConnection> Connections`, `ToJson()`, `Parse(string)` (throws `FormatException`),
+`Save(string path)`, `Load(string path)`. `RecordedConnection`: `Id`, `IReadOnlyList<RecordedMessage> Messages`.
+`RecordedMessage`: `RecordedSource Source` (`Client` or `Server`), `Body`, `BodyString`, `Offset`, `IsClose`.
+
 ## `Rony.Net.StateScope`
 `Server` (one scenario state for the server) or `Connection` (one per connection).
 
@@ -222,8 +254,9 @@ UTF-8 extension methods: `string.GetBytes()` and `byte[].GetString()`.
 | Exception | Thrown by |
 |---|---|
 | `MockVerificationException` | `Verify...(...)`, `VerifyInOrder(...)`, `VerifyAllRequestsMatched()`, `VerifyConnections(...)`, `Should()` assertions; waits with `FailOnUnmatched` |
-| `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)`, `WaitForConnection(s)Async(...)`, `WaitForCloseAsync(...)` |
-| `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter |
-| `InvalidOperationException` | `Receive(...)` without `Send(...)`; a response too long for its length prefix; pushing to a closed connection |
+| `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)`, `WaitForConnection(s)Async(...)`, `WaitForCloseAsync(...)`, `RecordingProxy.WaitForConnectionsClosedAsync(...)` |
+| `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter; `MockServer.Replay(...)` when a recorded request or greeting is already configured |
+| `InvalidOperationException` | `Receive(...)` without `Send(...)`; `ReceiveMatch(...)` / `ThenMatch(...)` on a rule that was not started with `Send(Regex)`; a response too long for its length prefix; pushing to a closed connection |
 | `NotSupportedException` | Connection members on a listener without connections, such as `UdpServer` |
+| `FormatException` | `Recording.Parse(...)` / `Recording.Load(...)` with an invalid recording; `JsonData.Parse(...)` with invalid JSON |
 | `ArgumentOutOfRangeException` | A negative delay or count; a length prefix other than 1, 2 or 4 |

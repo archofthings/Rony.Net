@@ -14,6 +14,7 @@
 - [Response Sequences](Response-Sequences)
 - [Simulating Failures](Simulating-Failures)
 - [Stateful Scenarios](Stateful-Scenarios)
+- [Record and Replay](Record-and-Replay)
 
 **Assertions**
 - [Verifying Requests](Verifying-Requests)

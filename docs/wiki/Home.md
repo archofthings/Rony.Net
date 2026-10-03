@@ -50,6 +50,7 @@ It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional 
 | [Response Sequences](Response-Sequences) | A different response each time |
 | [Simulating Failures](Simulating-Failures) | Delays, disconnects, silence, flaky servers |
 | [Stateful Scenarios](Stateful-Scenarios) | Rules that depend on what happened before (`InState`, `GoTo`) |
+| [Record and Replay](Record-and-Replay) | Record a real server with `RecordingProxy`, replay it with `server.Replay(...)` |
 
 | Check your client | |
 |---|---|

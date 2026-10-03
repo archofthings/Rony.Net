@@ -1,4 +1,5 @@
 using System;
+using System.Text.RegularExpressions;
 
 namespace Rony.Models
 {
@@ -81,6 +82,13 @@ namespace Rony.Models
         {
             if (func == null) throw new ArgumentNullException(nameof(func));
             return new ResponseStep(request => (func(request.GetString()) ?? string.Empty).GetBytes(), false);
+        }
+
+        /// <summary>A reply built from the match of <paramref name="pattern"/> against the request text; null means empty.</summary>
+        public static ResponseStep Reply(Regex pattern, Func<Match, string> func)
+        {
+            if (func == null) throw new ArgumentNullException(nameof(func));
+            return new ResponseStep(request => (func(pattern.Match(request.GetString())) ?? string.Empty).GetBytes(), false);
         }
 
         public static ResponseStep Reply(Func<byte[], byte[]> func)

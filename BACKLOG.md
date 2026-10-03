@@ -1,7 +1,7 @@
 # Backlog
 
-Proposed work for Rony.Net after 1.2.0. Nothing here is started or promised. The numbers are the ones used in the
-1.1 planning, so they have gaps (1–5, 12 and 14 shipped in 1.1.0; 6, 7, 8 and 16 in 1.2.0; see `CHANGELOG.md`).
+Proposed work for Rony.Net after 1.3.0. Nothing here is started or promised. The numbers are the ones used in the
+1.1 planning, so they have gaps (1–5, 12 and 14 shipped in 1.1.0; 6, 7, 8 and 16 in 1.2.0; 9 and 13 in 1.3.0; see `CHANGELOG.md`).
 
 To start an item: `/new-feature <item>` gives the checklist. When an item ships, remove it here and describe it in
 `CHANGELOG.md`.
@@ -10,16 +10,11 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 
 | Order | Item | Why this position |
 |---|---|---|
-| 1 | 9. Partial matching | Touches the matching order in `RequestHandler.cs`; design first |
-| 2 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
-| 3 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
-| 4 | 13. Record and replay, 15. Configuration files and CLI | Large; each needs its own design, probably its own package |
+| 1 | 10. TLS extras | Self-contained in `TcpServerSsl.cs` |
+| 2 | 11. IPv6 and Unix domain sockets | Listener work; Unix sockets need a `#if` for .NET Standard 2.1 |
+| 3 | 15. Configuration files and CLI | Large; needs its own design, probably its own package |
 
 ## Library features
-
-### 9. Partial matching
-- JSON field matching: `SendJson(j => ...)`.
-- Regex capture groups passed to the response: `Receive(m => $"HELLO {m.Groups[1]}")`.
 
 ### 10. TLS extras
 - Mutual TLS: require and validate a client certificate.
@@ -31,18 +26,6 @@ To start an item: `/new-feature <item>` gives the checklist. When an item ships,
 - IPv6 and any-address binding.
 - Unix domain sockets.
 
-### 13. Record and replay
-A proxy mode that records the traffic between a client and the real server to a file, and replays it as mock
-configuration.
-
 ### 15. Configuration files and a standalone server
 - Mock configuration from JSON or YAML.
 - A standalone CLI and Docker image that run a mock server from such a file.
-
-## Repository housekeeping
-- [ ] Bump `actions/checkout` and `actions/setup-dotnet` to v5 in the three workflows (the release log shows a
-      Node 20 deprecation warning).
-- [ ] Add an `.editorconfig` and make the code pass `dotnet format --verify-no-changes` (it reports 6 issues
-      today), then check it in CI.
-- [ ] Move the package metadata that the five projects repeat (authors, license, repository, Source Link
-      settings) into a `src/Directory.Build.props`.

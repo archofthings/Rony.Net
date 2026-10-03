@@ -48,7 +48,7 @@ namespace Rony.UnitTests.Models
             var message = new Message(input.GetBytes(), new IPEndPoint(IPAddress.Parse("127.0.0.1"), 1000));
 
             //Assert
-            Assert.Equal(input,message.BodyString);
+            Assert.Equal(input, message.BodyString);
         }
     }
 }

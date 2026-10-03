@@ -265,7 +265,7 @@ namespace Rony.FunctionalTests
             using var client = new TcpClient();
 
             //Act
-            server.Mock.Send("").Receive(x => x.Substring(0,4).ToUpper());
+            server.Mock.Send("").Receive(x => x.Substring(0, 4).ToUpper());
             server.Start();
             await client.ConnectAsync(IPAddress.Parse("127.0.0.1"), server.Port);
             await using var sslStream = new SslStream(client.GetStream(), false, CertificateValidationCallback);

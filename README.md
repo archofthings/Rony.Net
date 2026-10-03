@@ -27,12 +27,13 @@ server.Should().HaveReceived("PING", Times.Once());
 - **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams. → [Servers](https://github.com/archofthings/Rony.Net/wiki/Servers), [SSL and TLS](https://github.com/archofthings/Rony.Net/wiki/SSL-and-TLS)
 - **Free ports and a clean lifecycle.** Port `0` means tests never fight over ports, even in parallel; start and stop synchronously or with `await using`. → [Ports and Lifecycle](https://github.com/archofthings/Rony.Net/wiki/Ports-and-Lifecycle)
 - **Any protocol.** Text or binary; persistent connections; delimited, length-prefixed, fixed-length, STX/ETX or custom messages. → [Connections and Framing](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Framing)
-- **Flexible matching.** Exact requests, regular expressions, predicates, a default response and a handler for unmatched requests. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
+- **Flexible matching.** Exact requests, regular expressions with capture groups, JSON fields, predicates, a default response and a handler for unmatched requests. → [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
 - **Scripted responses.** Fixed, computed from the request, or a different one each time. → [Configuring Responses](https://github.com/archofthings/Rony.Net/wiki/Configuring-Responses), [Response Sequences](https://github.com/archofthings/Rony.Net/wiki/Response-Sequences)
 - **Server-initiated messages.** Greetings on connect, pushed messages and broadcasts; connection list and events. → [Connections and Push](https://github.com/archofthings/Rony.Net/wiki/Connections-and-Push)
 - **Stateful scenarios.** "`LIST` only works after `LOGIN`", for the whole server or per connection. → [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
 - **Failure testing.** Delays, chunked and throttled responses, dropped and reset connections, truncated or corrupted responses, refused connections, failing TLS handshakes, silence and flaky servers. → [Simulating Failures](https://github.com/archofthings/Rony.Net/wiki/Simulating-Failures)
 - **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, and waiting for requests and connections without sleeps. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
+- **Record and replay.** Record the conversation with a real server through a proxy, save it as an editable JSON file and replay it as a mock server. → [Record and Replay](https://github.com/archofthings/Rony.Net/wiki/Record-and-Replay)
 - **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
 - **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit v2 or v3, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
@@ -113,6 +114,8 @@ Details: [Configuring Responses](https://github.com/archofthings/Rony.Net/wiki/C
 server.Mock.Send(new Regex(@"^LOGIN \w+$")).Receive("WELCOME");
 server.Mock.SendMatching(text => text.StartsWith("GET ")).Receive("200 OK");
 server.Mock.SendMatchingBytes(bytes => bytes[0] == 0x02).Receive(new byte[] { 0x06 });
+server.Mock.Send(new Regex(@"^HELLO (\w+)$")).ReceiveMatch(m => $"HI {m.Groups[1].Value}");
+server.Mock.SendJson(j => j["type"].AsString() == "login").Receive("{\"ok\":true}");
 ```
 An exact request wins over patterns and predicates, which win over the `Send("")` default.
 Details: [Request Matching](https://github.com/archofthings/Rony.Net/wiki/Request-Matching)
@@ -154,6 +157,17 @@ server.Mock.Send("LIST").Receive("ERR not logged in");
 server.Mock.StateScope = StateScope.Connection;                  // optional: a session per connection
 ```
 Details: [Stateful Scenarios](https://github.com/archofthings/Rony.Net/wiki/Stateful-Scenarios)
+
+## Record and replay
+```csharp
+using var proxy = new RecordingProxy("real.host", 5000) { Framing = MessageFraming.Delimiter("\n") };
+proxy.Start();                                            // point your client at proxy.Port
+await proxy.WaitForConnectionsClosedAsync();
+proxy.Recording.Save("login.rony.json");                  // editable JSON
+
+server.Replay(Recording.Load("login.rony.json"));         // later, in tests: rules from the recording
+```
+Details: [Record and Replay](https://github.com/archofthings/Rony.Net/wiki/Record-and-Replay)
 
 ## Connections and pushed messages
 ```csharp

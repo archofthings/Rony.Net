@@ -35,6 +35,31 @@ server.Mock.SendMatchingBytes(bytes => bytes.Length > 0 && bytes[0] == 0xFF).Rec
 
 A predicate that throws, for example `bytes[10]` on a shorter request, simply doesn't match.
 
+## JSON requests
+`SendJson` matches requests that are valid JSON and satisfy a function on the parsed document. `JsonData` is read-only and
+indexing never throws, so a missing field is just `Undefined`:
+
+```csharp
+server.Mock.SendJson(j => j["type"].AsString() == "login").Receive("{\"ok\":true}");
+server.Mock.SendJson(j => j["items"].Count > 2 && j["user"]["roles"][0].AsString() == "admin").Receive("big admin order");
+
+Assert.Equal("{\"ok\":true}", server.Mock.Match("{\"type\":\"login\",\"user\":\"bob\"}").GetString());
+Assert.Empty(server.Mock.Match("not json"));   // not JSON: no match, and no error is logged
+```
+
+A request that isn't valid JSON doesn't match and the function isn't called; a function that throws doesn't match either.
+A JSON rule is a predicate rule, so it has the same place as `SendMatching` in [which response wins](#which-response-wins).
+There is no `ReceiveJson`: to build a response from the request, parse it yourself:
+
+```csharp
+server.Mock.SendJson(j => j["id"].Exists)
+    .Receive(request => "{\"echo\":" + JsonData.Parse(request)["id"] + "}");
+
+Assert.Equal("{\"echo\":42}", server.Mock.Match("{\"id\":42}").GetString());
+```
+
+`JsonData.Parse(text)` throws `FormatException` for invalid JSON, and `TryParse` returns false.
+
 ## Echoing part of the request
 Combine a pattern with a response function:
 
@@ -46,11 +71,22 @@ Assert.Equal("ACK 1001", await client.SendAndReceiveAsync("ORDER 1001"));
 Assert.Equal("ACK 1002", await client.SendAndReceiveAsync("ORDER 1002"));
 ```
 
+### Capture groups
+`ReceiveMatch` (and `ThenMatch` in a [sequence](Response-Sequences)) passes the regular expression `Match`, so you can use
+groups. They only exist after `Send(Regex)`; on any other rule they throw `InvalidOperationException`. `Receive(...)` was
+deliberately not extended with a `Func<Match, string>` overload, because `Receive(x => "pong")` would become ambiguous.
+
+```csharp
+server.Mock.Send(new Regex(@"^HELLO (\w+)$")).ReceiveMatch(m => $"HI {m.Groups[1].Value}");
+
+Assert.Equal("HI bob", server.Mock.Match("HELLO bob").GetString());
+```
+
 ## Which response wins
 When several configurations could match a request, the server picks the first that applies in this order:
 
 1. **Exact request:** `Send("ABC")` or `Send(bytes)`.
-2. **Patterns and predicates:** `Send(Regex)`, `SendMatching`, `SendMatchingBytes`, in the order you added them.
+2. **Patterns and predicates:** `Send(Regex)`, `SendMatching`, `SendMatchingBytes`, `SendJson`, in the order you added them.
 3. **Any request:** `Send("")`.
 
 ```csharp
@@ -112,5 +148,6 @@ Assert.Equal(2, server.Mock.Configs["LIST".GetBytes()].CallCount);
 
 To check how often a request arrived, [`server.Should().HaveReceived(...)`](Verifying-Requests) is usually clearer.
 
-Runnable code: [`ResponseSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/ResponseSamples.cs),
+Runnable code: [`PartialMatchingSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/PartialMatchingSamples.cs),
+[`ResponseSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/ResponseSamples.cs),
 [`UnmatchedRequestSamples.cs`](https://github.com/archofthings/Rony.Net/blob/main/samples/Rony.Samples/UnmatchedRequestSamples.cs)

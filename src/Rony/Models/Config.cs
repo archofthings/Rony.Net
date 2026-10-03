@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace Rony.Models
 {
@@ -64,6 +65,9 @@ namespace Rony.Models
 
         /// <summary>The scenario state the rule is limited to (<c>InState(...)</c>); null for every state.</summary>
         internal string State { get; set; }
+
+        /// <summary>The pattern of a rule started with <c>Send(Regex)</c>; null for every other rule.</summary>
+        internal Regex Pattern { get; set; }
 
         internal ResponseStep LastStep
         {
