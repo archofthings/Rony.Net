@@ -30,7 +30,7 @@ new TcpServer(IPAddress.IPv6Any, port) { DualMode = true }   // IPv4 and IPv6, s
 ```
 `port` defaults to 3000 when you leave it out; use `0` for a free port.
 
-TCP servers have two options, `KeepAlive` and `Framing`. They're described in [Connections and Framing](Connections-and-Framing).
+TCP servers have the options `KeepAlive`, `Framing` and `MaxBufferedBytes`, described in [Connections and Framing](Connections-and-Framing), and `DualMode` (see below).
 
 ## UDP
 ```csharp

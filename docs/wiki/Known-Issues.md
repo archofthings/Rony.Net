@@ -69,6 +69,12 @@ so you don't have to find them yourself. For problems with a known answer, see [
 - **A `unix` configuration needs `server.path`** when it is run with the tool.
 - **`rony record` does not check the target before it starts.** An unreachable target shows up as a logged error per
   connection.
+- **`rony record` stopped before any client connected still writes its output file,** with an empty recording, so the next
+  run on the same `--out` needs `--force`.
+- **A recording stores messages in the order they arrived.** A client that sends before the server's greeting arrives gets
+  the greeting recorded as the reply to its first request; record with the client as it normally behaves.
+- **A Unix socket path that is too long or already in use ends `rony run` with exit code 1,** not 2, and the message for a
+  path that is too long is the runtime's own text.
 - **There is no published Docker image.** The repository has a `Dockerfile` to build one. In a container the configuration
   must listen on `0.0.0.0`.
 - See [Standalone Server](Standalone-Server).

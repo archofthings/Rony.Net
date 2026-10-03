@@ -2,7 +2,8 @@
 
 The `rony` command-line tool runs the mock servers of Rony.Net without any .NET test code: start the server described by a
 [configuration file](Configuration-Files), record a conversation with a real server and replay it. Use it to give a
-front-end team, a script, a CI job or a Docker Compose setup a fake TCP, TLS, UDP or Unix socket service.
+front-end team, a script, a CI job or a Docker Compose setup a fake TCP, TLS, UDP or Unix socket service. [Scenarios](#scenarios)
+below show the common uses step by step.
 
 ## Install
 ```console
@@ -15,7 +16,7 @@ It needs the .NET 8 runtime or a newer one. `rony --help` and `rony <command> --
 | Code | Meaning |
 |---|---|
 | 0 | Success (for the long-running commands: stopped with Ctrl+C or SIGTERM) |
-| 1 | Runtime failure, for example the port is already in use |
+| 1 | Runtime failure, for example the port is already in use, or a Unix socket path that is too long or already exists |
 | 2 | Usage error (unknown command or option, missing value) or an invalid or missing input file |
 
 Messages go to the error output, results and log lines to the standard output. The tool listens on `127.0.0.1` unless the
@@ -93,6 +94,248 @@ For `record` and `replay`, at most one; the default is no framing.
 
 For other framings in a `run` configuration, see [Configuration Files](Configuration-Files#framing).
 
+## Scenarios
+Complete walk-throughs for what the tool is used for. The commands are for a POSIX shell (Linux, macOS, Git Bash, WSL); the
+differences for PowerShell are noted where they matter. The configuration files are exercised by the tests of the tool.
+
+### Stand in for a dependency during local development
+Your application needs a TCP service (a price service, a device, a legacy system) that is not available on your machine. Describe
+the part of it your application uses and run that.
+
+`mocks/shop.json`:
+```json
+{
+  "version": 1,
+  "server": { "port": 4000, "framing": { "type": "delimiter", "delimiter": "\n" } },
+  "onConnect": { "reply": "READY" },
+  "rules": [
+    { "request": "GET price:42", "reply": "19.99" },
+    { "match": "^GET (\\S+)$", "reply": "NOT FOUND $1" }
+  ]
+}
+```
+```console
+$ rony run mocks/shop.json
+Listening on tcp 127.0.0.1:4000
+```
+Point your application at `127.0.0.1:4000`. To try the server by hand, use `nc` (or `telnet`) in a second terminal and type
+the lines after `READY`:
+```console
+$ nc 127.0.0.1 4000
+READY
+GET price:42
+19.99
+GET color
+NOT FOUND color
+```
+The first terminal shows what happened to every connection and request, so you also see what your application sends:
+```console
+11:16:58.959 [Rony 11:16:58.959] #1 connected from 127.0.0.1:54896
+11:16:58.970 [Rony 11:16:58.970] #1 received "GET price:42" (matched "GET price:42")
+11:16:58.971 [Rony 11:16:58.971] #1 sent "19.99"
+11:16:58.972 [Rony 11:16:58.972] #1 received "GET color" (matched /^GET (\S+)$/)
+```
+Edit the file and start the tool again to change an answer (the file is read once at start). The exact request wins over the
+pattern; see [Request Matching](Request-Matching) for the order.
+
+### A mock for a team that does not use .NET
+The mock is a file, so the team needs the tool, not .NET knowledge. Commit `mocks/shop.json` to the repository as the shared
+artifact; everybody starts it the same way.
+- With the .NET runtime on the machine: `dotnet tool install --global Rony.Net.Cli`, then `rony run mocks/shop.json`. To pin the
+  version for the whole repository, use a local tool: `dotnet new tool-manifest`, `dotnet tool install Rony.Net.Cli`, commit
+  `.config/dotnet-tools.json`, and everybody runs `dotnet tool restore` once and `dotnet rony run mocks/shop.json`.
+- Without any .NET on the machine, use [Docker](#docker): build the image once, then
+  `docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config" rony run /config/shop.json`. For this, the file must
+  set `"address": "0.0.0.0"` (see [In a container](#in-a-container-next-to-the-system-under-test)); without an address the server is unreachable from outside the container.
+
+There is no published image yet (see [Known Issues](Known-Issues#standalone-server-rony)): build it from the `Dockerfile` of the
+Rony.Net repository, for example `docker build -t rony https://github.com/archofthings/Rony.Net.git`.
+
+### Record a real server once, replay it offline
+You have access to the real service only now (a VPN, a lab device, a test environment). Record a session with your application,
+and work against the recording later, offline.
+```console
+$ rony record --target api.test:5000 --out login.json --port 5001 --delimiter "\n"
+Recording on 127.0.0.1:5001 -> api.test:5000
+```
+Point your application at `127.0.0.1:5001`, do what you want to capture, and press Ctrl+C:
+```console
+Saved 1 connection to login.json
+```
+Later, without the real server:
+```console
+$ rony replay login.json --port 5001 --delimiter "\n"
+Listening on tcp 127.0.0.1:5001
+```
+- Give `record` and `replay` the same [framing option](#framing-options) (here `--delimiter "\n"`, which a POSIX shell
+  and PowerShell both pass as the two characters backslash and `n`; the tool turns them into a newline). Without it, every read is a recorded message
+  and the replay only works when the client sends its bytes in the same pieces.
+- Use the client as it normally behaves. A client that speaks before the greeting of the server has arrived gets that greeting
+  recorded as the answer to its first message.
+- **Review `login.json` before you commit it.** It contains everything that went through the proxy, including passwords and
+  tokens. Edit the file by hand to remove or change them: the format is described in [Record and Replay](Record-and-Replay#the-file-format).
+- A replay answers every request on its own. When the answers depend on what happened before (a login, a counter), the replay
+  is right only if the client sends its requests in the recorded order. For anything else, write the exchanges as rules of a
+  [configuration file](Configuration-Files) with states (see the stateful scenario below); there is no converter.
+
+### Record or replay a TLS service
+For a service that speaks TLS, tell the proxy to use TLS on both sides:
+```console
+$ rony record --target api.test:5443 --target-tls --tls --out api.json --port 5001
+Recording on 127.0.0.1:5001 -> api.test:5443
+```
+- `--target-tls` makes the proxy connect to the real server with TLS and validate its certificate normally. A target with a
+  private or self-signed certificate fails with `UntrustedRoot` in the log (the client is disconnected). Only for a service you
+  trust on a network you trust, add `--target-insecure`; the tool prints `Warning: --target-insecure accepts any certificate of the target.`
+- `--tls` makes the proxy (and `rony replay --tls`) speak TLS to your client. The certificate is generated at every start: a
+  self-signed one for `CN=localhost`, valid for about a week, that no system trusts. Your client has to accept it: in its
+  test configuration, switch off certificate validation (for example `curl -k` or `NODE_TLS_REJECT_UNAUTHORIZED=0`; `openssl s_client`
+  reports `self-signed certificate` and connects anyway). Do not switch it off in production code. You cannot
+  choose the certificate of `--tls`; for a trusted certificate use a [configuration file](Configuration-Files#tls) with your own PFX file.
+- Serve a recording over TLS the same way: `rony replay api.json --tls --port 5001`.
+
+### In CI
+Check that the configuration files in the repository are valid, so a typo is found by the pipeline and not at the first run:
+```console
+for f in mocks/*.json; do rony validate "$f" || exit 1; done
+```
+`validate` prints `OK` and exits with 0, or prints the error and exits with 2 (see [exit codes](#exit-codes)). It does not
+start anything, except that a `udp` file binds its port when it is loaded.
+
+To test a client that is not written in .NET against the mock, start the tool in the background, wait until it listens, run
+the tests and stop it with SIGTERM:
+```console
+rony run mocks/shop.json --quiet > rony.log 2>&1 &
+RONY_PID=$!
+until grep -q "Listening on" rony.log || ! kill -0 $RONY_PID; do sleep 0.2; done   # also printed with --quiet
+./run-client-tests.sh                       # connects to 127.0.0.1:4000
+kill -TERM $RONY_PID; wait $RONY_PID        # exits with 0 after stopping the server
+```
+Use a fixed port in the file (the tests need to know it) and make sure no other job on the agent uses it. In a
+pipeline, install the tool first: `dotnet tool install --global Rony.Net.Cli --version <version>`. If the tool cannot start
+(port in use, invalid file), it exits with 1 or 2, and the loop above ends instead of waiting.
+
+For tests written in .NET, do not start the tool: use the library, which gives you a free port per test and `Should()`
+assertions (see [Getting Started](Getting-Started) and [Configuration Files](Configuration-Files)).
+
+### In a container next to the system under test
+Build the image once from the `Dockerfile` (see [Docker](#docker)). The server in the file must listen on all interfaces, or
+the other containers cannot reach it: `mocks/shop.json` with `"address": "0.0.0.0"`.
+```console
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config" rony run /config/shop.json
+```
+In PowerShell write the volume as `-v "${PWD}/mocks:/config"` (`"$PWD:/config"` is read as a drive-qualified variable).
+With Docker Compose, the application reaches the mock by the name of its service and the port needs no publishing:
+```yaml
+services:
+  shop-mock:
+    image: rony                      # docker build -t rony <checkout of Rony.Net>
+    command: ["run", "/config/shop.json"]
+    volumes:
+      - ./mocks:/config:ro
+  app:
+    build: .
+    depends_on:
+      - shop-mock
+    environment:
+      SHOP_ADDRESS: shop-mock:4000   # the port of the file
+```
+`depends_on` waits for the container to start, not for the tool to listen (which takes a moment), so the application should
+retry its first connection. Add `ports: ["127.0.0.1:4000:4000"]` to the mock to reach it from the host too. Stop it with
+`docker compose down` (SIGTERM).
+
+The Docker and Docker Compose instructions have not been run by the authors of this page (Docker is not part of the test setup of the repository); check them once in your environment.
+
+### A stateful or failing server
+To see how a client copes with a server that needs a login, answers "busy" a few times, answers slowly and drops the connection,
+describe that server in a file. `stateScope: connection` gives every connection its own login state.
+
+`mocks/flaky.json`:
+```json
+{
+  "version": 1,
+  "stateScope": "connection",
+  "server": { "port": 4001, "framing": { "type": "delimiter", "delimiter": "\n" } },
+  "onConnect": { "reply": "HELLO" },
+  "onUnmatched": { "reply": "ERR login first" },
+  "rules": [
+    { "request": "LOGIN bob secret", "reply": "OK", "goTo": "authenticated" },
+    { "request": "FETCH", "state": "authenticated",
+      "replies": [ { "reply": "ERR busy" }, { "reply": "ERR busy" }, { "reply": "DATA 42", "afterMs": 2000 } ] },
+    { "request": "CRASH", "state": "authenticated", "disconnect": true }
+  ]
+}
+```
+```console
+$ nc 127.0.0.1 4001
+HELLO
+FETCH
+ERR login first
+LOGIN bob secret
+OK
+FETCH
+ERR busy
+FETCH
+ERR busy
+FETCH
+DATA 42
+CRASH
+```
+The last `FETCH` is answered after two seconds, and `CRASH` closes the connection without an answer. The answers of a
+sequence are used in order across all connections (the last one repeats), so restart the tool to start again from `ERR busy`.
+Point a client at it to see its retry, timeout and reconnect behaviour. More on the ideas in [Stateful Scenarios](Stateful-Scenarios),
+[Response Sequences](Response-Sequences) and [Simulating Failures](Simulating-Failures); the faults that need code
+(truncated or throttled responses, refused connections) are not available here.
+
+### A Unix domain socket or UDP
+The same file format serves other transports. A Unix domain socket (the file needs a `path`, because the tool cannot show a
+generated one):
+```json
+{
+  "version": 1,
+  "server": { "transport": "unix", "path": "/tmp/rony-demo.sock", "framing": { "type": "delimiter", "delimiter": "\n" } },
+  "rules": [ { "request": "PING", "reply": "PONG" } ]
+}
+```
+```console
+$ rony run unix.json
+Listening on unix /tmp/rony-demo.sock
+$ nc -U /tmp/rony-demo.sock
+PING
+PONG
+```
+The socket file is removed when the tool stops. A UDP server, where every datagram is one message (there is no framing):
+```json
+{
+  "version": 1,
+  "server": { "transport": "udp", "port": 5000 },
+  "rules": [ { "request": "PING", "reply": "PONG" } ]
+}
+```
+```console
+$ rony run udp.json
+Listening on udp 127.0.0.1:5000
+$ printf PING | nc -u -w1 127.0.0.1 5000
+PONG
+```
+Use `printf`, not `echo`: `echo` adds a newline, which makes the datagram `PING\n` and the rule does not match it.
+Docker publishes UDP ports with `-p 5000:5000/udp`. Recording and replay are for TCP and TLS only.
+
+### Share one file between the tool and your tests
+The same file can start the standalone server for the other team and be the server of a .NET test, so the two never disagree.
+Use `"port": 0` in a file that is shared this way (the file of the first scenario with `"port": 0`): a test then gets a free
+port of its own (`server.Port`) and several tests can run at once, while the tool prints the port it got. A container needs a
+fixed port and `"address": "0.0.0.0"`, so it gets a second file.
+```csharp
+using var server = MockServer.FromFile("mocks/shop.json");   // the file that `rony run mocks/shop.json` serves, with "port": 0
+server.Start();
+
+// ... run the code under test against 127.0.0.1:server.Port ...
+
+server.Should().HaveReceived("GET price:42", Times.Once());
+```
+Rules added in code are possible too, see [Configuration Files](Configuration-Files#using-the-server-from-code).
+
 ## Docker
 The repository has a `Dockerfile` for the tool (an SDK image builds it, the small .NET runtime image runs it as the
 non-root user of the image):
@@ -133,4 +376,4 @@ listeners, and assertions (`Should()`) need code; see [Not available in files](C
 The TLS certificate of `--tls` is generated and cannot be chosen (use `"transport": "tls"` with a PFX file in a configuration
 file for that), and there is no UDP recording or replay. There are no options to override the file: edit the file instead.
 
-Tests of the tool: `tests/Rony.Net.Cli.Tests` (the configuration above is one of them).
+Tests of the tool: `tests/Rony.Net.Cli.Tests` (every configuration on this page is one of them; the scenario tests use port `0` and a temporary socket path instead of the fixed ones shown).

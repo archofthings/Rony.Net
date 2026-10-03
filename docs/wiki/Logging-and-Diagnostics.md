@@ -36,7 +36,10 @@ With the [test framework packages](Test-Framework-Integration), the log goes to 
 | Errors | `error: the response function for #1 threw FormatException: ...` |
 | Failed connections | `connection from 127.0.0.1:50125 failed: AuthenticationException: ...` |
 
-Binary payloads are shown as hex, for example `0x02 0x01 0x03`.
+Binary payloads are shown as hex, for example `0x02 0x01 0x03`. Details a client controls (its server name, the subject of its
+certificate, its address, exception messages) are escaped and cut at 256 characters, so a client cannot inject extra lines or
+terminal sequences into the log. The standalone `rony` tool prints the same lines with the time in front
+([Standalone Server](Standalone-Server)).
 
 ## Errors that are otherwise silent
 The server never lets one bad request take it down, so some mistakes don't show up anywhere except the log:

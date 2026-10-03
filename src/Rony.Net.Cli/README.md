@@ -12,8 +12,13 @@ rony record --target api.test:5000 --out login.json --delimiter "\n"   # record 
 rony replay login.json --delimiter "\n"                                # serve the recording as a mock
 ```
 
+Typical uses (walk-throughs in the wiki):
+- **Stand in for a service during development:** write a JSON file, `rony run mock.json`, point your application at the printed port and try it with `nc`.
+- **Record once, replay offline:** `rony record` while your application talks to the real server (Ctrl+C saves), then `rony replay` the file; add `--tls` / `--target-tls` for TLS services.
+- **In CI or Docker:** `rony validate` the files in a pipeline, or run the server in a container next to the application (`docker run`, Docker Compose).
+
 Needs the .NET 8 runtime or newer. Exit codes: 0 success, 1 runtime failure (port in use), 2 usage error or invalid file.
 The server listens on `127.0.0.1` unless the configuration file (or `--address`) says otherwise.
 
-Documentation: [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server) and
+Documentation: [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server) (commands, options and scenarios) and
 [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files).

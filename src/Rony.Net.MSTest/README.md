@@ -1,6 +1,6 @@
 # Rony.Net.MSTest
 
-[MSTest](https://github.com/microsoft/testfx) integration for [Rony.Net](https://github.com/archofthings/Rony.Net), the TCP, TLS and UDP mock server for .NET tests.
+[MSTest](https://github.com/microsoft/testfx) integration for [Rony.Net](https://github.com/archofthings/Rony.Net), the TCP, TLS, UDP and Unix socket mock server for .NET tests.
 Requires MSTest 4. On MSTest 3, set `server.Log = line => TestContext.WriteLine("{0}", line);` yourself.
 
 - `MockServerTest`: a base class that gives every test its own started mock server, writes the server's log to the
