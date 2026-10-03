@@ -68,6 +68,7 @@ To run a mock server without writing code, install the `rony` tool (`Rony.Net.Cl
 | [Custom Listeners](Custom-Listeners) | Plug in your own transport |
 | [API Reference](API-Reference) | Every public type and member |
 | [Troubleshooting](Troubleshooting) | Common problems and answers |
+| [Known Issues](Known-Issues) | What the library and the `rony` tool do not do, or do in a surprising way |
 | [Upgrading to 1.0](Upgrading-to-1.0) | Changes from 0.x |
 
 ## Runnable examples

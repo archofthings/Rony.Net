@@ -57,4 +57,6 @@ The request may still be on its way, for example when your code sends in the bac
 - Replace `Thread.Sleep` with [`WaitForRequestAsync`](Waiting-for-Requests).
 
 ### Still stuck?
+Check the [known issues and limitations](Known-Issues) first.
+
 [Open an issue](https://github.com/archofthings/Rony.Net/issues) with a small test that shows the problem.

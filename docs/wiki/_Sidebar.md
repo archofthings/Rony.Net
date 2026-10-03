@@ -29,4 +29,5 @@
 - [Custom Listeners](Custom-Listeners)
 - [API Reference](API-Reference)
 - [Troubleshooting](Troubleshooting)
+- [Known Issues](Known-Issues)
 - [Upgrading to 1.0](Upgrading-to-1.0)

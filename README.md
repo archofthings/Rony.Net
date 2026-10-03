@@ -258,8 +258,16 @@ Details: [Test Framework Integration](https://github.com/archofthings/Rony.Net/w
 ## More
 - [Recipes](https://github.com/archofthings/Rony.Net/wiki/Recipes): testing a real client class with retries and timeouts; xUnit, NUnit and MSTest setup.
 - [Custom Listeners](https://github.com/archofthings/Rony.Net/wiki/Custom-Listeners): mock over your own transport, or with no network at all; optional interfaces add connections and failure simulation.
-- [API Reference](https://github.com/archofthings/Rony.Net/wiki/API-Reference) · [Troubleshooting](https://github.com/archofthings/Rony.Net/wiki/Troubleshooting)
+- [API Reference](https://github.com/archofthings/Rony.Net/wiki/API-Reference) · [Troubleshooting](https://github.com/archofthings/Rony.Net/wiki/Troubleshooting) · [Known Issues](https://github.com/archofthings/Rony.Net/wiki/Known-Issues)
 - [Runnable samples](https://github.com/archofthings/Rony.Net/tree/main/samples/Rony.Samples): every wiki example as a passing test.
+
+## Known issues
+- The `rony` tool and servers from a configuration file are for development and test networks: no connection or idle limits, and memory grows with the traffic.
+- Mutual TLS accepts any presented client certificate unless you set `ClientCertificateValidator`; when a rejected client notices depends on the OS.
+- Replay is order-dependent, does not replay recorded delays and has no UDP; recordings and logs contain everything on the wire, credentials included.
+- Unix domain sockets have no TLS and no RST; there is no published Docker image, only a `Dockerfile`.
+
+Details and the full list: [Known Issues and Limitations](https://github.com/archofthings/Rony.Net/wiki/Known-Issues)
 
 ## Upgrading from 0.x
 1.0 keeps TCP connections open after a response. If your client reads until the server closes the connection, set

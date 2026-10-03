@@ -32,6 +32,9 @@ No breaking changes.
   buffering without end. Connection details in log lines (server name, certificate subject, remote endpoint, exception
   messages) are escaped and cut at 256 characters, so a client cannot inject lines or terminal sequences into the log.
 
+### Documentation
+- New wiki page [Known Issues and Limitations](https://github.com/archofthings/Rony.Net/wiki/Known-Issues), summarised in the README.
+
 ## 1.3.0
 
 No breaking changes.
