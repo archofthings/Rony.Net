@@ -35,7 +35,19 @@ namespace Rony.Cli
 
                 // Attached before the server can accept a connection, so a client reacting to the line below loses no log line.
                 if (!line.Has("quiet")) server.Log = text => LogUnlessListening(sink, text);
-                await server.StartAsync().ConfigureAwait(false);
+                try
+                {
+                    await server.StartAsync().ConfigureAwait(false);
+                }
+                catch (ArgumentOutOfRangeException) when (transport == "unix")
+                {
+                    throw new InputException($"{path}: server.path \"{socket}\" is too long for a Unix socket (the limit is about 104 bytes).");
+                }
+                catch (SocketException exception) when (transport == "unix" && exception.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                {
+                    throw new InputException($"{path}: server.path \"{socket}\" is already in use: a file exists at that path.");
+                }
+
                 sink.WriteLine(transport == "unix" ? "Listening on unix " + socket : $"Listening on {transport} {Format(server.Address, server.Port)}");
 
                 await WaitForStopAsync(stop).ConfigureAwait(false);
@@ -107,6 +119,12 @@ namespace Rony.Cli
 
                 await WaitForStopAsync(stop).ConfigureAwait(false);
                 await proxy.StopAsync().ConfigureAwait(false);
+
+                if (proxy.Recording.Connections.Count == 0)
+                {
+                    sink.WriteLine($"No connections were recorded; {outPath} was not written.");
+                    return 0;
+                }
 
                 Save(proxy.Recording, outPath);
                 saved = true;
@@ -246,7 +264,8 @@ namespace Rony.Cli
                     Access = FileAccess.Write,
                     Share = FileShare.ReadWrite
                 };
-                if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                // Only a mode that creates the file may set it.
+                if (!existed && !OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
                 using (new FileStream(outPath, options))
                 {
                 }

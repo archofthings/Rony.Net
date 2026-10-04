@@ -2,6 +2,25 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
+## 1.4.1
+
+No breaking changes.
+
+### Fixed
+- `WaitForConnectionAsync()` and `WaitForConnectionsAsync()` now complete only after the `ConnectionOpened` handlers have
+  returned (so a handler must not wait for something the test does after the wait); `server.Connections` still lists the
+  connection while the handler runs.
+- `MockServer.Log` is no longer called while the server holds an internal lock, so a callback that waits for another thread
+  calling `Start()`, `Stop()`, `RefuseConnections()` or `AcceptConnections()` no longer deadlocks.
+- Calling `Stop()` or `Dispose()` on a `RecordingProxy` from its own `Log` callback no longer hangs: it stops the proxy
+  without waiting for the connections to end.
+- `rony record`, stopped before any client connected, no longer writes an empty recording: it prints a message and leaves the
+  `--out` file as it was.
+- `rony record --force` with an `--out` file that already exists no longer fails on Linux and macOS
+  ("UnixCreateMode can be requested only for modes that can create new files").
+- `rony run` with a Unix socket path that is too long or already in use now reports the problem with exit code 2 and a
+  message naming `server.path`, instead of exit code 1.
+
 ## 1.4.0
 
 No breaking changes.

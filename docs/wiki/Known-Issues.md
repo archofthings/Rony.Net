@@ -7,12 +7,6 @@ so you don't have to find them yourself. For problems with a known answer, see [
 - **`RefuseConnections()` can reset a client that is connecting at that moment.** A client whose connection was completed by
   the operating system but not yet accepted by the server may see a reset instead of "connection refused". Call it when no
   client is in the middle of connecting. See [Simulating Failures](Simulating-Failures).
-- **`WaitForConnectionAsync()` can return before your `ConnectionOpened` handler ran.** The connection is recorded first and
-  the event is raised afterwards. If a test depends on the handler's effect, wait for that effect (for example with a
-  `TaskCompletionSource` set in the handler). See [Connections and Push](Connections-and-Push).
-- **`Log` can be called while the server holds an internal lock** (during `Start()`, `Stop()`, `RefuseConnections()` and
-  `AcceptConnections()`). The callback must not wait for another thread that is calling one of them. See
-  [Logging and Diagnostics](Logging-and-Diagnostics).
 - **Received requests are kept until `Mock.Reset()`, connection records until the server is disposed.** That is what
   `Should()`, `ReceivedRequests` and `Connections` read. A server that runs for a long time, such as the standalone tool,
   grows with the traffic it receives.
@@ -47,8 +41,6 @@ so you don't have to find them yourself. For problems with a known answer, see [
 - **Replay is order-dependent.** A reply that depends on earlier requests replays correctly only when the client sends its
   requests in the recorded order.
 - **Recorded times are not replayed as delays.**
-- **Calling `Stop()` or `Dispose()` on a `RecordingProxy` from its own `Log` callback hangs,** because it waits for the relay
-  that is logging. Use `StopAsync()` there, or stop it from another place.
 - **A recording and the proxy's log contain everything on the wire,** including credentials and tokens.
 - See [Record and Replay](Record-and-Replay).
 
@@ -69,12 +61,8 @@ so you don't have to find them yourself. For problems with a known answer, see [
 - **A `unix` configuration needs `server.path`** when it is run with the tool.
 - **`rony record` does not check the target before it starts.** An unreachable target shows up as a logged error per
   connection.
-- **`rony record` stopped before any client connected still writes its output file,** with an empty recording, so the next
-  run on the same `--out` needs `--force`.
 - **A recording stores messages in the order they arrived.** A client that sends before the server's greeting arrives gets
   the greeting recorded as the reply to its first request; record with the client as it normally behaves.
-- **A Unix socket path that is too long or already in use ends `rony run` with exit code 1,** not 2, and the message for a
-  path that is too long is the runtime's own text.
 - **There is no published Docker image.** The repository has a `Dockerfile` to build one. In a container the configuration
   must listen on `0.0.0.0`.
 - See [Standalone Server](Standalone-Server).

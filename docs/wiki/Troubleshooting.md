@@ -64,8 +64,8 @@ The message starts with the place of the mistake, such as `rules[1]: unknown pro
 are found. See the [error list](Configuration-Files#errors). The same message is printed by `rony run` and `rony validate`.
 
 ### The `rony` tool exits
-Exit code `1` is a runtime failure (for example `Error: Address already in use` for a port that is taken, or a Unix socket path that is too long),
-`2` a usage error or an invalid or missing file (the message names the file and the place). Details in [Standalone Server](Standalone-Server#exit-codes).
+Exit code `1` is a runtime failure (for example `Error: Address already in use` for a port that is taken),
+`2` a usage error, an invalid or missing file, or a bad Unix socket path (the message names the file and the place). Details in [Standalone Server](Standalone-Server#exit-codes).
 
 ### `Receive(x => x)` doesn't compile ("The call is ambiguous")
 The lambda fits both the text and the byte overloads. Give it a type: `Receive((byte[] x) => x)` or `Receive((string x) => x)`.

@@ -45,7 +45,7 @@ namespace Rony.Cli
             ["record"] =
                 "Usage: rony record --target <host:port> --out <file.json> [options]\n" +
                 "\n" +
-                "Relays TCP (or TLS) traffic to the target and records it, until Ctrl+C or SIGTERM; then saves the recording.\n" +
+                "Relays TCP (or TLS) traffic to the target and records it, until Ctrl+C or SIGTERM; then saves the recording (nothing is written if no client connected).\n" +
                 "  --target <host:port>   The real server (required)\n" +
                 "  --out <file.json>      Where to save the recording (required)\n" +
                 "  --force                Overwrite --out if it exists\n" +

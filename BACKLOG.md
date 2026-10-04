@@ -12,7 +12,7 @@ Related items are grouped so that each version has one theme. The version number
 
 | Version | Theme | Items |
 |---|---|---|
-| 1.4.1 | Fixes to the mock server and the tool; no new API | I1–I6 |
+| 1.4.1 | Fixes to the mock server and the tool; no new API | I1 (I2–I6 are fixed, see `CHANGELOG.md`) |
 | 1.5.0 | The tool: verify, operate, deploy | 17, 18, 19, 20, 34, I7–I10 |
 | 1.6.0 | Files and proxying: say more in a file, mock only a part | 21, 22, 23, 24, 25, 29, 32 |
 | 1.7.0 | Network conditions: resilience testing | 30, 31 |
@@ -32,16 +32,6 @@ No new public API; patch version.
 
 - **I1. `RefuseConnections()` and a client that is connecting.** A client whose connection the operating system completed
   but the server has not accepted yet can see a reset. It should see "connection refused" or be served.
-- **I2. `WaitForConnectionAsync()` and `ConnectionOpened`.** The wait can return before the handler ran, because the
-  connection is recorded before the event is raised.
-- **I3. `Log` under an internal lock.** `MockServer` calls `Log` while holding a lock during `Start()`, `Stop()`,
-  `RefuseConnections()` and `AcceptConnections()`, so a callback that waits for another thread calling one of them
-  deadlocks.
-- **I4. `RecordingProxy` stopped from its own `Log` callback hangs.**
-- **I5. `rony record` stopped before any client connected** still writes its output file with an empty recording, so the
-  next run on the same `--out` needs `--force`. It should write nothing, or remove the file.
-- **I6. `rony run` and a bad Unix socket path.** A path that is too long or already in use ends with exit code 1 and,
-  for a path that is too long, the runtime's raw message. It should be exit code 2 with a message naming `server.path`.
 
 ## 1.5.0: the tool can be verified, operated and deployed
 

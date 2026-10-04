@@ -33,8 +33,8 @@ can go through it at the same time.
   to `proxy.Log` (same idea as `server.Log`) and the proxy keeps accepting. The connection is still in the recording, with a
   close by the server.
 - **Stopping.** `Stop()` / `StopAsync()` / `Dispose()` close every relayed connection and wait for them to end.
-  Don't call `Stop()` or `Dispose()` from the `Log` callback (it waits for the relay that is logging); use `StopAsync()`
-  from elsewhere.
+  Called from the `Log` callback, `Stop()` and `Dispose()` stop the proxy without waiting for the connections to end;
+  after that, `StopAsync()` (or `Stop()` from elsewhere) waits for them.
 
 ### TLS
 `Certificate` makes the proxy speak TLS to your client (like `TcpServerSsl`); `TargetTls` makes it speak TLS to the real

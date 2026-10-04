@@ -19,6 +19,7 @@ namespace Rony.Models
         private readonly TaskCompletionSource<bool> _closed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _syncRoot = new object();
         private DateTimeOffset? _closedAt;
+        private volatile bool _announced;
 
         internal ClientConnection(MockServer server, int id, object sender, EndPoint remoteEndPoint, TlsConnectionInfo tls = null)
         {
@@ -104,6 +105,13 @@ namespace Rony.Models
 
             cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException($"Expected connection {this} to close within {actualTimeout}, but it is still open.");
+        }
+
+        /// <summary>Whether the <see cref="MockServer.ConnectionOpened"/> handlers have returned; what the wait methods count.</summary>
+        internal bool Announced
+        {
+            get => _announced;
+            set => _announced = value;
         }
 
         internal void MarkClosed()

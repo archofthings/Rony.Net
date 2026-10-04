@@ -43,6 +43,7 @@ namespace Rony.Net
         private TcpListener _listener;
         private CancellationTokenSource _cancellation;
         private Task _acceptTask;
+        private Task _backgroundStop;
         private ManualResetEventSlim _acceptStopped;
         private int _accepted;
         private int _open;
@@ -96,7 +97,7 @@ namespace Rony.Net
 
         /// <summary>
         /// Receives a line for every connection, relayed message and error. Exceptions thrown by the callback are ignored.
-        /// Do not call <see cref="Stop"/> or <see cref="Dispose"/> from this callback: it runs on a relay that they wait for.
+        /// Called from this callback, <see cref="Stop"/> and <see cref="Dispose"/> stop the proxy without waiting for the connections to end.
         /// </summary>
         public Action<string> Log { get; set; }
 
@@ -123,6 +124,7 @@ namespace Rony.Net
                 started = $"recording proxy listening on {Address}:{Port}, relaying to {_targetHost}:{_targetPort}";
                 var acceptStopped = _acceptStopped = new ManualResetEventSlim(false);
                 _acceptTask = Task.Run(() => AcceptLoopAsync(listener, acceptStopped, cancellationToken));
+                _backgroundStop = null;
             }
 
             Trace(started);
@@ -130,11 +132,30 @@ namespace Rony.Net
 
         /// <summary>
         /// Stops accepting, closes every relayed connection on both sides and waits until they have ended. Calling it again does nothing.
-        /// Do not call <see cref="Stop"/> or <see cref="Dispose"/> from the <see cref="Log"/> callback: it runs on a relay that this call waits for.
+        /// Called from the <see cref="Log"/> callback, it stops the proxy without waiting for the connections to end;
+        /// a later <see cref="StopAsync"/> (or <see cref="Stop"/> from elsewhere) waits for them.
         /// </summary>
         public void Stop()
         {
-            if (!StopCore(out _, out var acceptStopped, out var cancellation)) return;
+            var insideLog = ReferenceEquals(_loggingProxy, this);
+            if (!StopCore(out var accept, out var acceptStopped, out var cancellation))
+            {
+                Task earlier;
+                lock (_syncRoot)
+                    earlier = _backgroundStop;
+                // The clean-up task swallows its exceptions, so waiting for it cannot throw.
+                if (earlier != null && !insideLog) earlier.Wait();
+                return;
+            }
+
+            if (insideLog)
+            {
+                // This thread is a relay running the Log callback: waiting for the relays would wait for itself.
+                var background = WaitForEndQuietlyAsync(accept, cancellation);
+                lock (_syncRoot)
+                    _backgroundStop = background;
+                return;
+            }
 
             acceptStopped.Wait();
             acceptStopped.Dispose();
@@ -155,7 +176,9 @@ namespace Rony.Net
         /// <summary>Like <see cref="Stop"/>, without blocking the caller.</summary>
         public Task StopAsync()
         {
-            return StopCore(out var accept, out _, out var cancellation) ? WaitForEndAsync(accept, cancellation) : Task.CompletedTask;
+            if (StopCore(out var accept, out _, out var cancellation)) return WaitForEndAsync(accept, cancellation);
+            lock (_syncRoot)
+                return _backgroundStop ?? Task.CompletedTask;
         }
 
         /// <summary>Stops accepting and aborts the relays. False if the proxy was not started.</summary>
@@ -185,6 +208,18 @@ namespace Rony.Net
             foreach (var relay in _relays.Keys)
                 relay.Abort();
             return true;
+        }
+
+        private async Task WaitForEndQuietlyAsync(Task accept, CancellationTokenSource cancellation)
+        {
+            try
+            {
+                await WaitForEndAsync(accept, cancellation).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Nobody waits for this clean-up.
+            }
         }
 
         private async Task WaitForEndAsync(Task accept, CancellationTokenSource cancellation)
@@ -325,10 +360,15 @@ namespace Rony.Net
                     waiter.TrySetResult(true);
         }
 
+        [ThreadStatic]
+        private static RecordingProxy _loggingProxy;
+
         private void Trace(string message)
         {
             var log = Log;
             if (log == null) return;
+            var previous = _loggingProxy;
+            _loggingProxy = this;
             try
             {
                 log($"[Rony {DateTime.Now:HH:mm:ss.fff}] {message}");
@@ -336,6 +376,10 @@ namespace Rony.Net
             catch (Exception)
             {
                 // A logger may refuse to write, for example after the test finished; never let that break the proxy.
+            }
+            finally
+            {
+                _loggingProxy = previous;
             }
         }
 

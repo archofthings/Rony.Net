@@ -32,6 +32,40 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task WaitForConnectionAsync_Should_Complete_After_The_ConnectionOpened_Handler_Returned()
+        {
+            //Arrange
+            using var server = LineServer();
+            var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var gate = new System.Threading.ManualResetEventSlim();
+            server.ConnectionOpened += (_, __) =>
+            {
+                entered.TrySetResult(true);
+                gate.Wait(Timeout);
+            };
+
+            try
+            {
+                //Act
+                using var client = await LineClient.ConnectAsync(server.Port);
+                await entered.Task.WaitAsync(Timeout);
+                var waiting = server.WaitForConnectionAsync();
+
+                //Assert: still listed while the handler runs, but not announced
+                Assert.False(waiting.IsCompleted);
+                Assert.Single(server.Connections);
+
+                gate.Set();
+                var connection = await waiting;
+                Assert.Same(server.Connections[0], connection);
+            }
+            finally
+            {
+                gate.Set();
+            }
+        }
+
+        [Fact]
         public async Task Greeting_Should_Arrive_Before_Any_Response()
         {
             //Arrange
