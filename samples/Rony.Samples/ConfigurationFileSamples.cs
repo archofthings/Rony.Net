@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using Rony.Listeners;
+using Rony.Models;
 using Rony.Net;
 using Xunit;
 
@@ -38,6 +40,43 @@ public class ConfigurationFileSamples
             Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));
 
             server.Should().HaveReceived("PING", Times.Once());
+        });
+    }
+
+    [Fact]
+    public async Task Load_a_file_with_overrides_and_validate_it()
+    {
+        await WithFileAsync("""
+            { "version": 1, "server": { "port": 4000 }, "rules": [ { "request": "PING", "reply": "PONG" } ] }
+            """, async path =>
+        {
+            MockServer.ValidateFile(path);   // throws FormatException with the place of the mistake; opens no socket
+
+            using var server = MockServer.FromFile(path, new ConfigurationOverrides { Port = 0 });
+            server.Start();
+
+            using var client = await TcpTestClient.ConnectAsync(server.Port);
+            Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));
+        });
+    }
+
+    [Fact]
+    public async Task Read_the_generated_path_of_a_unix_socket_server()
+    {
+        await WithFileAsync("""
+            { "version": 1, "server": { "transport": "unix" }, "rules": [ { "request": "PING", "reply": "PONG" } ] }
+            """, async path =>
+        {
+            using var server = MockServer.FromFile(path);
+            var socketPath = ((UnixSocketServer)server.Listener).Path;
+            server.Start();
+
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath));
+            await socket.SendAsync(System.Text.Encoding.UTF8.GetBytes("PING"), SocketFlags.None);
+            var buffer = new byte[16];
+            var read = await socket.ReceiveAsync(buffer, SocketFlags.None);
+            Assert.Equal("PONG", System.Text.Encoding.UTF8.GetString(buffer, 0, read));
         });
     }
 

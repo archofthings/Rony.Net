@@ -1,3 +1,4 @@
+using Rony.Listeners;
 using Rony.Net;
 using System;
 using System.IO;
@@ -184,6 +185,16 @@ namespace Rony.FunctionalTests
             {
                 Directory.Delete(directory, true);
             }
+        }
+
+        [Fact]
+        public void ValidateJson_Should_Not_Bind_The_Port_Of_A_Udp_Configuration()
+        {
+            using var busy = new UdpServer(new IPEndPoint(IPAddress.Loopback, 0));
+            using var server = new MockServer(busy);
+            server.Start();
+
+            MockServer.ValidateJson("{ \"version\": 1, \"server\": { \"transport\": \"udp\", \"port\": " + busy.Port + " } }");
         }
 
         [Fact]

@@ -6,8 +6,8 @@ mock server from a JSON file, without writing any code. The repository has a Doc
 ```console
 dotnet tool install --global Rony.Net.Cli
 
-rony run mock.json                  # start the server described by the file (Ctrl+C stops it)
-rony validate mock.json             # check the file without starting anything
+rony run mock.json                  # start the server described by the file (Ctrl+C stops it); --port and --address override the file
+rony validate mock.json             # check the file without starting anything or opening a socket
 rony record --target api.test:5000 --out login.json --delimiter "\n"   # record a real server through a proxy
 rony replay login.json --delimiter "\n"                                # serve the recording as a mock
 ```

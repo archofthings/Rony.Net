@@ -24,13 +24,22 @@ configuration file (or `--address`) says otherwise. Options are written `--name 
 
 ## rony run
 ```console
-rony run mock.json [--quiet]
+rony run mock.json [--port <N>] [--address <ip>] [--quiet]
 ```
 Loads the file with `MockServer.FromFile`, starts the server, prints where it listens and then every log line
 (prefixed with the time) until you press Ctrl+C or send SIGTERM; then it stops the server and exits with 0. A second Ctrl+C (or SIGTERM) while it
 is stopping ends the tool at once.
-`--quiet` hides the log lines. The address, port and transport come from the file only; use `"port": 0` to let the system pick one
-(it is printed). A `unix` configuration must set `server.path` (exit 2 otherwise), because the tool cannot show a generated temporary path. A file that is missing or invalid exits with 2 and the message of the [error](Configuration-Files#errors).
+A file that is missing or invalid exits with 2 and the message of the [error](Configuration-Files#errors).
+
+| Option | Description |
+|---|---|
+| `--port <N>` | Port, replacing `server.port` of the file (default: from the file); `0` lets the system pick one (it is printed). |
+| `--address <ip>` | Address, replacing `server.address` of the file (default: from the file). |
+| `--quiet` | Do not print the log lines. |
+
+So one file can serve on different ports. `--port` and `--address` are not allowed for a `unix` configuration (exit 2), and
+`--address` must be an IPv6 address when the file sets `server.dualMode`. A `unix` configuration without `server.path` gets a
+generated socket file in the temp directory, which is printed (`Listening on unix <path>`).
 
 ```json
 {
@@ -51,9 +60,8 @@ Listening on tcp 127.0.0.1:58182
 ```console
 rony validate mock.json
 ```
-Loads the file without starting anything. Prints `OK` and exits with 0, or prints the error and exits with 2. Handy in CI.
-A `udp` configuration binds its port when it is loaded (like `new UdpServer(...)`), so `validate` reports
-`The file is valid, but its UDP port is in use: <error>` and exits with 1 when the port is taken.
+Checks the file (`MockServer.ValidateFile`) without starting anything or opening a socket, so a `udp` port that is in use
+is no problem. Prints `OK` and exits with 0, or prints the error and exits with 2. Handy in CI.
 
 ## rony record
 ```console
@@ -200,7 +208,7 @@ Check that the configuration files in the repository are valid, so a typo is fou
 for f in mocks/*.json; do rony validate "$f" || exit 1; done
 ```
 `validate` prints `OK` and exits with 0, or prints the error and exits with 2 (see [exit codes](#exit-codes)). It does not
-start anything, except that a `udp` file binds its port when it is loaded.
+start anything and opens no socket.
 
 To test a client that is not written in .NET against the mock, start the tool in the background, wait until it listens, run
 the tests and stop it with SIGTERM:
@@ -220,7 +228,7 @@ assertions (see [Getting Started](Getting-Started) and [Configuration Files](Con
 
 ### In a container next to the system under test
 Build the image once from the `Dockerfile` (see [Docker](#docker)). The server in the file must listen on all interfaces, or
-the other containers cannot reach it: `mocks/shop.json` with `"address": "0.0.0.0"`.
+the other containers cannot reach it: `mocks/shop.json` with `"address": "0.0.0.0"` (or pass `--address 0.0.0.0` to `run`).
 ```console
 docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config" rony run /config/shop.json
 ```
@@ -288,8 +296,7 @@ Point a client at it to see its retry, timeout and reconnect behaviour. More on 
 (truncated or throttled responses, refused connections) are not available here.
 
 ### A Unix domain socket or UDP
-The same file format serves other transports. A Unix domain socket (the file needs a `path`, because the tool cannot show a
-generated one):
+The same file format serves other transports. A Unix domain socket (without `path`, the tool generates one and prints it):
 ```json
 {
   "version": 1,
@@ -304,7 +311,7 @@ $ nc -U /tmp/rony-demo.sock
 PING
 PONG
 ```
-The socket file is removed when the tool stops. A UDP server, where every datagram is one message (there is no framing):
+The socket file is removed when the tool stops. Without `"path"`, the line reads `Listening on unix /tmp/rony-1a2b3c4d.sock`. A UDP server, where every datagram is one message (there is no framing):
 ```json
 {
   "version": 1,
@@ -374,6 +381,6 @@ It can only do what a configuration file or a recording can express. Response fu
 chunked or throttled responses, refused connections, failing TLS handshakes, client certificate validators, custom framings and
 listeners, and assertions (`Should()`) need code; see [Not available in files](Configuration-Files#not-available-in-files).
 The TLS certificate of `--tls` is generated and cannot be chosen (use `"transport": "tls"` with a PFX file in a configuration
-file for that), and there is no UDP recording or replay. There are no options to override the file: edit the file instead.
+file for that), and there is no UDP recording or replay. Only the address and port of the file can be overridden (`--port`, `--address`); edit the file for anything else.
 
 Tests of the tool: `tests/Rony.Net.Cli.Tests` (every configuration on this page is one of them; the scenario tests use port `0` and a temporary socket path instead of the fixed ones shown).

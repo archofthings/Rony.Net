@@ -15,6 +15,8 @@ server.Start();
 | `MockServer.FromFile(path)` | Reads the file. Relative paths inside it (the certificate) are resolved against the file's directory. A missing file throws `FileNotFoundException`, a missing directory `DirectoryNotFoundException`. |
 | `MockServer.FromJson(json)` | The same for JSON text. Relative paths are resolved against the current directory. |
 | `MockServer.FromJson(json, baseDirectory)` | The same, resolving relative paths against `baseDirectory` (`null` means the current directory). |
+| `MockServer.FromFile(path, overrides)`, `MockServer.FromJson(json, baseDirectory, overrides)` | The same with a [`ConfigurationOverrides`](#overrides-and-validation) that replaces the address and port. |
+| `MockServer.ValidateFile(path)`, `MockServer.ValidateJson(json, baseDirectory = null)` | Check the file like the methods above do, without creating a listener. |
 
 The server is created but not started. A null argument throws `ArgumentNullException`; anything wrong with the content
 throws a `FormatException` (see [Errors](#errors)). The file format described here is **version 1**.
@@ -187,6 +189,26 @@ server.Start();
 // ... run the code under test ...
 
 server.Should().HaveReceivedInOrder("PING", "EXTRA");
+```
+
+## Overrides and validation
+One file can serve on different ports: `ConfigurationOverrides` replaces `server.address` and `server.port` (a value that is `null`
+keeps the one of the file; `rony run --port/--address` use it). It works for `tcp`, `tls` and `udp`; a `udp` server binds the
+overridden values when it is created. Overrides for a `unix` configuration, or an IPv4 address when the file sets `server.dualMode`,
+throw an `ArgumentException`; a mistake in the file itself is reported first, as a `FormatException`.
+```csharp
+using var server = MockServer.FromFile("mock.json", new ConfigurationOverrides { Port = 0 });
+```
+`MockServer.ValidateFile` and `ValidateJson` do everything the loading methods do, including loading the TLS certificate and
+adding every rule, except creating the listener, so nothing is bound (a `udp` port in use is no problem) and they throw the same
+`FormatException`:
+```csharp
+MockServer.ValidateFile("mock.json");   // throws FormatException with the place of the mistake; opens no socket
+```
+`server.Listener` is the listener the server was created with. For a `unix` configuration without `server.path` it tells the
+generated socket path:
+```csharp
+var path = ((UnixSocketServer)server.Listener).Path;
 ```
 
 ## Not available in files

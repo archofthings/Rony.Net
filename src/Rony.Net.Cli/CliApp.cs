@@ -15,7 +15,7 @@ namespace Rony.Cli
             "Usage: rony <command> [options]\n" +
             "\n" +
             "Commands:\n" +
-            "  run <config.json> [--quiet]            Run the mock server described by a configuration file\n" +
+            "  run <config.json> [options]            Run the mock server described by a configuration file\n" +
             "  validate <config.json>                 Check a configuration file without starting anything\n" +
             "  record --target <host:port> --out <file.json> [options]\n" +
             "                                         Record the traffic to a real server through a proxy\n" +
@@ -33,15 +33,17 @@ namespace Rony.Cli
         private static readonly Dictionary<string, string> CommandHelp = new Dictionary<string, string>
         {
             ["run"] =
-                "Usage: rony run <config.json> [--quiet]\n" +
+                "Usage: rony run <config.json> [options]\n" +
                 "\n" +
                 "Starts the mock server described by the file (see the Configuration Files wiki page), prints where it listens\n" +
                 "and logs every connection and request, until Ctrl+C or SIGTERM.\n" +
-                "  --quiet    Do not print the log lines",
+                "  --port <N>       Port (default: from the file; 0 is a free port)\n" +
+                "  --address <ip>   Address (default: from the file)\n" +
+                "  --quiet          Do not print the log lines",
             ["validate"] =
                 "Usage: rony validate <config.json>\n" +
                 "\n" +
-                "Loads the file without starting anything. Prints OK, or the error with exit code 2.",
+                "Checks the file without starting anything or opening a socket. Prints OK, or the error with exit code 2.",
             ["record"] =
                 "Usage: rony record --target <host:port> --out <file.json> [options]\n" +
                 "\n" +

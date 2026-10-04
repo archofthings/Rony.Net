@@ -145,5 +145,69 @@ namespace Rony.Tests.Handler
             Assert.Equal(StateScope.Connection, server.Mock.StateScope);
             Assert.True(server.Mock.FailOnUnmatched);
         }
+
+        [Fact]
+        public void Overrides_Should_Replace_Address_And_Port()
+        {
+            var overrides = new ConfigurationOverrides { Port = 0, Address = IPAddress.IPv6Loopback };
+            using var server = MockServer.FromJson(Json("{ 'version': 1, 'server': { 'port': 1 } }"), null, overrides);
+
+            Assert.Equal(0, server.Port);
+            Assert.Equal(IPAddress.IPv6Loopback, server.Address);
+            Assert.False(server.Active);
+            Assert.IsType<Rony.Listeners.TcpServer>(server.Listener);
+        }
+
+        [Theory]
+        [InlineData("{ 'version': 1, 'server': { 'transport': 'unix' } }", "127.0.0.1", null)]
+        [InlineData("{ 'version': 1, 'server': { 'transport': 'unix' } }", null, 0)]
+        [InlineData("{ 'version': 1, 'server': { 'address': '::', 'dualMode': true } }", "127.0.0.1", null)]
+        public void Overrides_Should_Be_Rejected_When_They_Do_Not_Fit_The_Configuration(string json, string address, int? port)
+        {
+            var overrides = new ConfigurationOverrides { Address = address == null ? null : IPAddress.Parse(address), Port = port };
+
+            Assert.Throws<ArgumentException>("overrides", () => MockServer.FromJson(Json(json), null, overrides));
+        }
+
+        [Fact]
+        public void Overrides_Should_Report_File_Errors_First()
+        {
+            var overrides = new ConfigurationOverrides { Port = 0 };
+
+            Assert.Throws<FormatException>(() => MockServer.FromJson(Json("{ 'version': 2, 'server': { 'transport': 'unix' } }"), null, overrides));
+        }
+
+        [Fact]
+        public void ValidateJson_Should_Report_An_Unreadable_Certificate_Like_FromJson()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "rony-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                File.WriteAllBytes(Path.Combine(directory, "server.pfx"), new byte[] { 1, 2, 3, 4 });
+                var json = Json("{ 'version': 1, 'server': { 'transport': 'tls', 'tls': { 'certificate': 'server.pfx' } } }");
+                var expected = Assert.Throws<FormatException>(() => MockServer.FromJson(json, directory));
+
+                var actual = Assert.Throws<FormatException>(() => MockServer.ValidateJson(json, directory));
+
+                Assert.Equal(expected.Message, actual.Message);
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        [Fact]
+        public void ValidateJson_Should_Report_The_Errors_Of_FromJson_And_Accept_A_Valid_File()
+        {
+            var invalid = Json("{ 'version': 1, 'rules': [ { 'request': 'A', 'reply': 'x' }, { 'request': 'A', 'reply': 'y' } ] }");
+            var expected = Assert.Throws<FormatException>(() => MockServer.FromJson(invalid));
+
+            var actual = Assert.Throws<FormatException>(() => MockServer.ValidateJson(invalid));
+
+            Assert.Equal(expected.Message, actual.Message);
+            MockServer.ValidateJson(Json("{ 'version': 1, 'rules': [ { 'request': 'A', 'reply': 'x' } ] }"));
+        }
     }
 }

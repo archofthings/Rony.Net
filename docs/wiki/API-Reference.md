@@ -26,6 +26,11 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `static MockServer FromJson(string json)` | A server (listener and rules) from a [configuration in JSON](Configuration-Files); not started. Throws `FormatException` naming the problem and where it is |
 | `static MockServer FromJson(string json, string baseDirectory)` | Same; relative paths in the configuration (the certificate) are resolved against `baseDirectory` (`null` = current directory) |
 | `static MockServer FromFile(string path)` | Same, reading the JSON from a file; relative paths are resolved against the file's directory. `FileNotFoundException` for a missing file |
+| `static MockServer FromJson(string json, string baseDirectory, ConfigurationOverrides overrides)` | Same, with the address and port of the configuration replaced by `overrides` (`null` = none). `ArgumentException` for an override for a `unix` configuration, or an IPv4 address with `server.dualMode` |
+| `static MockServer FromFile(string path, ConfigurationOverrides overrides)` | Same, reading the JSON from a file |
+| `static void ValidateJson(string json, string baseDirectory = null)` | Checks a configuration like `FromJson` (certificate, rules) without creating a listener, so nothing is bound. Same exceptions as `FromJson` |
+| `static void ValidateFile(string path)` | Same, reading the JSON from a file |
+| `IListener Listener` | The listener the server was created with, for example `((UnixSocketServer)server.Listener).Path` |
 | `void Replay(Recording recording)` | Adds rules that answer like the recorded server; see [Record and Replay](Record-and-Replay). Throws `ArgumentException` for requests that already have a rule |
 
 **Connections** (TCP; on other listeners `Connections` is empty and the methods throw `NotSupportedException`). See [Connections and Push](Connections-and-Push).
@@ -247,6 +252,10 @@ A TCP/TLS relay that records the traffic between a client and a real server (no 
 
 ## `Rony.Net.StateScope`
 `Server` (one scenario state for the server) or `Connection` (one per connection).
+
+## `Rony.Models.ConfigurationOverrides`
+Values that replace what a [configuration file](Configuration-Files#overrides-and-validation) says: `IPAddress Address` (`null` keeps `server.address`) and `int? Port`
+(`null` keeps `server.port`; `ArgumentOutOfRangeException` outside 0 to 65535).
 
 ## `Rony.Models.Config`
 One exact-request configuration: `CallCount`, and `GetResponse(string or byte[])`, which returns the next response and moves the sequence forward.

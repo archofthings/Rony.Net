@@ -12,26 +12,18 @@ Related items are grouped so that each version has one theme. The version number
 
 | Version | Theme | Items |
 |---|---|---|
-| 1.4.1 | Fixes to the mock server and the tool; no new API | I1 (I2–I6 are fixed, see `CHANGELOG.md`) |
-| 1.5.0 | The tool: verify, operate, deploy | 17, 18, 19, 20, 34, I7–I10 |
+| 1.5.0 | The tool: verify, operate, deploy | 17, 18, 20, 34, I7, I10 (19, I8 and I9 are done, see `CHANGELOG.md`) |
 | 1.6.0 | Files and proxying: say more in a file, mock only a part | 21, 22, 23, 24, 25, 29, 32 |
 | 1.7.0 | Network conditions: resilience testing | 30, 31 |
 | 1.8.0 | Binary, long-lived and well-known protocols | 26, 27, 28, 33 |
 
-Order inside the plan: 1.4.1 first (small, lowers the Known Issues list), then 1.5.0 (closes the biggest gap between the
-library and the tool). 1.6.0, 1.7.0 and 1.8.0 do not depend on each other and can swap, except that item 31 builds on
+Order inside the plan: 1.5.0 first (closes the biggest gap between the library and the tool); the fixes planned as
+1.4.1 are done (see `CHANGELOG.md`). 1.6.0, 1.7.0 and 1.8.0 do not depend on each other and can swap, except that item 31 builds on
 the pass-through of item 23; within 1.6.0, item 21 comes before 22 and 24 because they add to the file format it
 extends, and 23 before 29.
 
 Items 29 to 34 come from a look at what comparable tools offer (mountebank, Toxiproxy, MockServer's TCP chaos profile,
 Mockly) in October 2026; they are the features those tools have for raw TCP that Rony.Net lacks.
-
-## 1.4.1: fixes
-
-No new public API; patch version.
-
-- **I1. `RefuseConnections()` and a client that is connecting.** A client whose connection the operating system completed
-  but the server has not accepted yet can see a reset. It should see "connection refused" or be served.
 
 ## 1.5.0: the tool can be verified, operated and deployed
 
@@ -44,8 +36,6 @@ without limit.
   steer it.
 - **18. Hot reload: `rony run --watch`.** Reloads the rules when the configuration file changes, without dropping open
   connections; a file with a mistake is reported and the old rules stay.
-- **19. `rony run` options that override the file:** `--port` and `--address`, so one file serves on different ports
-  (needs a way to build the listener from a file with overrides, including UDP, which binds when it is created).
 - **20. A published Docker image,** built and pushed by the release workflow (registry, tags and permissions to be
   decided), with the `docker compose` example of the wiki run in CI.
 - **34. A Testcontainers module** (`Rony.Net.Testcontainers`): starts the published image of item 20 from a test, waits
@@ -53,10 +43,6 @@ without limit.
 - **I7. Memory growth.** The tool keeps every received request and connection record for its whole run, and `record`
   keeps the whole recording in memory. A cap ("keep the last N") makes long runs safe; it fits with item 17, which
   moves the full history to a file.
-- **I8. `rony validate` binds the port of a `udp` configuration,** because `UdpServer` binds in its constructor. A
-  parse-only path validates without touching the network; item 19 needs the same split of parsing and building.
-- **I9. A `unix` configuration without `server.path` cannot be run by the tool,** because the generated path is not
-  readable from outside the server. Expose it and print it.
 - **I10. Tests:** the 16 MiB default of `server.maxBufferedBytes` is only tested through the parsing of the property.
 
 ## 1.6.0: files and proxying
@@ -116,6 +102,9 @@ them on the whole server, switchable in the middle of a test.
 
 ## Not planned
 
+- `RefuseConnections()` without any reset (was I1): the server already accepts every client waiting in the accept queue
+  before it closes the listening socket. A client whose handshake completes in the instant between that and the close is
+  reset by the operating system, and no socket API closes that gap. It stays in `docs/wiki/Known-Issues.md`.
 - HTTP and WebSocket support: mature tools exist for them, and the value of this library is in raw TCP, TLS and UDP.
 - `dotnet test` twice took minutes of wall-clock time on macOS although its tests finished in seconds (cause unknown).
   If it happens again, capture `--blame-hang-timeout` and `--diag` output.

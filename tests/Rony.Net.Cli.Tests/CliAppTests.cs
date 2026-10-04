@@ -152,19 +152,6 @@ namespace Rony.Cli.Tests
         }
 
         [Fact]
-        public async Task Run_Should_Reject_A_Unix_Config_Without_A_Path()
-        {
-            using var directory = new TempDirectory();
-            var file = directory.Write("mock.json", "{\"version\":1,\"server\":{\"transport\":\"unix\"},\"rules\":[]}");
-            var error = new LineWriter();
-
-            var code = await CliApp.RunAsync(new[] { "run", file }, new LineWriter(), error, CancellationToken.None).WaitAsync(Limit);
-
-            Assert.Equal(2, code);
-            Assert.Contains("server.path", error.Text);
-        }
-
-        [Fact]
         public async Task Record_Should_Reject_An_Unwritable_Out_Before_Starting_The_Proxy()
         {
             using var directory = new TempDirectory();
@@ -180,19 +167,18 @@ namespace Rony.Cli.Tests
         }
 
         [Fact]
-        public async Task Validate_Should_Report_A_Udp_Port_In_Use_With_Exit_Code_1()
+        public async Task Validate_Should_Not_Bind_The_Port_Of_A_Udp_Configuration()
         {
             using var directory = new TempDirectory();
-            // The same address as the file's default: Windows lets 127.0.0.1 bind next to a socket on 0.0.0.0.
             using var busy = new MockServer(new UdpServer("127.0.0.1", 0));
             busy.Start();
             var file = directory.Write("mock.json", "{\"version\":1,\"server\":{\"transport\":\"udp\",\"port\":" + busy.Port + "},\"rules\":[]}");
-            var error = new LineWriter();
+            var output = new LineWriter();
 
-            var code = await CliApp.RunAsync(new[] { "validate", file }, new LineWriter(), error, CancellationToken.None).WaitAsync(Limit);
+            var code = await CliApp.RunAsync(new[] { "validate", file }, output, new LineWriter(), CancellationToken.None).WaitAsync(Limit);
 
-            Assert.Equal(1, code);
-            Assert.Contains("The file is valid, but its UDP port is in use", error.Text);
+            Assert.Equal(0, code);
+            Assert.Equal("OK", output.Text);
         }
 
         [Theory]
@@ -245,6 +231,63 @@ namespace Rony.Cli.Tests
 
             stop.Cancel();
             Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Run_Should_Let_Port_And_Address_Override_The_File()
+        {
+            using var directory = new TempDirectory();
+            using var stop = new CancellationTokenSource();
+            var file = directory.Write("mock.json", WikiConfig.Replace("\"port\": 0", "\"port\": 1"));
+            var output = new LineWriter();
+            var run = CliApp.RunAsync(new[] { "run", file, "--port", "0", "--address", "127.0.0.1", "--quiet" }, output, new LineWriter(), stop.Token);
+            var listening = await output.WaitForLineAsync(l => l.StartsWith("Listening on tcp 127.0.0.1:")).WaitAsync(Limit);
+
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", PortOf(listening));
+            using var stream = client.GetStream();
+            await stream.WriteAsync(Encoding.UTF8.GetBytes("PING\n"));
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            Assert.Equal("PONG", await reader.ReadLineAsync().WaitAsync(Limit));
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Run_Should_Reject_Port_And_Address_For_A_Unix_Config()
+        {
+            using var directory = new TempDirectory();
+            var error = new LineWriter();
+
+            var code = await CliApp.RunAsync(new[] { "run", directory.Write("sock.json", UnixConfig), "--port", "0" }, new LineWriter(), error, CancellationToken.None).WaitAsync(Limit);
+
+            Assert.Equal(2, code);
+            Assert.Contains("cannot be overridden", error.Text);
+            Assert.DoesNotContain("Parameter", error.Text);
+        }
+
+        [Fact]
+        public async Task Run_Should_Print_The_Generated_Path_Of_A_Unix_Config_Without_A_Path()
+        {
+            using var directory = new TempDirectory();
+            using var stop = new CancellationTokenSource();
+            var config = UnixConfig.Replace("\"path\": \"/tmp/rony-demo.sock\", ", "");
+            var (run, listening) = await StartAsync(directory.Write("sock.json", config), stop.Token, "Listening on unix ");
+
+            var socketPath = listening.Substring("Listening on unix ".Length);
+            using (var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
+            {
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath));
+                using var stream = new NetworkStream(socket);
+                await stream.WriteAsync(Encoding.UTF8.GetBytes("PING\n"));
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                Assert.Equal("PONG", await reader.ReadLineAsync().WaitAsync(Limit));
+            }
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+            Assert.False(File.Exists(socketPath));
         }
 
         [Fact]

@@ -80,7 +80,45 @@ namespace Rony.Handlers
         private const int DefaultMaxBufferedBytes = 16 * 1024 * 1024;
         private const int MaxCertificateBytes = 1024 * 1024;
 
-        public static MockServer Create(string json, string baseDirectory)
+        private sealed class Configuration
+        {
+            public ServerSettings Settings;
+            public string StateScope;
+            public bool FailOnUnmatched;
+            public List<Response> OnConnect;
+            public List<Response> OnUnmatched;
+            public List<Rule> Rules;
+        }
+
+        public static MockServer Create(string json, string baseDirectory, ConfigurationOverrides overrides)
+        {
+            var configuration = Parse(json, baseDirectory);
+            if (overrides != null) ApplyOverrides(configuration.Settings, overrides);
+
+            var server = CreateServer(configuration.Settings);
+            try
+            {
+                ApplyRules(server.Mock, configuration);
+                return server;
+            }
+            catch
+            {
+                server.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>Checks everything <see cref="Create"/> checks except what needs a listener: nothing is bound.</summary>
+        public static void Validate(string json, string baseDirectory)
+        {
+            var configuration = Parse(json, baseDirectory);
+            var settings = configuration.Settings;
+            if (settings.Transport == "tls" && settings.CertificatePath != null)
+                LoadCertificate(settings.CertificatePath, settings.CertificatePassword).Dispose();
+            ApplyRules(new RequestHandler(), configuration);
+        }
+
+        private static Configuration Parse(string json, string baseDirectory)
         {
             if (json == null) throw new ArgumentNullException(nameof(json));
 
@@ -103,23 +141,40 @@ namespace Rony.Handlers
             var onUnmatched = ParseOptionalResponses(root, "onUnmatched");
             var rules = ParseRules(root["rules"]);
 
-            var server = CreateServer(settings);
-            try
+            return new Configuration
             {
-                var mock = server.Mock;
-                if (stateScope == "connection") mock.StateScope = StateScope.Connection;
-                mock.FailOnUnmatched = failOnUnmatched;
-                if (onConnect != null) Apply(() => AddResponses(mock.OnConnect(), onConnect, null), "onConnect");
-                if (onUnmatched != null) Apply(() => AddResponses(mock.OnUnmatched(), onUnmatched, null), "onUnmatched");
-                foreach (var rule in rules)
-                    Apply(() => AddRule(mock, rule), rule.Where);
-                return server;
-            }
-            catch
+                Settings = settings,
+                StateScope = stateScope,
+                FailOnUnmatched = failOnUnmatched,
+                OnConnect = onConnect,
+                OnUnmatched = onUnmatched,
+                Rules = rules
+            };
+        }
+
+        private static void ApplyOverrides(ServerSettings settings, ConfigurationOverrides overrides)
+        {
+            if (overrides.Address == null && overrides.Port == null) return;
+            if (settings.Transport == "unix")
+                throw new ArgumentException("Address and port cannot be overridden for transport \"unix\".", nameof(overrides));
+            if (overrides.Address != null)
             {
-                server.Dispose();
-                throw;
+                if (settings.DualMode && overrides.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6)
+                    throw new ArgumentException("The override address must be an IPv6 address because the configuration sets server.dualMode.", nameof(overrides));
+                settings.Address = overrides.Address;
             }
+
+            if (overrides.Port != null) settings.Port = overrides.Port.Value;
+        }
+
+        private static void ApplyRules(RequestHandler mock, Configuration configuration)
+        {
+            if (configuration.StateScope == "connection") mock.StateScope = StateScope.Connection;
+            mock.FailOnUnmatched = configuration.FailOnUnmatched;
+            if (configuration.OnConnect != null) Apply(() => AddResponses(mock.OnConnect(), configuration.OnConnect, null), "onConnect");
+            if (configuration.OnUnmatched != null) Apply(() => AddResponses(mock.OnUnmatched(), configuration.OnUnmatched, null), "onUnmatched");
+            foreach (var rule in configuration.Rules)
+                Apply(() => AddRule(mock, rule), rule.Where);
         }
 
         #region Parsing

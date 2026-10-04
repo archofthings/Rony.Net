@@ -57,6 +57,9 @@ namespace Rony.Net
         /// </summary>
         public int Port => _listener.Port;
 
+        /// <summary>The listener the server was created with, for example to read <see cref="Rony.Listeners.UnixSocketServer.Path"/> of a server created from a configuration; start and stop it through the server.</summary>
+        public IListener Listener => _listener;
+
         /// <summary>Whether the server is started and listening.</summary>
         public bool Active => _listener.Active;
 
@@ -122,7 +125,7 @@ namespace Rony.Net
         /// </summary>
         /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
         /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid; the message names the problem and where it is.</exception>
-        public static MockServer FromJson(string json, string baseDirectory) => MockConfiguration.Create(json, baseDirectory);
+        public static MockServer FromJson(string json, string baseDirectory) => MockConfiguration.Create(json, baseDirectory, null);
 
         /// <summary>
         /// Like <see cref="FromJson(string)"/>, reading the JSON from a file. Relative paths inside the file (the TLS certificate)
@@ -137,6 +140,53 @@ namespace Rony.Net
             if (path == null) throw new ArgumentNullException(nameof(path));
             var fullPath = Path.GetFullPath(path);
             return FromJson(File.ReadAllText(fullPath), Path.GetDirectoryName(fullPath));
+        }
+
+        /// <summary>
+        /// Like <see cref="FromJson(string, string)"/>, with <paramref name="overrides"/> replacing the address and port of the configuration
+        /// (null means no overrides). A UDP server binds when it is created, so it binds the overridden values.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
+        /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid; this is reported before a problem with the overrides.</exception>
+        /// <exception cref="ArgumentException">An override is set for the transport <c>unix</c>, or the configuration sets <c>server.dualMode</c> and the override address is not an IPv6 address.</exception>
+        public static MockServer FromJson(string json, string baseDirectory, ConfigurationOverrides overrides) => MockConfiguration.Create(json, baseDirectory, overrides);
+
+        /// <summary>
+        /// Like <see cref="FromFile(string)"/>, with <paramref name="overrides"/> replacing the address and port of the configuration
+        /// (null means no overrides).
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
+        /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+        /// <exception cref="DirectoryNotFoundException">The directory of the file does not exist.</exception>
+        /// <exception cref="FormatException">The content is not valid JSON or the configuration is invalid; this is reported before a problem with the overrides.</exception>
+        /// <exception cref="ArgumentException">An override is set for the transport <c>unix</c>, or the configuration sets <c>server.dualMode</c> and the override address is not an IPv6 address.</exception>
+        public static MockServer FromFile(string path, ConfigurationOverrides overrides)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var fullPath = Path.GetFullPath(path);
+            return FromJson(File.ReadAllText(fullPath), Path.GetDirectoryName(fullPath), overrides);
+        }
+
+        /// <summary>
+        /// Checks a configuration like <see cref="FromJson(string, string)"/> does (including loading the TLS certificate and adding
+        /// every rule) without creating a listener, so no socket is opened.
+        /// </summary>
+        /// <param name="json">The configuration.</param>
+        /// <param name="baseDirectory">The directory relative paths inside the configuration are resolved against (null means the current directory).</param>
+        /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
+        /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid; the message names the problem and where it is.</exception>
+        public static void ValidateJson(string json, string baseDirectory = null) => MockConfiguration.Validate(json, baseDirectory);
+
+        /// <summary>Like <see cref="ValidateJson"/>, reading the JSON from a file; relative paths inside the file are resolved against its directory.</summary>
+        /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
+        /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+        /// <exception cref="DirectoryNotFoundException">The directory of the file does not exist.</exception>
+        /// <exception cref="FormatException">The content is not valid JSON or the configuration is invalid.</exception>
+        public static void ValidateFile(string path)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var fullPath = Path.GetFullPath(path);
+            ValidateJson(File.ReadAllText(fullPath), Path.GetDirectoryName(fullPath));
         }
 
         /// <summary>Starts listening. Calling it again while started does nothing; a stopped server can be started again.</summary>

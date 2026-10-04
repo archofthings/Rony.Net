@@ -24,14 +24,16 @@ namespace Rony.Cli
 
         public static async Task<int> RunAsync(string[] args, Sink sink, CancellationToken stop)
         {
-            var line = CommandLine.Parse(args, NoValues, new HashSet<string> { "quiet" });
+            var line = CommandLine.Parse(args, new HashSet<string> { "port", "address" }, new HashSet<string> { "quiet" });
             var path = line.SinglePositional("the configuration file");
+            var overrides = new ConfigurationOverrides();
+            if (line.Has("port", out _)) overrides.Port = line.Port();
+            if (line.Has("address", out _)) overrides.Address = line.Address();
 
-            using (var server = Load(path))
+            using (var server = Load(path, overrides))
             {
-                ReadServerSettings(path, out var transport, out var socket);
-                if (transport == "unix" && socket == null)
-                    throw new InputException($"{path}: a configuration for this tool with \"transport\": \"unix\" must set server.path (the generated temporary path cannot be shown).");
+                var unix = server.Listener as UnixSocketServer;
+                var transport = unix != null ? "unix" : server.Listener is UdpServer ? "udp" : server.Listener is TcpServerSsl ? "tls" : "tcp";
 
                 // Attached before the server can accept a connection, so a client reacting to the line below loses no log line.
                 if (!line.Has("quiet")) server.Log = text => LogUnlessListening(sink, text);
@@ -39,16 +41,16 @@ namespace Rony.Cli
                 {
                     await server.StartAsync().ConfigureAwait(false);
                 }
-                catch (ArgumentOutOfRangeException) when (transport == "unix")
+                catch (ArgumentOutOfRangeException) when (unix != null)
                 {
-                    throw new InputException($"{path}: server.path \"{socket}\" is too long for a Unix socket (the limit is about 104 bytes).");
+                    throw new InputException($"{path}: server.path \"{unix.Path}\" is too long for a Unix socket (the limit is about 104 bytes).");
                 }
-                catch (SocketException exception) when (transport == "unix" && exception.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                catch (SocketException exception) when (unix != null && exception.SocketErrorCode == SocketError.AddressAlreadyInUse)
                 {
-                    throw new InputException($"{path}: server.path \"{socket}\" is already in use: a file exists at that path.");
+                    throw new InputException($"{path}: server.path \"{unix.Path}\" is already in use: a file exists at that path.");
                 }
 
-                sink.WriteLine(transport == "unix" ? "Listening on unix " + socket : $"Listening on {transport} {Format(server.Address, server.Port)}");
+                sink.WriteLine(unix != null ? "Listening on unix " + unix.Path : $"Listening on {transport} {Format(server.Address, server.Port)}");
 
                 await WaitForStopAsync(stop).ConfigureAwait(false);
                 await server.StopAsync().ConfigureAwait(false);
@@ -60,20 +62,17 @@ namespace Rony.Cli
         public static int Validate(string[] args, Sink sink)
         {
             var line = CommandLine.Parse(args, NoValues, NoValues);
-            MockServer server;
+            var path = line.SinglePositional("the configuration file");
             try
             {
-                server = Load(line.SinglePositional("the configuration file"));
+                MockServer.ValidateFile(path);
             }
-            catch (SocketException exception)
+            catch (Exception exception) when (IsInputError(exception))
             {
-                // A udp configuration binds its port when it is loaded.
-                sink.Error.WriteLine("The file is valid, but its UDP port is in use: " + exception.Message);
-                return 1;
+                throw new InputException($"{path}: {exception.Message}");
             }
 
-            using (server)
-                sink.WriteLine("OK");
+            sink.WriteLine("OK");
             return 0;
         }
 
@@ -203,18 +202,27 @@ namespace Rony.Cli
             return 0;
         }
 
-        private static MockServer Load(string path)
+        private static MockServer Load(string path, ConfigurationOverrides overrides)
         {
             try
             {
-                return MockServer.FromFile(path);
+                return MockServer.FromFile(path, overrides);
             }
-            catch (Exception exception) when (exception is FormatException || exception is IOException
-                                              || exception is UnauthorizedAccessException || exception is ArgumentException)
+            catch (ArgumentException exception) when (exception.ParamName == "overrides")
+            {
+                // The core message without its " (Parameter 'overrides')" suffix.
+                var message = exception.Message;
+                var suffix = message.IndexOf(" (Parameter", StringComparison.Ordinal);
+                throw new InputException($"{path}: {(suffix >= 0 ? message.Substring(0, suffix) : message)}");
+            }
+            catch (Exception exception) when (IsInputError(exception))
             {
                 throw new InputException($"{path}: {exception.Message}");
             }
         }
+
+        private static bool IsInputError(Exception exception) =>
+            exception is FormatException || exception is IOException || exception is UnauthorizedAccessException || exception is ArgumentException;
 
         private static async Task WaitForStopAsync(CancellationToken stop)
         {
@@ -233,23 +241,6 @@ namespace Rony.Cli
         {
             if (text.Contains("] listening on ") || text.Contains("] recording proxy listening on ")) return;
             sink.Log(text);
-        }
-
-        // MockServer does not expose its listener, so the transport word and the socket file come from the (valid) file itself.
-        private static void ReadServerSettings(string path, out string transport, out string socket)
-        {
-            transport = "tcp";
-            socket = null;
-            try
-            {
-                var server = JsonData.Parse(File.ReadAllText(path))["server"];
-                transport = server["transport"].AsString() ?? transport;
-                socket = server["path"].AsString();
-            }
-            catch (Exception exception) when (exception is FormatException || exception is IOException)
-            {
-                // Only the wording of the line depends on it.
-            }
         }
 
         /// <summary>Proves <paramref name="outPath"/> can be written before anything starts; true when the probe created the file.</summary>
