@@ -527,6 +527,45 @@ namespace Rony.FunctionalTests
         }
 
         [Theory]
+        [InlineData("listening on")]
+        [InlineData("stopped")]
+        [InlineData("refusing connections")]
+        [InlineData("accepting connections")]
+        public void Log_Should_Not_Be_Called_While_The_Server_Holds_Its_Lock(string line)
+        {
+            //Arrange: the Log callback waits for another thread that needs the server's lock
+            using var server = new MockServer(new TcpServer(0));
+            if (line != "listening on") server.Start();
+            if (line == "accepting connections") server.RefuseConnections();
+            Action<MockServer> other = line switch
+            {
+                "listening on" => s => s.Stop(),
+                "stopped" => s => s.Start(),
+                "refusing connections" => s => s.AcceptConnections(),
+                _ => s => s.RefuseConnections()
+            };
+            var triggered = 0;
+            var returned = false;
+            server.Log = message =>
+            {
+                if (!message.Contains(line) || Interlocked.Exchange(ref triggered, 1) == 1) return;
+                returned = Task.Run(() => other(server)).Wait(TimeSpan.FromSeconds(5));
+            };
+
+            //Act
+            switch (line)
+            {
+                case "listening on": server.Start(); break;
+                case "stopped": server.Stop(); break;
+                case "refusing connections": server.RefuseConnections(); break;
+                default: server.AcceptConnections(); break;
+            }
+
+            //Assert
+            Assert.True(returned);
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task StopAsync_Should_Wait_For_Work_In_Flight_And_Call_No_Callback_Afterwards(bool tls)

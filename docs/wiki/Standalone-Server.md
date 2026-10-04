@@ -16,8 +16,8 @@ It needs the .NET 8 runtime or a newer one. `rony --help` and `rony <command> --
 | Code | Meaning |
 |---|---|
 | 0 | Success (for the long-running commands: stopped with Ctrl+C or SIGTERM) |
-| 1 | Runtime failure, for example the port is already in use, or a Unix socket path that is too long or already exists |
-| 2 | Usage error (unknown command or option, missing value) or an invalid or missing input file |
+| 1 | Runtime failure, for example the port is already in use |
+| 2 | Usage error (unknown command or option, missing value), an invalid or missing input file, or a Unix socket path that is too long or already exists |
 
 Messages go to the error output, results and log lines to the standard output. The tool listens on `127.0.0.1` unless the
 configuration file (or `--address`) says otherwise. Options are written `--name value` or `--name=value`.
@@ -60,7 +60,7 @@ A `udp` configuration binds its port when it is loaded (like `new UdpServer(...)
 rony record --target api.test:5000 --out login.json --delimiter "\n"
 ```
 Starts a [`RecordingProxy`](Record-and-Replay) to the target, prints `Recording on 127.0.0.1:41208 -> api.test:5000`, and
-relays and logs everything until Ctrl+C or SIGTERM. Then it stops the proxy and saves the recording to `--out`. Point your
+relays and logs everything until Ctrl+C or SIGTERM. Then it stops the proxy and saves the recording to `--out` (when no client connected, it prints a message and writes nothing). Point your
 client at the printed port while it runs. The recording and the log contain everything sent through the proxy, including
 credentials and tokens: review them before committing or sharing them. On Linux and macOS the output file is created readable by its owner only.
 

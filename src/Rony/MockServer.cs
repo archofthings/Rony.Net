@@ -44,6 +44,9 @@ namespace Rony.Net
         private CancellationTokenSource _cancellation;
         private Task _listenTask;
         private int _lastConnectionId;
+        private readonly Queue<string> _lifecycleLog = new Queue<string>();
+        private bool _writingLifecycleLog;
+        private TaskCompletionSource<bool> _lifecycleLogDrained;
 
         /// <summary>The address the server listens on.</summary>
         public IPAddress Address => _listener.Address;
@@ -146,10 +149,13 @@ namespace Rony.Net
                 _cancellation = new CancellationTokenSource();
                 var cancellationToken = _cancellation.Token;
 
-                // Logged inside the lock, so StopAsync cannot complete before this line is written.
-                Trace($"listening on {Address}:{Port}");
+                // Queued inside the lock, so the lines keep the order of the state changes; written after the lock
+                // is released (FlushLifecycleLog), so StopAsync cannot complete before this line is written.
+                QueueLifecycleLog($"listening on {Address}:{Port}");
                 _listenTask = Task.Run(() => ListenAsync(cancellationToken));
             }
+
+            FlushLifecycleLog();
         }
 
         /// <summary>
@@ -184,16 +190,75 @@ namespace Rony.Net
         /// <summary>Stops listening, closes open connections and cancels pending delayed responses. Safe to call repeatedly.</summary>
         public void Stop()
         {
+            StopCore();
+            FlushLifecycleLog();
+        }
+
+        private Task StopCore()
+        {
             lock (_syncRoot)
             {
-                if (_cancellation == null) return;
+                if (_cancellation == null) return _listenTask;
                 _cancellation.Cancel();
                 _cancellation = null;
                 _refusingConnections = false;
                 _listener.Stop();
 
-                // Logged inside the lock, so StopAsync cannot complete before this line is written.
-                Trace("stopped");
+                // Queued inside the lock, so the lines keep the order of the state changes; written after the lock
+                // is released (FlushLifecycleLog), so StopAsync cannot complete before this line is written.
+                QueueLifecycleLog("stopped");
+                return _listenTask;
+            }
+        }
+
+        private void QueueLifecycleLog(string message)
+        {
+            lock (_lifecycleLog)
+                _lifecycleLog.Enqueue(message);
+        }
+
+        /// <summary>
+        /// Writes the queued lifecycle lines outside every lock. Only one thread writes at a time; a caller that finds
+        /// another thread writing returns, because that thread writes its lines too (also when called from the Log callback).
+        /// </summary>
+        private void FlushLifecycleLog()
+        {
+            TaskCompletionSource<bool> drained;
+            lock (_lifecycleLog)
+            {
+                if (_writingLifecycleLog || _lifecycleLog.Count == 0) return;
+                _writingLifecycleLog = true;
+                drained = _lifecycleLogDrained = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            var finished = false;
+            try
+            {
+                while (true)
+                {
+                    string line;
+                    lock (_lifecycleLog)
+                    {
+                        if (_lifecycleLog.Count == 0)
+                        {
+                            _writingLifecycleLog = false;
+                            finished = true;
+                            break;
+                        }
+                        line = _lifecycleLog.Dequeue();
+                    }
+
+                    Trace(line);
+                }
+            }
+            finally
+            {
+                if (!finished)
+                {
+                    lock (_lifecycleLog)
+                        _writingLifecycleLog = false;
+                }
+                drained.TrySetResult(true);
             }
         }
 
@@ -210,12 +275,16 @@ namespace Rony.Net
         /// </summary>
         public async Task StopAsync()
         {
-            Task listenTask;
-            lock (_syncRoot)
+            var listenTask = StopCore();
+            FlushLifecycleLog();
+
+            Task lifecycleLog = null;
+            lock (_lifecycleLog)
             {
-                Stop();
-                listenTask = _listenTask;
+                if (_writingLifecycleLog) lifecycleLog = _lifecycleLogDrained.Task;
             }
+            if (lifecycleLog != null)
+                await lifecycleLog.ConfigureAwait(false);
 
             if (_listener is TcpServerBase tcpServer)
                 await tcpServer.WaitForBackgroundWorkAsync().ConfigureAwait(false);
@@ -246,9 +315,11 @@ namespace Rony.Net
             lock (_syncRoot)
             {
                 _faultListener.RefuseConnections();
-                if (!_refusingConnections) Trace("refusing connections");
+                if (!_refusingConnections) QueueLifecycleLog("refusing connections");
                 _refusingConnections = true;
             }
+
+            FlushLifecycleLog();
         }
 
         /// <summary>
@@ -262,9 +333,11 @@ namespace Rony.Net
             lock (_syncRoot)
             {
                 _faultListener.AcceptConnections();
-                if (_refusingConnections) Trace("accepting connections");
+                if (_refusingConnections) QueueLifecycleLog("accepting connections");
                 _refusingConnections = false;
             }
+
+            FlushLifecycleLog();
         }
 
         /// <summary>Stops the server and releases the listener.</summary>
@@ -366,29 +439,41 @@ namespace Rony.Net
 
         /// <summary>
         /// Waits for the first connection (including ones already accepted). Throws <see cref="TimeoutException"/>
-        /// after <paramref name="timeout"/>, which defaults to 5 seconds.
+        /// after <paramref name="timeout"/>, which defaults to 5 seconds. It completes after the <see cref="ConnectionOpened"/> handlers
+        /// have returned, so a handler must not wait for something the test does after this wait.
         /// </summary>
         public Task<ClientConnection> WaitForConnectionAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             RequireConnections();
             var actualTimeout = timeout ?? DefaultWaitTimeout;
             return _connections.WaitAsync(
-                connections => connections.FirstOrDefault(),
+                connections => connections.FirstOrDefault(c => c.Announced),
                 actualTimeout,
                 connections => $"Expected a connection within {actualTimeout}, but none was accepted.",
                 cancellationToken);
         }
 
-        /// <summary>Waits until at least <paramref name="count"/> connections have been accepted in total.</summary>
+        /// <summary>
+        /// Waits until at least <paramref name="count"/> connections have been accepted in total. A connection counts after its
+        /// <see cref="ConnectionOpened"/> handlers have returned, so a handler must not wait for something the test does after this wait.
+        /// </summary>
         public Task<IReadOnlyList<ClientConnection>> WaitForConnectionsAsync(int count, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             RequireConnections();
             var actualTimeout = timeout ?? DefaultWaitTimeout;
             return _connections.WaitAsync(
-                connections => connections.Count >= count ? connections : null,
+                connections =>
+                {
+                    IReadOnlyList<ClientConnection> announced = connections.Where(c => c.Announced).ToArray();
+                    return announced.Count >= count ? announced : null;
+                },
                 actualTimeout,
-                connections => $"Expected {count} connections within {actualTimeout}, but {connections.Count} were accepted." +
-                               Environment.NewLine + RequestJournal.Describe(connections),
+                connections =>
+                {
+                    var announced = connections.Where(c => c.Announced).ToArray();
+                    return $"Expected {count} connections within {actualTimeout}, but {announced.Length} were accepted." +
+                           Environment.NewLine + RequestJournal.Describe(announced);
+                },
                 cancellationToken);
         }
 
@@ -479,8 +564,16 @@ namespace Rony.Net
             var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint, tls);
             _connectionsBySender[sender] = connection;
             _connections.Record(connection);
-            Trace($"{Label(connection)} connected from {(string.IsNullOrEmpty(remoteEndPoint?.ToString()) ? "unknown address" : LogText.Safe(remoteEndPoint.ToString()))}{DescribeTls(tls)}");
-            Raise(ConnectionOpened, connection);
+            try
+            {
+                Trace($"{Label(connection)} connected from {(string.IsNullOrEmpty(remoteEndPoint?.ToString()) ? "unknown address" : LogText.Safe(remoteEndPoint.ToString()))}{DescribeTls(tls)}");
+                Raise(ConnectionOpened, connection);
+            }
+            finally
+            {
+                connection.Announced = true;
+                _connections.NotifyChanged();
+            }
 
             CancellationToken cancellationToken;
             lock (_syncRoot)

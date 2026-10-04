@@ -127,6 +127,33 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task Stop_Called_From_The_Log_Callback_Should_Not_Wait_For_The_Connection()
+        {
+            //Arrange
+            using var real = LineServer(s => s.Mock.Send("PING").Receive("PONG"));
+            var stopped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var triggered = 0;
+            using var proxy = new RecordingProxy("127.0.0.1", real.Port) { Framing = MessageFraming.Delimiter("\n") };
+            proxy.Log = line =>
+            {
+                if (!line.Contains("client → server") || Interlocked.Exchange(ref triggered, 1) == 1) return;
+                proxy.Stop();
+                stopped.TrySetResult(true);
+            };
+            proxy.Start();
+
+            //Act
+            using var client = await RecordingTestClient.ConnectAsync(proxy.Port);
+            await client.SendAsync("PING");
+
+            //Assert
+            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await proxy.StopAsync();
+            Assert.False(proxy.Active);
+            await proxy.WaitForConnectionsClosedAsync(TimeSpan.Zero);   // StopAsync waited for the relay: nothing is left running
+        }
+
+        [Fact]
         public async Task Unreachable_Target_Should_Disconnect_The_Client_And_Keep_Accepting()
         {
             //Arrange

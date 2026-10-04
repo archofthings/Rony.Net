@@ -267,6 +267,28 @@ namespace Rony.Cli.Tests
             Assert.Equal(0, await run.WaitAsync(Limit));
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task Run_Should_Reject_A_Bad_Unix_Socket_Path_With_Exit_Code_2(bool tooLong)
+        {
+            if (!tooLong && OperatingSystem.IsWindows()) return;   // the error for an existing path differs there
+
+            using var directory = new TempDirectory();
+            var socketPath = System.IO.Path.Combine(directory.Path, tooLong ? new string('a', 200) : "t");
+            if (!tooLong && socketPath.Length > 100) return;   // would hit the too-long branch instead (macOS limit is 104)
+            if (!tooLong) directory.Write("t", "not a socket");
+            var file = directory.Write("sock.json", UnixConfig.Replace("/tmp/rony-demo.sock", socketPath.Replace("\\", "\\\\")));
+            var error = new LineWriter();
+
+            var code = await CliApp.RunAsync(new[] { "run", file }, new LineWriter(), error, CancellationToken.None).WaitAsync(Limit);
+
+            Assert.Equal(2, code);
+            Assert.Contains("server.path", error.Text);
+            Assert.Contains(tooLong ? "too long" : "already in use", error.Text);
+            if (!tooLong) Assert.Equal("not a socket", File.ReadAllText(socketPath));
+        }
+
         [Fact]
         public async Task Run_Should_Serve_The_Udp_Scenario_Of_The_Wiki()
         {
@@ -281,6 +303,28 @@ namespace Rony.Cli.Tests
 
             stop.Cancel();
             Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Record_Should_Not_Write_A_File_When_No_Client_Connected(bool existing)
+        {
+            using var directory = new TempDirectory();
+            var recordingFile = Path.Combine(directory.Path, "empty.json");
+            Directory.CreateDirectory(directory.Path);
+            if (existing) File.WriteAllText(recordingFile, "earlier");
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+            var record = CliApp.RunAsync(new[] { "record", "--target", "127.0.0.1:1", "--out", recordingFile, "--quiet", "--force" }, output, new LineWriter(), stop.Token);
+            await output.WaitForLineAsync(l => l.StartsWith("Recording on 127.0.0.1:")).WaitAsync(Limit);
+
+            stop.Cancel();
+
+            Assert.Equal(0, await record.WaitAsync(Limit));
+            Assert.Contains($"No connections were recorded; {recordingFile} was not written.", output.Text);
+            if (existing) Assert.Equal("earlier", File.ReadAllText(recordingFile));
+            else Assert.False(File.Exists(recordingFile));
         }
 
         [Fact]

@@ -112,7 +112,8 @@ server.ConnectionOpened += (sender, connection) => { /* before its first request
 server.ConnectionClosed += (sender, connection) => { /* closed by either side; ClosedAt is set */ };
 ```
 The events are raised on the server's background threads. An exception thrown by a handler is
-[logged](Logging-and-Diagnostics) and otherwise ignored.
+[logged](Logging-and-Diagnostics) and otherwise ignored. `WaitForConnectionAsync()` and `WaitForConnectionsAsync()` complete
+after the `ConnectionOpened` handlers have returned, so a handler must not wait for something the test does after the wait.
 
 ## Pushing messages
 Send a message the client didn't ask for, such as a notification, to one connection:
