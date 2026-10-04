@@ -2,9 +2,20 @@
 
 Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wiki).
 
-## 1.4.1
+## 1.5.0
 
 No breaking changes.
+
+### Added
+- `rony run <config.json> --port <N> --address <ip>` override `server.port` and `server.address` of the file, so one file
+  serves on different ports (not for a `unix` configuration).
+- `MockServer.FromFile(path, overrides)` and `MockServer.FromJson(json, baseDirectory, overrides)` take a new
+  `ConfigurationOverrides` (`Address`, `Port`) that replaces the address and port of the configuration.
+- `MockServer.ValidateFile(path)` and `MockServer.ValidateJson(json)` check a configuration without creating a listener, so
+  nothing is bound; `rony validate` uses them and no longer binds the port of a `udp` configuration (the exit code 1 "UDP port
+  is in use" result is gone).
+- `MockServer.Listener` returns the listener of a server; `rony run` can now run a `unix` configuration without `server.path`
+  and prints the generated socket path.
 
 ### Fixed
 - `WaitForConnectionAsync()` and `WaitForConnectionsAsync()` now complete only after the `ConnectionOpened` handlers have

@@ -56,9 +56,6 @@ so you don't have to find them yourself. For problems with a known answer, see [
 ## Standalone server (`rony`)
 - **For development and test networks only.** No limit on connections, idle time or handshake time, and memory grows with
   the traffic for as long as the tool runs. See [Limits and security](Standalone-Server#limits-and-security).
-- **`rony run` takes the address and port from the file only;** there are no options to override them.
-- **`rony validate` binds the port of a `udp` configuration,** so it reports "in use" while a server with that file runs.
-- **A `unix` configuration needs `server.path`** when it is run with the tool.
 - **`rony record` does not check the target before it starts.** An unreachable target shows up as a logged error per
   connection.
 - **A recording stores messages in the order they arrived.** A client that sends before the server's greeting arrives gets
