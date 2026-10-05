@@ -115,6 +115,16 @@ The events are raised on the server's background threads. An exception thrown by
 [logged](Logging-and-Diagnostics) and otherwise ignored. `WaitForConnectionAsync()` and `WaitForConnectionsAsync()` complete
 after the `ConnectionOpened` handlers have returned, so a handler must not wait for something the test does after the wait.
 
+## Limiting the connection records
+`server.Connections` keeps every connection. `server.MaxConnectionRecords` caps the number (`0`, the default, is unlimited): when a
+connection is recorded or closes, the oldest closed records are dropped until the cap is met. Open connections are always kept,
+so the list can be longer than the cap. `Connections`, `VerifyConnections` and `WaitForConnectionsAsync(count)` count only the
+kept records.
+
+```csharp
+server.MaxConnectionRecords = 1000;
+```
+
 ## Pushing messages
 Send a message the client didn't ask for, such as a notification, to one connection:
 

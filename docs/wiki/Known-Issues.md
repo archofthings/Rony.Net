@@ -7,9 +7,11 @@ so you don't have to find them yourself. For problems with a known answer, see [
 - **`RefuseConnections()` can reset a client that is connecting at that moment.** A client whose connection was completed by
   the operating system but not yet accepted by the server may see a reset instead of "connection refused". Call it when no
   client is in the middle of connecting. See [Simulating Failures](Simulating-Failures).
-- **Received requests are kept until `Mock.Reset()`, connection records until the server is disposed.** That is what
-  `Should()`, `ReceivedRequests` and `Connections` read. A server that runs for a long time, such as the standalone tool,
-  grows with the traffic it receives.
+- **Received requests are kept until `Mock.Reset()`, connection records until the server is disposed, unless you cap them.**
+  That is what `Should()`, `ReceivedRequests` and `Connections` read. A server that runs for a long time grows with the
+  traffic it receives; set `Mock.MaxReceivedRequests` and `MaxConnectionRecords` (the standalone tool does by default). See
+  [Verifying Requests](Verifying-Requests#limiting-and-journaling-requests). With `StateScope.Connection` on UDP, one small
+  entry per distinct client address is kept for the whole run (TCP entries are removed with the dropped connection record).
 - **No limit on buffered data unless you set one.** A client that never completes a message makes the server buffer what it
   sends. Set `MaxBufferedBytes` on the listener when the client is not your own code. Servers from a configuration file
   default to 16 MiB. See [Connections and Framing](Connections-and-Framing).
@@ -54,8 +56,8 @@ so you don't have to find them yourself. For problems with a known answer, see [
 - See [Configuration Files](Configuration-Files).
 
 ## Standalone server (`rony`)
-- **For development and test networks only.** No limit on connections, idle time or handshake time, and memory grows with
-  the traffic for as long as the tool runs. See [Limits and security](Standalone-Server#limits-and-security).
+- **For development and test networks only.** No limit on connections, idle time or handshake time, and `rony record`
+  keeps its whole recording in memory until it stops (`run` and `replay` keep only the last 10000 requests, see `--keep`). See [Limits and security](Standalone-Server#limits-and-security).
 - **`rony record` does not check the target before it starts.** An unreachable target shows up as a logged error per
   connection.
 - **A recording stores messages in the order they arrived.** A client that sends before the server's greeting arrives gets

@@ -178,6 +178,22 @@ namespace Rony.Tests.Handler
         }
 
         [Fact]
+        public void MaxReceivedRequests_Should_Keep_Only_The_Newest_Requests()
+        {
+            //Arrange
+            _handler.MaxReceivedRequests = 2;
+
+            //Act
+            _handler.Match("one");
+            _handler.Match("two");
+            _handler.Match("three");
+
+            //Assert
+            Assert.Equal(new[] { "two", "three" }, _handler.ReceivedRequests.Select(r => r.BodyString));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _handler.MaxReceivedRequests = -1);
+        }
+
+        [Fact]
         public void Received_Requests_Should_Be_Recorded_With_Match_Result()
         {
             //Arrange

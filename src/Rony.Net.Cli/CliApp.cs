@@ -39,6 +39,8 @@ namespace Rony.Cli
                 "and logs every connection and request, until Ctrl+C or SIGTERM.\n" +
                 "  --port <N>       Port (default: from the file; 0 is a free port)\n" +
                 "  --address <ip>   Address (default: from the file)\n" +
+                "  --journal <file> Append every received request to the file, one JSON object per line\n" +
+                "  --keep <N>       Requests and connection records kept in memory (default 10000; 0 is unlimited)\n" +
                 "  --quiet          Do not print the log lines",
             ["validate"] =
                 "Usage: rony validate <config.json>\n" +
@@ -65,6 +67,8 @@ namespace Rony.Cli
                 "  --port <N>             Port (default 0: a free port)\n" +
                 "  --address <ip>         Address (default 127.0.0.1)\n" +
                 "  --tls                  Serve TLS with a generated self-signed certificate\n" +
+                "  --journal <file>       Append every received request to the file, one JSON object per line\n" +
+                "  --keep <N>             Requests and connection records kept in memory (default 10000; 0 is unlimited)\n" +
                 "  --quiet                Do not print the log lines\n" +
                 FramingHelp,
         };

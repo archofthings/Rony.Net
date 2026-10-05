@@ -22,11 +22,65 @@ namespace Rony.Handlers
                 return _items.ToArray();
         }
 
-        public void Record(T item)
+        public void Record(T item) => Record(item, 0, null);
+
+        /// <summary>
+        /// Records an item, then drops the oldest items that <paramref name="canDrop"/> accepts while more than
+        /// <paramref name="max"/> are kept (0 = no limit; null = every item can be dropped). Returns the dropped items.
+        /// </summary>
+        public IReadOnlyList<T> Record(T item, int max, Func<T, bool> canDrop)
         {
+            IReadOnlyList<T> dropped;
             lock (_syncRoot)
+            {
                 _items.Add(item);
+                dropped = TrimCore(max, canDrop);
+            }
             NotifyChanged();
+            return dropped;
+        }
+
+        /// <summary>Drops the oldest items like <see cref="Record(T, int, Func{T, bool})"/>, without recording one.</summary>
+        public IReadOnlyList<T> Trim(int max, Func<T, bool> canDrop)
+        {
+            IReadOnlyList<T> dropped;
+            lock (_syncRoot)
+                dropped = TrimCore(max, canDrop);
+            if (dropped.Count > 0) NotifyChanged();
+            return dropped;
+        }
+
+        private IReadOnlyList<T> TrimCore(int max, Func<T, bool> canDrop)
+        {
+            if (max <= 0 || _items.Count <= max) return Array.Empty<T>();
+            var excess = _items.Count - max;
+            if (canDrop == null)
+            {
+                var oldest = _items.GetRange(0, excess);
+                _items.RemoveRange(0, excess);
+                return oldest;
+            }
+
+            // One pass: compact the kept items to the front, collecting the dropped ones.
+            List<T> dropped = null;
+            var write = 0;
+            for (var read = 0; read < _items.Count; read++)
+            {
+                var item = _items[read];
+                if (excess > 0 && canDrop(item))
+                {
+                    (dropped ??= new List<T>()).Add(item);
+                    excess--;
+                }
+                else
+                {
+                    _items[write++] = item;
+                }
+            }
+
+            if (dropped == null) return Array.Empty<T>();
+            _items.RemoveRange(write, _items.Count - write);
+            return dropped;
         }
 
         /// <summary>Wakes up the waiters, for example after a recorded item changed.</summary>

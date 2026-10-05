@@ -26,6 +26,9 @@ namespace Rony.Handlers
 
         public bool Matched { get; }
 
+        /// <summary>The request as it was recorded; null for results that are not for a request.</summary>
+        public ReceivedRequest Request { get; set; }
+
         /// <summary>The scenario state the request was matched in.</summary>
         public string State { get; }
 

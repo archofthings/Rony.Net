@@ -1,3 +1,4 @@
+using Rony.Interfaces;
 using Rony.Listeners;
 using Rony.Models;
 using Rony.Net;
@@ -24,14 +25,38 @@ namespace Rony.Cli
 
         public static async Task<int> RunAsync(string[] args, Sink sink, CancellationToken stop)
         {
-            var line = CommandLine.Parse(args, new HashSet<string> { "port", "address" }, new HashSet<string> { "quiet" });
+            var line = CommandLine.Parse(args, new HashSet<string> { "port", "address", "journal", "keep" }, new HashSet<string> { "quiet" });
             var path = line.SinglePositional("the configuration file");
+            var keep = line.Keep();
             var overrides = new ConfigurationOverrides();
             if (line.Has("port", out _)) overrides.Port = line.Port();
             if (line.Has("address", out _)) overrides.Address = line.Address();
 
+            // Opened first, so an unopenable journal fails before anything is loaded or bound.
+            var journal = RequestJournalFile.Open(line, sink);
+            try
+            {
+                return await ServeAsync(line, path, keep, overrides, journal, sink, stop).ConfigureAwait(false);
+            }
+            catch
+            {
+                journal?.Abandon();
+                throw;
+            }
+            finally
+            {
+                journal?.Dispose();
+            }
+        }
+
+        private static async Task<int> ServeAsync(CommandLine line, string path, int keep, ConfigurationOverrides overrides,
+            RequestJournalFile journal, Sink sink, CancellationToken stop)
+        {
             using (var server = Load(path, overrides))
             {
+                server.Mock.MaxReceivedRequests = keep;
+                server.MaxConnectionRecords = keep;
+                if (journal != null) server.RequestReceived += journal.Write;
                 var unix = server.Listener as UnixSocketServer;
                 var transport = unix != null ? "unix" : server.Listener is UdpServer ? "udp" : server.Listener is TcpServerSsl ? "tls" : "tcp";
 
@@ -142,14 +167,34 @@ namespace Rony.Cli
 
         public static async Task<int> ReplayAsync(string[] args, Sink sink, CancellationToken stop)
         {
-            var values = new HashSet<string>(FramingValues) { "port", "address" };
+            var values = new HashSet<string>(FramingValues) { "port", "address", "journal", "keep" };
             var flags = new HashSet<string> { "tls", "stx-etx", "quiet" };
             var line = CommandLine.Parse(args, values, flags);
             var path = line.SinglePositional("the recording file");
+            var keep = line.Keep();
             var address = line.Address();
             var port = line.Port();
             var framing = line.Framing();
 
+            var journal = RequestJournalFile.Open(line, sink);
+            try
+            {
+                return await ReplayServeAsync(line, path, keep, address, port, framing, journal, sink, stop).ConfigureAwait(false);
+            }
+            catch
+            {
+                journal?.Abandon();
+                throw;
+            }
+            finally
+            {
+                journal?.Dispose();
+            }
+        }
+
+        private static async Task<int> ReplayServeAsync(CommandLine line, string path, int keep, IPAddress address, int port, IMessageFraming framing,
+            RequestJournalFile journal, Sink sink, CancellationToken stop)
+        {
             Recording recording;
             try
             {
@@ -176,6 +221,9 @@ namespace Rony.Cli
 
                 using (var server = new MockServer(listener))
                 {
+                    server.Mock.MaxReceivedRequests = keep;
+                    server.MaxConnectionRecords = keep;
+                    if (journal != null) server.RequestReceived += journal.Write;
                     try
                     {
                         server.Replay(recording);

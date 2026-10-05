@@ -28,6 +28,7 @@ namespace Rony.Handlers
         private readonly ConcurrentDictionary<byte[], Config> _configs;
         private readonly List<PredicateConfig> _predicateConfigs = new List<PredicateConfig>();
         private readonly Journal<ReceivedRequest> _journal = new Journal<ReceivedRequest>();
+        private volatile int _maxReceivedRequests;
 
         // Guards matching and everything below, so finding a rule and moving to its next state is atomic.
         private readonly object _matchLock = new object();
@@ -281,8 +282,11 @@ namespace Rony.Handlers
                 var matched = config != null;
                 config ??= _unmatchedConfig;
 
-                _journal.Record(new ReceivedRequest(request, remoteEndPoint, DateTimeOffset.Now, matched, connectionId));
-                return Use(config, matched, state, stateKey);
+                var received = new ReceivedRequest(request, remoteEndPoint, DateTimeOffset.Now, matched, connectionId);
+                _journal.Record(received, MaxReceivedRequests, null);
+                var result = Use(config, matched, state, stateKey);
+                result.Request = received;
+                return result;
             }
         }
 
@@ -291,6 +295,23 @@ namespace Rony.Handlers
         {
             lock (_matchLock)
                 return Use(_connectConfig, true, GetStateCore(stateKey), stateKey);
+        }
+
+        /// <summary>Forgets the scenario state kept for a conversation (a dropped connection record).</summary>
+        internal void ForgetState(object stateKey)
+        {
+            lock (_matchLock)
+                _connectionStates.Remove(stateKey);
+        }
+
+        /// <summary>The number of conversations with a remembered scenario state.</summary>
+        internal int ConnectionStateCount
+        {
+            get
+            {
+                lock (_matchLock)
+                    return _connectionStates.Count;
+            }
         }
 
         /// <summary>The scenario state of a conversation (see <see cref="StateScope"/>).</summary>
@@ -361,7 +382,24 @@ namespace Rony.Handlers
 
         #region Verification
 
-        /// <summary>Every request received so far, oldest first.</summary>
+        /// <summary>
+        /// The most received requests that are kept; 0 (the default) means unlimited. When the limit is exceeded the oldest
+        /// requests are dropped. A lower value takes effect when the next request is recorded. Only the kept requests are seen by
+        /// <see cref="ReceivedRequests"/>, <see cref="UnmatchedRequests"/>, the <c>Verify</c> methods, <c>Should()</c> and the
+        /// <c>WaitFor</c> methods, so <see cref="WaitForRequestsAsync"/> with a count above the limit cannot complete.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+        public int MaxReceivedRequests
+        {
+            get => _maxReceivedRequests;
+            set
+            {
+                if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "The limit cannot be negative.");
+                _maxReceivedRequests = value;
+            }
+        }
+
+        /// <summary>Every request received so far (up to <see cref="MaxReceivedRequests"/>), oldest first.</summary>
         public IReadOnlyList<ReceivedRequest> ReceivedRequests => _journal.Snapshot();
 
         /// <summary>Received requests that no configured response handled.</summary>

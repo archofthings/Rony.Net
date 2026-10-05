@@ -89,6 +89,15 @@ namespace Rony.Cli
             return port;
         }
 
+        /// <summary>How many received requests and connection records the server keeps (<c>--keep</c>); 10000 by default, 0 is unlimited.</summary>
+        public int Keep()
+        {
+            if (!_values.TryGetValue("keep", out var text)) return 10000;
+            if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var keep))
+                throw new UsageException($"--keep must be a number from 0 to 2147483647, not \"{text}\".");
+            return keep;
+        }
+
         public IPAddress Address()
         {
             if (!_values.TryGetValue("address", out var text)) return IPAddress.Loopback;
