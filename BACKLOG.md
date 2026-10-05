@@ -12,7 +12,7 @@ Related items are grouped so that each version has one theme. The version number
 
 | Version | Theme | Items |
 |---|---|---|
-| 1.5.0 | The tool: verify, operate, deploy | 17 (rest), 18, 20, 34, I10 (19, I7, I8, I9 and the journal of 17 are done, see `CHANGELOG.md`) |
+| 1.5.0 | The tool: verify, operate, deploy | 18, 20, 34, I10 (17, 19, I7, I8 and I9 are done, see `CHANGELOG.md`) |
 | 1.6.0 | Files and proxying: say more in a file, mock only a part | 21, 22, 23, 24, 25, 29, 32 |
 | 1.7.0 | Network conditions: resilience testing | 30, 31 |
 | 1.8.0 | Binary, long-lived and well-known protocols | 26, 27, 28, 33 |
@@ -30,9 +30,6 @@ Mockly) in October 2026; they are the features those tools have for raw TCP that
 Today a test that is not written in .NET can talk to `rony run` but cannot ask what it received, and a long run grows
 without limit.
 
-- **17. Verification for the tool: named rule sets.** The journal (`--journal`) and the control endpoint (`--control`)
-  shipped; what is left is that a rule gets a `"group"` and the control endpoint switches a group on or off in one
-  step, so a test can steer the mock between scenarios. Needs a way to disable rules by group in the core.
 - **18. Hot reload: `rony run --watch`.** Reloads the rules when the configuration file changes, without dropping open
   connections; a file with a mistake is reported and the old rules stay.
 - **20. A published Docker image,** built and pushed by the release workflow (registry, tags and permissions to be
@@ -92,6 +89,10 @@ them on the whole server, switchable in the middle of a test.
 
 ## Ideas, not planned yet
 
+- Named rule sets for the tool: a rule gets a `"group"` and the control endpoint switches a group on or off. Left out
+  of item 17 because a state does most of it already: rules with `"state": "outage"` win over rules without a state,
+  and `{"command":"state","set":"outage"}` switches them on in one step. Worth building only when someone needs several
+  sets active at once, or a switch that survives a `goTo` in the middle of a protocol flow.
 - A scripted mock client: the reverse role, connecting to a server under test and playing a conversation, with the
   same matching and assertions.
 - A transcript of a whole conversation as one value, for snapshot tests.
