@@ -12,7 +12,7 @@ Related items are grouped so that each version has one theme. The version number
 
 | Version | Theme | Items |
 |---|---|---|
-| 1.5.0 | The tool: verify, operate, deploy | 17, 18, 20, 34, I7, I10 (19, I8 and I9 are done, see `CHANGELOG.md`) |
+| 1.5.0 | The tool: verify, operate, deploy | 17 (rest), 18, 20, 34, I10 (19, I7, I8, I9 and the journal of 17 are done, see `CHANGELOG.md`) |
 | 1.6.0 | Files and proxying: say more in a file, mock only a part | 21, 22, 23, 24, 25, 29, 32 |
 | 1.7.0 | Network conditions: resilience testing | 30, 31 |
 | 1.8.0 | Binary, long-lived and well-known protocols | 26, 27, 28, 33 |
@@ -30,19 +30,16 @@ Mockly) in October 2026; they are the features those tools have for raw TCP that
 Today a test that is not written in .NET can talk to `rony run` but cannot ask what it received, and a long run grows
 without limit.
 
-- **17. Verification for the tool.** A `--journal <file>` option that appends every received request as a JSON line,
-  and a control endpoint on a separate loopback port to list received requests, reset them, read or set the scenario
-  state and switch a named set of rules on or off in one step. Lets a test in any language assert against the mock and
-  steer it.
+- **17. Verification for the tool: control endpoint.** The journal (`--journal`) shipped; what is left is a control
+  endpoint on a separate loopback port (`rony run --control <port>`, JSON lines over TCP) to list received requests,
+  reset them and read or set the scenario state, and after it named rule sets: a rule gets a `"group"` and the
+  endpoint switches a group on or off in one step. Lets a test in any language assert against the mock and steer it.
 - **18. Hot reload: `rony run --watch`.** Reloads the rules when the configuration file changes, without dropping open
   connections; a file with a mistake is reported and the old rules stay.
 - **20. A published Docker image,** built and pushed by the release workflow (registry, tags and permissions to be
   decided), with the `docker compose` example of the wiki run in CI.
 - **34. A Testcontainers module** (`Rony.Net.Testcontainers`): starts the published image of item 20 from a test, waits
   until it listens and gives the mapped port, for stacks that run their dependencies as containers.
-- **I7. Memory growth.** The tool keeps every received request and connection record for its whole run, and `record`
-  keeps the whole recording in memory. A cap ("keep the last N") makes long runs safe; it fits with item 17, which
-  moves the full history to a file.
 - **I10. Tests:** the 16 MiB default of `server.maxBufferedBytes` is only tested through the parsing of the property.
 
 ## 1.6.0: files and proxying

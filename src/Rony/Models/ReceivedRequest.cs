@@ -1,6 +1,8 @@
 using Rony.Helpers;
 using System;
+using System.Globalization;
 using System.Net;
+using System.Text;
 
 namespace Rony.Models
 {
@@ -43,6 +45,28 @@ namespace Rony.Models
         /// and for requests passed to <c>Match(...)</c> directly.
         /// </summary>
         public int? ConnectionId { get; }
+
+        /// <summary>
+        /// The request as one line of JSON (no line breaks): <c>time</c>, <c>connection</c> (omitted when there is no connection id),
+        /// <c>remote</c> (omitted when unknown), <c>matched</c> and the body as <c>text</c> (valid UTF-8 without control
+        /// characters other than CR, LF and tab) or else <c>base64</c>.
+        /// </summary>
+        public string ToJson()
+        {
+            var builder = new StringBuilder();
+            builder.Append("{\"time\":\"").Append(Timestamp.ToString("yyyy-MM-dd'T'HH:mm:ss.fffzzz", CultureInfo.InvariantCulture)).Append('"');
+            if (ConnectionId.HasValue)
+                builder.Append(",\"connection\":").Append(ConnectionId.Value.ToString(CultureInfo.InvariantCulture));
+            var remote = RemoteEndPoint?.ToString();
+            if (!string.IsNullOrEmpty(remote))
+                builder.Append(",\"remote\":").Append(JsonParser.Quote(remote));
+            builder.Append(",\"matched\":").Append(Matched ? "true" : "false");
+            if (Recording.TryGetText(Body, out var text))
+                builder.Append(",\"text\":").Append(JsonParser.Quote(text));
+            else
+                builder.Append(",\"base64\":\"").Append(Convert.ToBase64String(Body)).Append('"');
+            return builder.Append('}').ToString();
+        }
 
         public override string ToString()
         {

@@ -21,6 +21,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `int Port` | The listening port (the assigned one when created with port `0`) |
 | `RequestHandler Mock` | Configuration, recording and verification |
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | Shortcut for `Mock.ReceivedRequests` |
+| `event EventHandler<ReceivedRequest> RequestReceived` | A request was matched and recorded, before its response is sent; see [Verifying Requests](Verifying-Requests#limiting-and-journaling-requests) |
 | `Action<string> Log` | Receives a [log](Logging-and-Diagnostics) line for everything the server does |
 | `MockServerAssertions Should()` | [Fluent assertions](Verifying-Requests#all-assertions) |
 | `static MockServer FromJson(string json)` | A server (listener and rules) from a [configuration in JSON](Configuration-Files); not started. Throws `FormatException` naming the problem and where it is |
@@ -39,6 +40,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 |---|---|
 | `IReadOnlyList<ClientConnection> Connections` | Every accepted connection, open or closed, oldest first |
 | `IReadOnlyList<ClientConnection> OpenConnections` | The connections still open |
+| `int MaxConnectionRecords` | The most connection records kept (default 0: unlimited); the oldest closed ones are dropped, open ones are kept; negative throws |
 | `event EventHandler<ClientConnection> ConnectionOpened` | A client connected |
 | `event EventHandler<ClientConnection> ConnectionClosed` | A connection closed, by either side |
 | `Task<int> BroadcastAsync(string or byte[] message)` | Pushes a message to every open connection; returns how many it reached |
@@ -94,6 +96,7 @@ Available as `server.Mock`.
 |---|---|
 | `IReadOnlyList<ReceivedRequest> ReceivedRequests` | Every request, oldest first |
 | `IReadOnlyList<ReceivedRequest> UnmatchedRequests` | Requests with no configured response |
+| `int MaxReceivedRequests` | The most requests kept (default 0: unlimited); the oldest are dropped when the next is recorded; negative throws |
 | `void Verify(string or byte[] request)` | At least once |
 | `void Verify(string or byte[] request, Times times)` | The given number of times |
 | `void Verify(Func<ReceivedRequest, bool> predicate[, Times times])` | Requests satisfying the predicate |
@@ -182,7 +185,7 @@ The last response in a sequence repeats once the sequence ends.
 `Never()`, `Once()`, `AtLeastOnce()`, `Exactly(n)`, `AtLeast(n)`, `AtMost(n)`, `Between(min, max)`, plus `Matches(count)`, `Min` and `Max`.
 
 ## `Rony.Models.ReceivedRequest`
-`Body` (bytes), `BodyString` (UTF-8 text), `RemoteEndPoint`, `Timestamp`, `Matched`, `ConnectionId` (TCP).
+`Body` (bytes), `BodyString` (UTF-8 text), `RemoteEndPoint`, `Timestamp`, `Matched`, `ConnectionId` (TCP), and `string ToJson()`: the request as one line of JSON (see [Verifying Requests](Verifying-Requests#limiting-and-journaling-requests)).
 
 ## `Rony.Models.ClientConnection`
 A TCP connection the server accepted; see [Connections and Push](Connections-and-Push).

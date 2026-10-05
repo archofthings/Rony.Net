@@ -69,6 +69,24 @@ public class ConnectionAndPushSamples
     }
 
     [Fact]
+    public async Task Limit_the_connection_records()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("").Receive("ok");
+        server.MaxConnectionRecords = 1;
+        server.Start();
+
+        using (var first = await TcpTestClient.ConnectAsync(server.Port))
+            await first.SendAndReceiveAsync("hello");
+        await server.WaitForAllConnectionsClosedAsync();
+
+        using var second = await TcpTestClient.ConnectAsync(server.Port);
+        await second.SendAndReceiveAsync("hello");
+
+        Assert.Equal(new[] { 2 }, server.Connections.Select(c => c.Id));   // the closed record #1 was dropped
+    }
+
+    [Fact]
     public async Task Check_that_the_client_reuses_its_connection()
     {
         using var server = new MockServer(new TcpServer(0));

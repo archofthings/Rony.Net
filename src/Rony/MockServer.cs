@@ -40,6 +40,7 @@ namespace Rony.Net
         private bool _refusingConnections;
         private readonly Dictionary<object, Task> _conversations = new Dictionary<object, Task>();
         private readonly Journal<ClientConnection> _connections = new Journal<ClientConnection>();
+        private volatile int _maxConnectionRecords;
         private readonly ConcurrentDictionary<object, ClientConnection> _connectionsBySender = new ConcurrentDictionary<object, ClientConnection>();
         private CancellationTokenSource _cancellation;
         private Task _listenTask;
@@ -80,10 +81,28 @@ namespace Rony.Net
         public Action<string> Log { get; set; }
 
         /// <summary>
-        /// Every connection accepted so far, open or closed, oldest first. Always empty for listeners without
-        /// connections, such as <see cref="Rony.Listeners.UdpServer"/>.
+        /// Every connection accepted so far, open or closed, oldest first (without the records dropped because of
+        /// <see cref="MaxConnectionRecords"/>). Always empty for listeners without connections, such as
+        /// <see cref="Rony.Listeners.UdpServer"/>.
         /// </summary>
         public IReadOnlyList<ClientConnection> Connections => _connections.Snapshot();
+
+        /// <summary>
+        /// The most connection records that are kept; 0 (the default) means unlimited. When the limit is exceeded, when a
+        /// connection is recorded or closes, the oldest closed records are dropped; open connections are always kept, so the
+        /// list can be longer than the limit. <see cref="Connections"/>, <see cref="VerifyConnections"/> and
+        /// <see cref="WaitForConnectionsAsync"/> count only the kept records.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+        public int MaxConnectionRecords
+        {
+            get => _maxConnectionRecords;
+            set
+            {
+                if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "The limit cannot be negative.");
+                _maxConnectionRecords = value;
+            }
+        }
 
         /// <summary>The connections that are still open, oldest first.</summary>
         public IReadOnlyList<ClientConnection> OpenConnections => Connections.Where(c => c.IsOpen).ToArray();
@@ -93,6 +112,14 @@ namespace Rony.Net
 
         /// <summary>Raised when a connection is closed, by either side.</summary>
         public event EventHandler<ClientConnection> ConnectionClosed;
+
+        /// <summary>
+        /// Raised for every received request, after it was matched and recorded (the argument is the instance in
+        /// <see cref="RequestHandler.ReceivedRequests"/>) and before its response is sent. Requests of one connection are raised
+        /// in order; requests of different connections may be raised at the same time. An exception thrown by a handler is
+        /// logged and does not stop the other handlers. No handler runs after <see cref="StopAsync"/> has completed.
+        /// </summary>
+        public event EventHandler<ReceivedRequest> RequestReceived;
 
         /// <summary>Creates a mock server on top of <paramref name="listener"/>. Call <see cref="Start"/> to begin listening.</summary>
         public MockServer(IListener listener)
@@ -613,7 +640,7 @@ namespace Rony.Net
 
             var connection = new ClientConnection(this, Interlocked.Increment(ref _lastConnectionId), sender, remoteEndPoint, tls);
             _connectionsBySender[sender] = connection;
-            _connections.Record(connection);
+            DropRecords(_connections.Record(connection, _maxConnectionRecords, c => !c.IsOpen));
             try
             {
                 Trace($"{Label(connection)} connected from {(string.IsNullOrEmpty(remoteEndPoint?.ToString()) ? "unknown address" : LogText.Safe(remoteEndPoint.ToString()))}{DescribeTls(tls)}");
@@ -660,8 +687,18 @@ namespace Rony.Net
             if (!_connectionsBySender.TryGetValue(sender, out var connection)) return;
             connection.MarkClosed();
             _connections.NotifyChanged();
+            DropRecords(_connections.Trim(_maxConnectionRecords, c => !c.IsOpen));
             Trace($"{Label(connection)} disconnected");
             Raise(ConnectionClosed, connection);
+        }
+
+        private void DropRecords(IReadOnlyList<ClientConnection> dropped)
+        {
+            foreach (var connection in dropped)
+            {
+                _connectionsBySender.TryRemove(connection.Sender, out _);
+                Mock.ForgetState(connection);
+            }
         }
 
         private void OnConnectionFailed(EndPoint remoteEndPoint, Exception exception)
@@ -747,6 +784,7 @@ namespace Rony.Net
                 var result = Mock.Handle(body, received.RemoteEndPoint, connection?.Id,
                     (object)connection ?? received.RemoteEndPoint,
                     (exception, source) => Trace($"error: {source} threw {Describe(exception)}"));
+                RaiseRequestReceived(result.Request);
                 var showState = result.State != RequestHandler.InitialState && !(result.Matched && result.RuleHasState);
                 Trace($"{label} received {ByteFormatter.Describe(body)} " +
                       (result.Matched ? $"(matched {result.Rule}" : "(unmatched") +
@@ -773,6 +811,23 @@ namespace Rony.Net
                 // The client may already be gone, or the server is stopping.
                 if (!cancellationToken.IsCancellationRequested)
                     Trace($"{label} could not respond: {Describe(exception)}");
+            }
+        }
+
+        private void RaiseRequestReceived(ReceivedRequest request)
+        {
+            var handlers = RequestReceived;
+            if (handlers == null) return;
+            foreach (var handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    ((EventHandler<ReceivedRequest>)handler)(this, request);
+                }
+                catch (Exception exception)
+                {
+                    Trace($"error: a request event handler threw {Describe(exception)}");
+                }
             }
         }
 

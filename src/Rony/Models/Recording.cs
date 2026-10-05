@@ -155,7 +155,7 @@ namespace Rony.Models
         }
 
         /// <summary>The body as text if it is valid UTF-8 that round-trips exactly and has no control characters except CR, LF and tab.</summary>
-        private static bool TryGetText(byte[] body, out string text)
+        internal static bool TryGetText(byte[] body, out string text)
         {
             text = null;
             try

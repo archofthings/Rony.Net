@@ -1,4 +1,5 @@
 using Rony.Listeners;
+using Rony.Models;
 using Rony.Net;
 using System;
 using System.Diagnostics;
@@ -954,6 +955,27 @@ namespace Rony.FunctionalTests
             //Act + Assert
             Assert.Equal("{\"ok\":true}", await SendAndReadAsync(stream, "{\"type\":\"login\"}"));
             Assert.Equal("HI bob", await SendAndReadAsync(stream, "HELLO bob"));
+        }
+
+        [Fact]
+        public async Task RequestReceived_Should_Raise_The_Recorded_Request_And_Survive_A_Throwing_Handler()
+        {
+            //Arrange
+            using var server = new MockServer(new TcpServer(0));
+            server.Mock.Send("PING").Receive("PONG");
+            var raised = new TaskCompletionSource<ReceivedRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
+            server.RequestReceived += (_, _) => throw new InvalidOperationException("broken handler");
+            server.RequestReceived += (_, request) => raised.TrySetResult(request);
+            server.Start();
+            using var client = await ConnectAsync(server);
+
+            //Act
+            var reply = await SendAndReadAsync(client.GetStream(), "PING");
+
+            //Assert
+            Assert.Equal("PONG", reply);
+            var request = await raised.Task.WaitAsync(ReadTimeout);
+            Assert.Same(server.Mock.ReceivedRequests.Single(), request);
         }
 
         private static async Task<TcpClient> ConnectAsync(MockServer server)

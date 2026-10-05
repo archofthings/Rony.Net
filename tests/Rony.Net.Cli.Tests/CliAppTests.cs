@@ -1,4 +1,5 @@
 using Rony.Listeners;
+using Rony.Models;
 using Rony.Net;
 using System;
 using System.IO;
@@ -164,6 +165,89 @@ namespace Rony.Cli.Tests
             Assert.Equal(2, code);
             Assert.Contains(outPath, error.Text);
             Assert.DoesNotContain("Recording on", output.Text);
+        }
+
+        [Fact]
+        public async Task Run_Should_Append_Every_Request_To_The_Journal()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            var journal = directory.Write("journal.jsonl", "{\"old\":true}\n");
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+            var error = new LineWriter();
+
+            var run = CliApp.RunAsync(new[] { "run", file, "--journal", journal, "--quiet" }, output, error, stop.Token);
+            var listening = await output.WaitForLineAsync(l => l.StartsWith("Listening on tcp 127.0.0.1:")).WaitAsync(Limit);
+            Assert.Equal("PONG", await ExchangeAsync(PortOf(listening), "PING"));
+            Assert.Null(await ExchangeAsync(PortOf(listening), "OTHER"));
+            stop.Cancel();
+
+            Assert.Equal(0, await run.WaitAsync(Limit));
+            var lines = File.ReadAllLines(journal);
+            Assert.Equal(3, lines.Length);
+            Assert.Equal("{\"old\":true}", lines[0]);
+            Assert.Equal("PING", JsonData.Parse(lines[1])["text"].AsString());
+            Assert.Equal(true, JsonData.Parse(lines[1])["matched"].AsBoolean());
+            Assert.Equal("OTHER", JsonData.Parse(lines[2])["text"].AsString());
+            Assert.Equal(false, JsonData.Parse(lines[2])["matched"].AsBoolean());
+        }
+
+        [Fact]
+        public async Task Run_Should_Reject_An_Unwritable_Journal_Before_Listening()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            var output = new LineWriter();
+            var error = new LineWriter();
+
+            var code = await CliApp.RunAsync(new[] { "run", file, "--journal", directory.Path }, output, error, CancellationToken.None).WaitAsync(Limit);
+
+            Assert.Equal(2, code);
+            Assert.Contains("Cannot write " + directory.Path, error.Text);
+            Assert.DoesNotContain("Listening on", output.Text);
+        }
+
+        [Fact]
+        public async Task Run_Should_Delete_A_New_Empty_Journal_When_The_File_Cannot_Be_Loaded()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("bad.json", "{ not json");
+            var journal = Path.Combine(directory.Path, "journal.jsonl");
+
+            var code = await CliApp.RunAsync(new[] { "run", file, "--journal", journal }, new LineWriter(), new LineWriter(), CancellationToken.None).WaitAsync(Limit);
+
+            Assert.Equal(2, code);
+            Assert.False(File.Exists(journal));
+        }
+
+        [Fact]
+        public void A_Failing_Journal_Write_Should_Be_Reported_Once_And_Stop_The_Journal()
+        {
+            var error = new LineWriter();
+            var sink = new Sink(new LineWriter()) { Error = error };
+            using var journal = new RequestJournalFile(new FailingStream(), sink);
+            var request = new ReceivedRequest(Encoding.UTF8.GetBytes("PING"), null, DateTimeOffset.Now, true);
+
+            journal.Write(null, request);
+            journal.Write(null, request);
+
+            Assert.Single(error.Lines);
+            Assert.Contains("disk full", error.Text);
+        }
+
+        private sealed class FailingStream : Stream
+        {
+            public override bool CanRead => false;
+            public override bool CanSeek => false;
+            public override bool CanWrite => true;
+            public override long Length => 0;
+            public override long Position { get => 0; set { } }
+            public override void Flush() => throw new IOException("disk full");
+            public override void Write(byte[] buffer, int offset, int count) => throw new IOException("disk full");
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
         }
 
         [Fact]
@@ -424,6 +508,8 @@ namespace Rony.Cli.Tests
         [InlineData("run", "a.json", "--unknown")]
         [InlineData("run", "a.json", "--quiet=yes")]
         [InlineData("replay", "a.json", "--port")]
+        [InlineData("run", "a.json", "--keep", "-1")]
+        [InlineData("replay", "a.json", "--keep", "many")]
         [InlineData("replay", "a.json", "--port", "70000")]
         [InlineData("replay", "a.json", "--address", "localhost")]
         [InlineData("replay", "a.json", "--delimiter", "x", "--stx-etx")]

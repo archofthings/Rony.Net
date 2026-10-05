@@ -561,6 +561,35 @@ namespace Rony.FunctionalTests
             Assert.Throws<NotSupportedException>(() => server.Should().HaveNoOpenConnections());
         }
 
+        [Fact]
+        public async Task MaxConnectionRecords_Should_Drop_The_Oldest_Closed_Records_And_Keep_Open_Ones()
+        {
+            //Arrange
+            using var server = LineServer(s =>
+            {
+                s.MaxConnectionRecords = 1;
+                s.Mock.Send("PING").Receive("PONG");
+            });
+            using (var first = await LineClient.ConnectAsync(server.Port))
+            {
+                await first.SendAsync("PING");
+                Assert.Equal("PONG", await first.ReadLineAsync());
+            }
+
+            await server.WaitForAllConnectionsClosedAsync();
+
+            //Act
+            using var second = await LineClient.ConnectAsync(server.Port);
+            await second.SendAsync("PING");
+            await second.ReadLineAsync();
+            using var third = await LineClient.ConnectAsync(server.Port);
+            await server.WaitForConnectionsAsync(2);
+
+            //Assert
+            Assert.Equal(new[] { 2, 3 }, server.Connections.Select(c => c.Id));
+            Assert.All(server.Connections, c => Assert.True(c.IsOpen));
+        }
+
         private static async Task<string> UdpRequestAsync(UdpClient client, int port, string request)
         {
             var data = Encoding.UTF8.GetBytes(request);

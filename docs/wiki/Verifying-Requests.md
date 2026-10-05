@@ -192,8 +192,27 @@ Assert.True(requests[0].Timestamp <= requests[1].Timestamp);
 | `Timestamp` | When the server received it |
 | `Matched` | Whether a configured response handled it |
 | `ConnectionId` | The [connection](Connections-and-Push) it arrived on (TCP); `null` for UDP and `Match(...)` |
+| `ToJson()` | The request as one line of JSON, see [below](#limiting-and-journaling-requests) |
 
 `server.Mock.UnmatchedRequests` lists only the requests that had no response.
+
+## Limiting and journaling requests
+A server that runs for a long time keeps every request. `Mock.MaxReceivedRequests` caps that number (`0`, the default, is
+unlimited): when it is exceeded the oldest requests are dropped when the next one is recorded, and `ReceivedRequests`,
+`UnmatchedRequests`, `Verify...`, `Should()` and the `WaitFor...` methods see only the kept ones, so
+`WaitForRequestsAsync(count)` with a count above the cap can never complete.
+
+`server.RequestReceived` is raised for every request after it was matched and recorded and before its response is sent.
+`request.ToJson()` is the request as one line of JSON, for a journal that is not limited by the cap:
+
+```csharp
+server.Mock.MaxReceivedRequests = 1000;
+server.RequestReceived += (sender, request) => journal.WriteLine(request.ToJson());
+```
+Requests of one connection are raised in order; connections may raise concurrently, so the handler must be thread-safe. An
+exception thrown by a handler is [logged](Logging-and-Diagnostics) and ignored. The line looks like
+`{"time":"2026-10-04T12:34:56.789+02:00","connection":1,"remote":"127.0.0.1:50123","matched":true,"text":"PING"}`; see
+[Journal](Standalone-Server#journal) for the properties.
 
 ## Starting over
 `ClearReceivedRequests()` forgets what was received but keeps the configuration, which is useful between the steps of a longer test:

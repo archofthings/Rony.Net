@@ -24,7 +24,7 @@ configuration file (or `--address`) says otherwise. Options are written `--name 
 
 ## rony run
 ```console
-rony run mock.json [--port <N>] [--address <ip>] [--quiet]
+rony run mock.json [--port <N>] [--address <ip>] [--journal <file>] [--keep <N>] [--quiet]
 ```
 Loads the file with `MockServer.FromFile`, starts the server, prints where it listens and then every log line
 (prefixed with the time) until you press Ctrl+C or send SIGTERM; then it stops the server and exits with 0. A second Ctrl+C (or SIGTERM) while it
@@ -35,6 +35,8 @@ A file that is missing or invalid exits with 2 and the message of the [error](Co
 |---|---|
 | `--port <N>` | Port, replacing `server.port` of the file (default: from the file); `0` lets the system pick one (it is printed). |
 | `--address <ip>` | Address, replacing `server.address` of the file (default: from the file). |
+| `--journal <file>` | Append every received request to the file, one JSON object per line: see [Journal](#journal). |
+| `--keep <N>` | How many received requests and connection records the server keeps in memory (default 10000; `0` is unlimited). |
 | `--quiet` | Do not print the log lines. |
 
 So one file can serve on different ports. `--port` and `--address` are not allowed for a `unix` configuration (exit 2), and
@@ -88,8 +90,31 @@ credentials and tokens: review them before committing or sharing them. On Linux 
 rony replay login.json --delimiter "\n"
 ```
 Serves a recording as a mock server, like `server.Replay(Recording.Load(...))`, and prints `Listening on tcp 127.0.0.1:41209`.
-Options: `--port <N>`, `--address <ip>`, `--tls` (a generated self-signed certificate), `--quiet` and the framing options.
+Options: `--port <N>`, `--address <ip>`, `--tls` (a generated self-signed certificate), `--journal <file>` and `--keep <N>` (as for
+`run`), `--quiet` and the framing options.
 Use the same framing as when recording. An invalid recording exits with 2.
+
+## Journal
+`rony run` and `rony replay` write every received request to the `--journal` file as one line of JSON, so a test in any
+language can check what the mock received:
+```json
+{"time":"2026-10-04T12:34:56.789+02:00","connection":1,"remote":"127.0.0.1:50123","matched":true,"text":"PING"}
+```
+| Property | Meaning |
+|---|---|
+| `time` | When the request was received, ISO 8601 with milliseconds and offset |
+| `connection` | The connection number (the `#1` of the log); left out for UDP |
+| `remote` | The client's address and port; left out when unknown |
+| `matched` | Whether a rule answered the request |
+| `text` or `base64` | The request body as text when it is valid UTF-8 without control characters other than CR, LF and tab, otherwise as Base64 |
+
+The file is created if it is missing and appended to if it exists, UTF-8 without a BOM, and every line is flushed at once, so
+another process can read it while the server runs (on Linux and macOS a new file is readable by its owner only; on Windows
+a reader must open the file allowing a writer, for example `Get-Content` or `tail`, in .NET `FileShare.ReadWrite`). A file that
+cannot be opened exits with 2 before anything listens; a journal file that this run created and that is still empty is deleted
+when the server fails to load or start. If a write fails later, the tool reports it once on the error output and
+stops journaling; the server keeps running. The journal contains everything the clients sent, including credentials, so
+treat it like the log. `rony record` has no journal: it saves its recording.
 
 ## Framing options
 For `record` and `replay`, at most one; the default is no framing.
@@ -368,9 +393,10 @@ then moved over `--out`, so a failed save never destroys an existing file and a 
 ## Limits and security
 The tool is for development and test networks, not for hostile ones.
 - It listens on loopback unless the file or `--address` says otherwise.
-- It keeps every received request and every connection record in memory for its whole run, and `record` keeps the whole
-  recording in memory until it stops, so a long-running or exposed instance grows. There is no limit on the number of
-  connections, on idle time or on the handshake time.
+- `run` and `replay` keep the last 10000 received requests and connection records in memory (`--keep <N>` changes it, `0` is
+  unlimited); `record` keeps its whole recording in memory until it stops, so a long recording grows. There is no limit on
+  the number of connections, on idle time or on the handshake time. With per-connection state on UDP, one small entry per
+  distinct client address is kept for the whole run.
 - A server from a configuration file limits a single buffered message to 16 MiB (`server.maxBufferedBytes`); `rony replay` does the same.
 - The log contains the full request and response bodies unless you pass `--quiet`.
 - With `--tls`, or `tls` and `requireClientCertificate` in a file, any client certificate is accepted.

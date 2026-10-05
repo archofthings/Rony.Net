@@ -14,6 +14,13 @@ No breaking changes.
 - `MockServer.ValidateFile(path)` and `MockServer.ValidateJson(json)` check a configuration without creating a listener, so
   nothing is bound; `rony validate` uses them and no longer binds the port of a `udp` configuration (the exit code 1 "UDP port
   is in use" result is gone).
+- `rony run` and `rony replay` take `--journal <file>`: every received request is appended to the file as one line of JSON, so a
+  test in any language can check what the mock received; `--keep <N>` (default 10000, `0` is unlimited) sets how many
+  requests and connection records the server keeps in memory.
+- `RequestHandler.MaxReceivedRequests` and `MockServer.MaxConnectionRecords` cap the kept received requests and connection
+  records (default `0`: unlimited, as before); the oldest are dropped, open connections are always kept.
+- `MockServer.RequestReceived` is raised for every received request before its response is sent, and
+  `ReceivedRequest.ToJson()` returns it as one line of JSON.
 - `MockServer.Listener` returns the listener of a server; `rony run` can now run a `unix` configuration without `server.path`
   and prints the generated socket path.
 

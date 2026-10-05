@@ -233,4 +233,29 @@ public class VerificationSamples
             .And.HaveNoUnmatchedRequests()
             .And.HaveAcceptedConnections(Times.Once());
     }
+
+    [Fact]
+    public async Task Limit_and_journal_the_received_requests()
+    {
+        using var server = new MockServer(new TcpServer(0));
+        server.Mock.Send("").Receive("ok");
+        var output = new StringWriter();
+        var journal = TextWriter.Synchronized(output);
+
+        server.Mock.MaxReceivedRequests = 2;
+        server.RequestReceived += (sender, request) => journal.WriteLine(request.ToJson());
+        server.Start();
+
+        using (var client = await TcpTestClient.ConnectAsync(server.Port))
+        {
+            await client.SendAndReceiveAsync("one");
+            await client.SendAndReceiveAsync("two");
+            await client.SendAndReceiveAsync("three");
+        }
+
+        Assert.Equal(new[] { "two", "three" }, server.ReceivedRequests.Select(r => r.BodyString));
+        var lines = output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(3, lines.Length);
+        Assert.Contains("\"text\":\"one\"", lines[0]);
+    }
 }
