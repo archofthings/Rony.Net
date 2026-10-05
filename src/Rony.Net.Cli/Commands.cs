@@ -25,9 +25,10 @@ namespace Rony.Cli
 
         public static async Task<int> RunAsync(string[] args, Sink sink, CancellationToken stop)
         {
-            var line = CommandLine.Parse(args, new HashSet<string> { "port", "address", "journal", "keep" }, new HashSet<string> { "quiet" });
+            var line = CommandLine.Parse(args, new HashSet<string> { "port", "address", "journal", "keep", "control" }, new HashSet<string> { "quiet" });
             var path = line.SinglePositional("the configuration file");
             var keep = line.Keep();
+            var control = line.Control();
             var overrides = new ConfigurationOverrides();
             if (line.Has("port", out _)) overrides.Port = line.Port();
             if (line.Has("address", out _)) overrides.Address = line.Address();
@@ -36,7 +37,7 @@ namespace Rony.Cli
             var journal = RequestJournalFile.Open(line, sink);
             try
             {
-                return await ServeAsync(line, path, keep, overrides, journal, sink, stop).ConfigureAwait(false);
+                return await ServeAsync(line, path, keep, control, overrides, journal, sink, stop).ConfigureAwait(false);
             }
             catch
             {
@@ -49,7 +50,7 @@ namespace Rony.Cli
             }
         }
 
-        private static async Task<int> ServeAsync(CommandLine line, string path, int keep, ConfigurationOverrides overrides,
+        private static async Task<int> ServeAsync(CommandLine line, string path, int keep, int? control, ConfigurationOverrides overrides,
             RequestJournalFile journal, Sink sink, CancellationToken stop)
         {
             using (var server = Load(path, overrides))
@@ -62,23 +63,31 @@ namespace Rony.Cli
 
                 // Attached before the server can accept a connection, so a client reacting to the line below loses no log line.
                 if (!line.Has("quiet")) server.Log = text => LogUnlessListening(sink, text);
-                try
-                {
-                    await server.StartAsync().ConfigureAwait(false);
-                }
-                catch (ArgumentOutOfRangeException) when (unix != null)
-                {
-                    throw new InputException($"{path}: server.path \"{unix.Path}\" is too long for a Unix socket (the limit is about 104 bytes).");
-                }
-                catch (SocketException exception) when (unix != null && exception.SocketErrorCode == SocketError.AddressAlreadyInUse)
-                {
-                    throw new InputException($"{path}: server.path \"{unix.Path}\" is already in use: a file exists at that path.");
-                }
 
-                sink.WriteLine(unix != null ? "Listening on unix " + unix.Path : $"Listening on {transport} {Format(server.Address, server.Port)}");
+                // Created (and subscribed to the server) before the server starts, so no request is missed.
+                using (var endpoint = CreateControl(control, server, keep, unix == null && server.Listener is TcpServerBase))
+                {
+                    try
+                    {
+                        await server.StartAsync().ConfigureAwait(false);
+                    }
+                    catch (ArgumentOutOfRangeException) when (unix != null)
+                    {
+                        throw new InputException($"{path}: server.path \"{unix.Path}\" is too long for a Unix socket (the limit is about 104 bytes).");
+                    }
+                    catch (SocketException exception) when (unix != null && exception.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                    {
+                        throw new InputException($"{path}: server.path \"{unix.Path}\" is already in use: a file exists at that path.");
+                    }
 
-                await WaitForStopAsync(stop).ConfigureAwait(false);
-                await server.StopAsync().ConfigureAwait(false);
+                    if (endpoint != null) await endpoint.StartAsync().ConfigureAwait(false);
+                    sink.WriteLine(unix != null ? "Listening on unix " + unix.Path : $"Listening on {transport} {Format(server.Address, server.Port)}");
+                    if (endpoint != null) sink.WriteLine($"Control on 127.0.0.1:{endpoint.Port}");
+
+                    await WaitForStopAsync(stop).ConfigureAwait(false);
+                    if (endpoint != null) await endpoint.StopAsync().ConfigureAwait(false);
+                    await server.StopAsync().ConfigureAwait(false);
+                }
             }
 
             return 0;
@@ -167,11 +176,12 @@ namespace Rony.Cli
 
         public static async Task<int> ReplayAsync(string[] args, Sink sink, CancellationToken stop)
         {
-            var values = new HashSet<string>(FramingValues) { "port", "address", "journal", "keep" };
+            var values = new HashSet<string>(FramingValues) { "port", "address", "journal", "keep", "control" };
             var flags = new HashSet<string> { "tls", "stx-etx", "quiet" };
             var line = CommandLine.Parse(args, values, flags);
             var path = line.SinglePositional("the recording file");
             var keep = line.Keep();
+            var control = line.Control();
             var address = line.Address();
             var port = line.Port();
             var framing = line.Framing();
@@ -179,7 +189,7 @@ namespace Rony.Cli
             var journal = RequestJournalFile.Open(line, sink);
             try
             {
-                return await ReplayServeAsync(line, path, keep, address, port, framing, journal, sink, stop).ConfigureAwait(false);
+                return await ReplayServeAsync(line, path, keep, control, address, port, framing, journal, sink, stop).ConfigureAwait(false);
             }
             catch
             {
@@ -192,7 +202,7 @@ namespace Rony.Cli
             }
         }
 
-        private static async Task<int> ReplayServeAsync(CommandLine line, string path, int keep, IPAddress address, int port, IMessageFraming framing,
+        private static async Task<int> ReplayServeAsync(CommandLine line, string path, int keep, int? control, IPAddress address, int port, IMessageFraming framing,
             RequestJournalFile journal, Sink sink, CancellationToken stop)
         {
             Recording recording;
@@ -235,11 +245,17 @@ namespace Rony.Cli
 
                     // Attached before the server can accept a connection, so a client reacting to the line below loses no log line.
                     if (!line.Has("quiet")) server.Log = text => LogUnlessListening(sink, text);
-                    await server.StartAsync().ConfigureAwait(false);
-                    sink.WriteLine($"Listening on {(line.Has("tls") ? "tls" : "tcp")} {Format(server.Address, server.Port)}");
+                    using (var endpoint = CreateControl(control, server, keep, true))
+                    {
+                        await server.StartAsync().ConfigureAwait(false);
+                        if (endpoint != null) await endpoint.StartAsync().ConfigureAwait(false);
+                        sink.WriteLine($"Listening on {(line.Has("tls") ? "tls" : "tcp")} {Format(server.Address, server.Port)}");
+                        if (endpoint != null) sink.WriteLine($"Control on 127.0.0.1:{endpoint.Port}");
 
-                    await WaitForStopAsync(stop).ConfigureAwait(false);
-                    await server.StopAsync().ConfigureAwait(false);
+                        await WaitForStopAsync(stop).ConfigureAwait(false);
+                        if (endpoint != null) await endpoint.StopAsync().ConfigureAwait(false);
+                        await server.StopAsync().ConfigureAwait(false);
+                    }
                 }
             }
             finally
@@ -248,6 +264,15 @@ namespace Rony.Cli
             }
 
             return 0;
+        }
+
+        /// <summary>Creates the control endpoint for <paramref name="server"/> (not started); null when <c>--control</c> is not given. <paramref name="tcp"/> tells that the mock listens on a TCP port.</summary>
+        private static ControlEndpoint CreateControl(int? port, MockServer server, int keep, bool tcp)
+        {
+            if (port == null) return null;
+            if (tcp && port.Value != 0 && port.Value == server.Port)
+                throw new UsageException($"--control must not be the port of the mock server ({port.Value}).");
+            return new ControlEndpoint(server, keep, port.Value);
         }
 
         private static MockServer Load(string path, ConfigurationOverrides overrides)

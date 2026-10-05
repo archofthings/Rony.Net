@@ -30,10 +30,9 @@ Mockly) in October 2026; they are the features those tools have for raw TCP that
 Today a test that is not written in .NET can talk to `rony run` but cannot ask what it received, and a long run grows
 without limit.
 
-- **17. Verification for the tool: control endpoint.** The journal (`--journal`) shipped; what is left is a control
-  endpoint on a separate loopback port (`rony run --control <port>`, JSON lines over TCP) to list received requests,
-  reset them and read or set the scenario state, and after it named rule sets: a rule gets a `"group"` and the
-  endpoint switches a group on or off in one step. Lets a test in any language assert against the mock and steer it.
+- **17. Verification for the tool: named rule sets.** The journal (`--journal`) and the control endpoint (`--control`)
+  shipped; what is left is that a rule gets a `"group"` and the control endpoint switches a group on or off in one
+  step, so a test can steer the mock between scenarios. Needs a way to disable rules by group in the core.
 - **18. Hot reload: `rony run --watch`.** Reloads the rules when the configuration file changes, without dropping open
   connections; a file with a mistake is reported and the old rules stay.
 - **20. A published Docker image,** built and pushed by the release workflow (registry, tags and permissions to be

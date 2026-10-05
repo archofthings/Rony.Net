@@ -24,7 +24,7 @@ configuration file (or `--address`) says otherwise. Options are written `--name 
 
 ## rony run
 ```console
-rony run mock.json [--port <N>] [--address <ip>] [--journal <file>] [--keep <N>] [--quiet]
+rony run mock.json [--port <N>] [--address <ip>] [--journal <file>] [--keep <N>] [--control <N>] [--quiet]
 ```
 Loads the file with `MockServer.FromFile`, starts the server, prints where it listens and then every log line
 (prefixed with the time) until you press Ctrl+C or send SIGTERM; then it stops the server and exits with 0. A second Ctrl+C (or SIGTERM) while it
@@ -37,6 +37,7 @@ A file that is missing or invalid exits with 2 and the message of the [error](Co
 | `--address <ip>` | Address, replacing `server.address` of the file (default: from the file). |
 | `--journal <file>` | Append every received request to the file, one JSON object per line: see [Journal](#journal). |
 | `--keep <N>` | How many received requests and connection records the server keeps in memory (default 10000; `0` is unlimited). |
+| `--control <N>` | Start the [control endpoint](#control-endpoint) on `127.0.0.1:<N>` (`0` lets the system pick one). |
 | `--quiet` | Do not print the log lines. |
 
 So one file can serve on different ports. `--port` and `--address` are not allowed for a `unix` configuration (exit 2), and
@@ -90,7 +91,7 @@ credentials and tokens: review them before committing or sharing them. On Linux 
 rony replay login.json --delimiter "\n"
 ```
 Serves a recording as a mock server, like `server.Replay(Recording.Load(...))`, and prints `Listening on tcp 127.0.0.1:41209`.
-Options: `--port <N>`, `--address <ip>`, `--tls` (a generated self-signed certificate), `--journal <file>` and `--keep <N>` (as for
+Options: `--port <N>`, `--address <ip>`, `--tls` (a generated self-signed certificate), `--journal <file>`, `--keep <N>` and `--control <N>` (as for
 `run`), `--quiet` and the framing options.
 Use the same framing as when recording. An invalid recording exits with 2.
 
@@ -115,6 +116,42 @@ cannot be opened exits with 2 before anything listens; a journal file that this 
 when the server fails to load or start. If a write fails later, the tool reports it once on the error output and
 stops journaling; the server keeps running. The journal contains everything the clients sent, including credentials, so
 treat it like the log. `rony record` has no journal: it saves its recording.
+
+## Control endpoint
+`rony run` and `rony replay` with `--control <N>` open a second, small server for your test: over one TCP connection it can
+ask what the mock received, forget that, and read or set the scenario state, from any language. The tool prints it after the
+`Listening on` line:
+```console
+Listening on tcp 127.0.0.1:41209
+Control on 127.0.0.1:41210
+```
+The endpoint listens on `127.0.0.1` only, whatever `--address` says, and has no authentication, so every program on the machine
+can use it; in a container it is reachable only from inside the container. It starts before the tool prints anything and
+stops before the mock server does. `--control` must differ from the port of the mock server (a TCP or TLS server; exit 2). A control port that cannot be bound exits with 1 and the mock server is stopped too.
+
+The protocol is plain TCP, UTF-8: one JSON object per line is a command, one JSON object per line is the reply. The connection
+stays open for more commands, and several may be open at once. Every reply has `ok`; an error is
+`{"ok":false,"error":"<message>"}` and does not close the connection. A trailing `\r` is ignored, and a command line longer than 1 MiB closes that control connection.
+
+| Command | Reply |
+|---|---|
+| `{"command":"requests"}` | `{"ok":true,"requests":[<entry>,...],"last":<seq>}`: all kept requests, oldest first |
+| `{"command":"requests","after":<seq>}` | the same, only the entries with a sequence number greater than `<seq>` |
+| `{"command":"clear"}` | `{"ok":true}`; forgets the kept requests, the sequence numbers keep counting |
+| `{"command":"state"}` | `{"ok":true,"state":"<current>"}` |
+| `{"command":"state","set":"<name>"}` | sets the scenario state, then replies like the line above |
+
+An entry is the [journal](#journal) line of the request with `seq` as its first property. `seq` starts at 1 and counts every
+request since the tool started, also across `clear`; `last` is the number of the newest request ever received (0 when there
+is none), so `"after": <last>` returns only what arrives later. At most `--keep` entries are kept (`0` is unlimited). The state
+commands use the server-wide state; with `"stateScope": "connection"` they reply with an error. Unknown commands, unknown
+properties, invalid JSON and an `after` that is not a non-negative whole number are error replies.
+
+```text
+$ printf '%s\n' '{"command":"requests"}' '{"command":"state","set":"authenticated"}' | nc 127.0.0.1 41210
+{"ok":true,"requests":[{"seq":1,"time":"2026-10-04T12:34:56.789+02:00","connection":1,"remote":"127.0.0.1:50123","matched":true,"text":"PING"}],"last":1}
+{"ok":true,"state":"authenticated"}
+```
 
 ## Framing options
 For `record` and `replay`, at most one; the default is no framing.
@@ -401,6 +438,8 @@ The tool is for development and test networks, not for hostile ones.
 - The log contains the full request and response bodies unless you pass `--quiet`.
 - With `--tls`, or `tls` and `requireClientCertificate` in a file, any client certificate is accepted.
 - `rony record` on a non-loopback address is an open relay to the target.
+- The `--control` endpoint is loopback only and has no authentication: any local program can read the received requests (and
+  with them credentials) and change the state.
 
 ## What the tool cannot do
 It can only do what a configuration file or a recording can express. Response functions and predicates, truncated, corrupted,

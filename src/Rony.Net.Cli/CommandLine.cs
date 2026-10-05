@@ -89,6 +89,15 @@ namespace Rony.Cli
             return port;
         }
 
+        /// <summary>The port of the control endpoint (<c>--control</c>); null when the option is not given.</summary>
+        public int? Control()
+        {
+            if (!_values.TryGetValue("control", out var text)) return null;
+            if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var port) || port > 65535)
+                throw new UsageException($"--control must be a number from 0 to 65535, not \"{text}\".");
+            return port;
+        }
+
         /// <summary>How many received requests and connection records the server keeps (<c>--keep</c>); 10000 by default, 0 is unlimited.</summary>
         public int Keep()
         {
