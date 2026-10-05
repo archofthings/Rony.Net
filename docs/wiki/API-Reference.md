@@ -31,6 +31,8 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `static MockServer FromFile(string path, ConfigurationOverrides overrides)` | Same, reading the JSON from a file |
 | `static void ValidateJson(string json, string baseDirectory = null)` | Checks a configuration like `FromJson` (certificate, rules) without creating a listener, so nothing is bound. Same exceptions as `FromJson` |
 | `static void ValidateFile(string path)` | Same, reading the JSON from a file |
+| `void ReloadJson(string json, string baseDirectory = null)` | Replaces the rules (`stateScope`, `failOnUnmatched`, `onConnect`, `onUnmatched`, `rules`) of the server with those of a configuration, after checking it like `ValidateJson` (same exceptions; on error the rules stay). Connections, received requests and state are kept; the `server` section is not applied. See [Reloading](Configuration-Files#reloading) |
+| `void ReloadFile(string path)` | Same, reading the JSON from a file; relative paths are resolved against the file's directory |
 | `IListener Listener` | The listener the server was created with, for example `((UnixSocketServer)server.Listener).Path` |
 | `void Replay(Recording recording)` | Adds rules that answer like the recorded server; see [Record and Replay](Record-and-Replay). Throws `ArgumentException` for requests that already have a rule |
 

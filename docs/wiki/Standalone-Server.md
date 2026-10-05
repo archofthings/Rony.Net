@@ -24,7 +24,7 @@ configuration file (or `--address`) says otherwise. Options are written `--name 
 
 ## rony run
 ```console
-rony run mock.json [--port <N>] [--address <ip>] [--journal <file>] [--keep <N>] [--control <N>] [--quiet]
+rony run mock.json [--port <N>] [--address <ip>] [--journal <file>] [--keep <N>] [--control <N>] [--watch] [--quiet]
 ```
 Loads the file with `MockServer.FromFile`, starts the server, prints where it listens and then every log line
 (prefixed with the time) until you press Ctrl+C or send SIGTERM; then it stops the server and exits with 0. A second Ctrl+C (or SIGTERM) while it
@@ -38,6 +38,7 @@ A file that is missing or invalid exits with 2 and the message of the [error](Co
 | `--journal <file>` | Append every received request to the file, one JSON object per line: see [Journal](#journal). |
 | `--keep <N>` | How many received requests and connection records the server keeps in memory (default 10000; `0` is unlimited). |
 | `--control <N>` | Start the [control endpoint](#control-endpoint) on `127.0.0.1:<N>` (`0` lets the system pick one). |
+| `--watch` | Reload the rules when the file changes: see [Reloading](#reloading-the-file). |
 | `--quiet` | Do not print the log lines. |
 
 So one file can serve on different ports. `--port` and `--address` are not allowed for a `unix` configuration (exit 2), and
@@ -58,6 +59,14 @@ Listening on tcp 127.0.0.1:58182
 10:25:47.105 [Rony 10:25:47.105] #1 received "PING" (matched "PING")
 10:25:47.112 [Rony 10:25:47.112] #1 sent "PONG"
 ```
+
+### Reloading the file
+With `--watch` the tool reads the file every half second (polling, so it also works for a file bind-mounted into a container and
+with editors that replace the file) and, when its text changed and has been the same for two checks (about a second after the save), calls `MockServer.ReloadFile`: the new rules apply at once, open
+connections stay, and received requests and the scenario state are kept (see [Reloading](Configuration-Files#reloading)). It prints
+`Reloaded <file>` (also with `--quiet`). A file with a mistake prints `<file>: <message>; keeping the previous rules.` once on the
+error output and the old rules stay; fix the file and it is reloaded. A file that cannot be read at that moment is tried again.
+The `server` section is not applied on reload: change of address, port, transport or framing needs a restart. `--watch` is for `run`, not `replay`.
 
 ## rony validate
 ```console

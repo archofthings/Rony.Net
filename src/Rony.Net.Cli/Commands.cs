@@ -25,7 +25,7 @@ namespace Rony.Cli
 
         public static async Task<int> RunAsync(string[] args, Sink sink, CancellationToken stop)
         {
-            var line = CommandLine.Parse(args, new HashSet<string> { "port", "address", "journal", "keep", "control" }, new HashSet<string> { "quiet" });
+            var line = CommandLine.Parse(args, new HashSet<string> { "port", "address", "journal", "keep", "control" }, new HashSet<string> { "quiet", "watch" });
             var path = line.SinglePositional("the configuration file");
             var keep = line.Keep();
             var control = line.Control();
@@ -53,6 +53,8 @@ namespace Rony.Cli
         private static async Task<int> ServeAsync(CommandLine line, string path, int keep, int? control, ConfigurationOverrides overrides,
             RequestJournalFile journal, Sink sink, CancellationToken stop)
         {
+            // Read before loading, so an edit made right after the start is noticed.
+            var baseline = line.Has("watch") ? ConfigWatcher.TryRead(path) : null;
             using (var server = Load(path, overrides))
             {
                 server.Mock.MaxReceivedRequests = keep;
@@ -84,7 +86,26 @@ namespace Rony.Cli
                     sink.WriteLine(unix != null ? "Listening on unix " + unix.Path : $"Listening on {transport} {Format(server.Address, server.Port)}");
                     if (endpoint != null) sink.WriteLine($"Control on 127.0.0.1:{endpoint.Port}");
 
-                    await WaitForStopAsync(stop).ConfigureAwait(false);
+                    ConfigWatcher watcher = null;
+                    try
+                    {
+                        if (line.Has("watch"))
+                        {
+                            watcher = new ConfigWatcher(server, path, baseline, sink);
+                            watcher.Start();
+                        }
+
+                        await WaitForStopAsync(stop).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (watcher != null)
+                        {
+                            await watcher.StopAsync().ConfigureAwait(false);
+                            watcher.Dispose();
+                        }
+                    }
+
                     if (endpoint != null) await endpoint.StopAsync().ConfigureAwait(false);
                     await server.StopAsync().ConfigureAwait(false);
                 }

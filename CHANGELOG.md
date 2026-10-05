@@ -7,6 +7,10 @@ Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wik
 No breaking changes.
 
 ### Added
+- `rony run <config.json> --watch` reloads the rules when the file changes (polling every half second, so it also works for a
+  bind-mounted file); a file with a mistake is reported and the old rules stay.
+- `MockServer.ReloadFile(path)` and `ReloadJson(json)` replace the rules of a running server with those of a configuration
+  without dropping connections; the `server` section is not applied.
 - `rony run <config.json> --port <N> --address <ip>` override `server.port` and `server.address` of the file, so one file
   serves on different ports (not for a `unix` configuration).
 - `MockServer.FromFile(path, overrides)` and `MockServer.FromJson(json, baseDirectory, overrides)` take a new

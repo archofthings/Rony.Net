@@ -185,6 +185,7 @@ server.Start();
 
 using var other = MockServer.FromFile("mock.json", new ConfigurationOverrides { Port = 0 });   // another port than the file says
 MockServer.ValidateFile("mock.json");                  // check a file without opening a socket
+server.ReloadFile("mock.json");                        // new rules for the running server; connections and state are kept
 ```
 Details: [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files)
 
@@ -195,6 +196,7 @@ dotnet tool install --global Rony.Net.Cli
 rony run mock.json [--port 0] [--address 0.0.0.0]    # serve a configuration file (Ctrl+C stops it)
 rony run mock.json --journal requests.jsonl          # append every received request to a file, one JSON line each
 rony run mock.json --control 0                       # a loopback control port: ask for the received requests, clear them, read or set the state
+rony run mock.json --watch                           # reload the rules whenever the file changes (a broken file keeps the old rules)
 rony validate mock.json                              # check a configuration file, for example in CI
 rony record --target api.test:5000 --out login.json  # record a real server through a proxy
 rony replay login.json                               # serve the recording

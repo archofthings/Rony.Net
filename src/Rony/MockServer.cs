@@ -216,6 +216,38 @@ namespace Rony.Net
             ValidateJson(File.ReadAllText(fullPath), Path.GetDirectoryName(fullPath));
         }
 
+        /// <summary>
+        /// Replaces the rules of the running server with those of a configuration (file format version 1): <c>stateScope</c>,
+        /// <c>failOnUnmatched</c>, <c>onConnect</c>, <c>onUnmatched</c> and <c>rules</c> take the place of everything configured before,
+        /// also rules added in code. The configuration is checked completely first like <see cref="ValidateJson"/> does; when it is
+        /// invalid the exception is thrown and the rules stay as they are. Matching sees either the old or the new rules, never a mix.
+        /// Open connections, the listener, received requests and the scenario state are kept; sequences start again.
+        /// The <c>server</c> section is checked but not applied (address, port, transport, framing, TLS and the like stay as they are).
+        /// Logs <c>rules reloaded (n rules)</c>. Do not define rules or call <c>Mock.Reset()</c> concurrently with a reload; a reader of
+        /// <c>Mock.Configs</c> may see the exact-request table while it is being replaced.
+        /// </summary>
+        /// <param name="json">The configuration.</param>
+        /// <param name="baseDirectory">The directory relative paths inside the configuration are resolved against (null means the current directory).</param>
+        /// <exception cref="ArgumentNullException"><paramref name="json"/> is null.</exception>
+        /// <exception cref="FormatException">The text is not valid JSON or the configuration is invalid.</exception>
+        public void ReloadJson(string json, string baseDirectory = null)
+        {
+            var count = MockConfiguration.Reload(Mock, json, baseDirectory);
+            Trace($"rules reloaded ({count} rules)");
+        }
+
+        /// <summary>Like <see cref="ReloadJson"/>, reading the JSON from a file; relative paths inside the file are resolved against its directory.</summary>
+        /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
+        /// <exception cref="FileNotFoundException">The file does not exist.</exception>
+        /// <exception cref="DirectoryNotFoundException">The directory of the file does not exist.</exception>
+        /// <exception cref="FormatException">The content is not valid JSON or the configuration is invalid.</exception>
+        public void ReloadFile(string path)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var fullPath = Path.GetFullPath(path);
+            ReloadJson(File.ReadAllText(fullPath), Path.GetDirectoryName(fullPath));
+        }
+
         /// <summary>Starts listening. Calling it again while started does nothing; a stopped server can be started again.</summary>
         public void Start()
         {

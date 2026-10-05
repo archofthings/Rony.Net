@@ -191,6 +191,34 @@ public class ConfigurationFileSamples
     }
 
     [Fact]
+    public async Task Reload_the_rules_of_a_running_server()
+    {
+        await WithFileAsync("""{ "version": 1, "rules": [ { "request": "PING", "reply": "old" } ] }""", async path =>
+        {
+            using var server = MockServer.FromFile(path);
+            server.Start();
+            Assert.Equal("old", await ReplyAsync(server));
+
+            File.WriteAllText(path, """{ "version": 1, "rules": [ { "request": "PING", "reply": "new" } ] }""");
+            server.ReloadFile(path);   // new rules; connections, received requests and the scenario state are kept
+
+            Assert.Equal("new", await ReplyAsync(server));
+            server.Should().HaveReceived("PING", Times.Exactly(2));
+        });
+    }
+
+    private static async Task<string> ReplyAsync(MockServer server)
+    {
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync(IPAddress.Loopback, server.Port);
+        var stream = tcp.GetStream();
+        await stream.WriteAsync("PING".GetBytes());
+        var buffer = new byte[64];
+        var read = await stream.ReadAsync(buffer).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        return buffer[..read].GetString();
+    }
+
+    [Fact]
     public async Task A_tls_server_with_a_generated_certificate()
     {
         using var server = MockServer.FromJson("""

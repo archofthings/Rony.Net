@@ -109,13 +109,30 @@ namespace Rony.Handlers
         }
 
         /// <summary>Checks everything <see cref="Create"/> checks except what needs a listener: nothing is bound.</summary>
-        public static void Validate(string json, string baseDirectory)
+        public static void Validate(string json, string baseDirectory) => Build(json, baseDirectory, out _);
+
+        /// <summary>
+        /// Checks a configuration completely like <see cref="Validate"/>, then replaces the rules of <paramref name="mock"/> with its rules.
+        /// Returns the number of entries in the <c>rules</c> array.
+        /// </summary>
+        public static int Reload(RequestHandler mock, string json, string baseDirectory)
+        {
+            var source = Build(json, baseDirectory, out var ruleCount);
+            mock.ReplaceRulesWith(source);
+            return ruleCount;
+        }
+
+        // Parses, loads and disposes the certificate, and builds the rules into a stand-alone handler.
+        private static RequestHandler Build(string json, string baseDirectory, out int ruleCount)
         {
             var configuration = Parse(json, baseDirectory);
             var settings = configuration.Settings;
             if (settings.Transport == "tls" && settings.CertificatePath != null)
                 LoadCertificate(settings.CertificatePath, settings.CertificatePassword).Dispose();
-            ApplyRules(new RequestHandler(), configuration);
+            var handler = new RequestHandler();
+            ApplyRules(handler, configuration);
+            ruleCount = configuration.Rules.Count;
+            return handler;
         }
 
         private static Configuration Parse(string json, string baseDirectory)

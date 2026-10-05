@@ -233,11 +233,12 @@ namespace Rony.Handlers
         /// </summary>
         public void Reset()
         {
-            _configs.Clear();
-            lock (_predicateConfigs)
-                _predicateConfigs.Clear();
+            // One step, in the lock order of Find and ReplaceRulesWith, so a reload never meets a half-cleared rule set.
             lock (_matchLock)
             {
+                _configs.Clear();
+                lock (_predicateConfigs)
+                    _predicateConfigs.Clear();
                 _stateConfigs.Clear();
                 _connectionStates.Clear();
                 _state = InitialState;
@@ -246,6 +247,34 @@ namespace Rony.Handlers
             }
             _journal.Clear();
             _pending = null;
+        }
+
+        /// <summary>
+        /// Replaces every configured response, <see cref="StateScope"/> and <see cref="FailOnUnmatched"/> with those of
+        /// <paramref name="source"/> (a stand-alone handler that is not used afterwards). Recorded requests and the scenario state are kept.
+        /// Matching sees either all old or all new rules.
+        /// </summary>
+        internal void ReplaceRulesWith(RequestHandler source)
+        {
+            // Same lock order as Find: _matchLock, then _predicateConfigs.
+            lock (_matchLock)
+            {
+                _configs.Clear();
+                foreach (var pair in source._configs)
+                    _configs[pair.Key] = pair.Value;
+                lock (_predicateConfigs)
+                {
+                    _predicateConfigs.Clear();
+                    _predicateConfigs.AddRange(source._predicateConfigs);
+                }
+                _stateConfigs.Clear();
+                foreach (var pair in source._stateConfigs)
+                    _stateConfigs[pair.Key] = pair.Value;
+                _connectConfig = source._connectConfig;
+                _unmatchedConfig = source._unmatchedConfig;
+                StateScope = source.StateScope;
+                FailOnUnmatched = source.FailOnUnmatched;
+            }
         }
 
         #endregion

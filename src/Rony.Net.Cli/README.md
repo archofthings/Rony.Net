@@ -9,6 +9,7 @@ dotnet tool install --global Rony.Net.Cli
 rony run mock.json                  # start the server described by the file (Ctrl+C stops it); --port and --address override the file
 rony run mock.json --journal requests.jsonl   # also append every received request to a file, one JSON line each; --keep <N> limits what is kept in memory
 rony run mock.json --control 0      # a control port on 127.0.0.1 (printed): ask for the received requests, clear them, read or set the state
+rony run mock.json --watch          # reload the rules when the file changes; open connections stay, a broken file keeps the old rules
 rony validate mock.json             # check the file without starting anything or opening a socket
 rony record --target api.test:5000 --out login.json --delimiter "\n"   # record a real server through a proxy
 rony replay login.json --delimiter "\n"                                # serve the recording as a mock
