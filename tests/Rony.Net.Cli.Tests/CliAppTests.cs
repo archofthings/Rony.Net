@@ -3,6 +3,8 @@ using Rony.Models;
 using Rony.Net;
 using System;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -191,6 +193,228 @@ namespace Rony.Cli.Tests
             Assert.Equal(true, JsonData.Parse(lines[1])["matched"].AsBoolean());
             Assert.Equal("OTHER", JsonData.Parse(lines[2])["text"].AsString());
             Assert.Equal(false, JsonData.Parse(lines[2])["matched"].AsBoolean());
+        }
+
+        private sealed class ControlClient : IDisposable
+        {
+            private readonly TcpClient _client = new TcpClient();
+            private StreamReader _reader;
+            private StreamWriter _writer;
+
+            public static async Task<ControlClient> ConnectAsync(int port)
+            {
+                var control = new ControlClient();
+                await control._client.ConnectAsync("127.0.0.1", port);
+                var stream = control._client.GetStream();
+                control._reader = new StreamReader(stream, Encoding.UTF8);
+                control._writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+                return control;
+            }
+
+            public async Task<JsonData> SendAsync(string command)
+            {
+                await _writer.WriteLineAsync(command);
+                return JsonData.Parse(await _reader.ReadLineAsync().WaitAsync(Limit));
+            }
+
+            public void Dispose() => _client.Dispose();
+        }
+
+        private const string StateConfig = @"{
+  ""version"": 1,
+  ""server"": { ""port"": 0, ""framing"": { ""type"": ""delimiter"", ""delimiter"": ""\n"" } },
+  ""rules"": [
+    { ""request"": ""WHO"", ""reply"": ""anonymous"" },
+    { ""request"": ""WHO"", ""state"": ""authenticated"", ""reply"": ""bob"" }
+  ]
+}";
+
+        [Fact]
+        public async Task Run_Should_Let_The_Control_Endpoint_Read_And_Clear_The_Requests()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+
+            var run = CliApp.RunAsync(new[] { "run", file, "--control", "0", "--quiet" }, output, new LineWriter(), stop.Token);
+            var listening = await output.WaitForLineAsync(l => l.StartsWith("Listening on tcp 127.0.0.1:")).WaitAsync(Limit);
+            var controlLine = await output.WaitForLineAsync(l => l.StartsWith("Control on 127.0.0.1:")).WaitAsync(Limit);
+            var lines = output.Lines.ToList();
+            Assert.True(lines.IndexOf(listening) < lines.IndexOf(controlLine));
+            Assert.Equal("PONG", await ExchangeAsync(PortOf(listening), "PING"));
+            Assert.Null(await ExchangeAsync(PortOf(listening), "OTHER"));
+
+            using (var control = await ControlClient.ConnectAsync(PortOf(controlLine)))
+            {
+                var all = await control.SendAsync("{\"command\":\"requests\"}");
+                Assert.Equal(true, all["ok"].AsBoolean());
+                Assert.Equal(2, all["requests"].Count);
+                Assert.Equal(1, all["requests"][0]["seq"].AsNumber());
+                Assert.Equal("PING", all["requests"][0]["text"].AsString());
+                Assert.Equal(2, all["requests"][1]["seq"].AsNumber());
+                Assert.Equal("OTHER", all["requests"][1]["text"].AsString());
+                Assert.Equal(2, all["last"].AsNumber());
+
+                var after = await control.SendAsync("{\"command\":\"requests\",\"after\":1}");
+                Assert.Equal(1, after["requests"].Count);
+                Assert.Equal("OTHER", after["requests"][0]["text"].AsString());
+
+                Assert.Equal(true, (await control.SendAsync("{\"command\":\"clear\"}"))["ok"].AsBoolean());
+                var cleared = await control.SendAsync("{\"command\":\"requests\"}");
+                Assert.Equal(0, cleared["requests"].Count);
+                Assert.Equal(2, cleared["last"].AsNumber());
+
+                // the sequence keeps counting after clear
+                Assert.Equal("PONG", await ExchangeAsync(PortOf(listening), "PING"));
+                var next = await control.SendAsync("{\"command\":\"requests\"}");
+                Assert.Equal(1, next["requests"].Count);
+                Assert.Equal(3, next["requests"][0]["seq"].AsNumber());
+                Assert.Equal(3, next["last"].AsNumber());
+            }
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Run_Should_Let_The_Control_Endpoint_Read_And_Set_The_State()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", StateConfig);
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+
+            var run = CliApp.RunAsync(new[] { "run", file, "--control", "0", "--quiet" }, output, new LineWriter(), stop.Token);
+            var listening = await output.WaitForLineAsync(l => l.StartsWith("Listening on tcp 127.0.0.1:")).WaitAsync(Limit);
+            var controlLine = await output.WaitForLineAsync(l => l.StartsWith("Control on 127.0.0.1:")).WaitAsync(Limit);
+
+            using (var control = await ControlClient.ConnectAsync(PortOf(controlLine)))
+            {
+                Assert.Equal("initial", (await control.SendAsync("{\"command\":\"state\"}"))["state"].AsString());
+                Assert.Equal("anonymous", await ExchangeAsync(PortOf(listening), "WHO"));
+                Assert.Equal("authenticated", (await control.SendAsync("{\"command\":\"state\",\"set\":\"authenticated\"}"))["state"].AsString());
+                Assert.Equal("bob", await ExchangeAsync(PortOf(listening), "WHO"));
+            }
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Theory]
+        [InlineData("{not json")]
+        [InlineData("[1]")]
+        [InlineData("{}")]
+        [InlineData("{\"command\":\"bogus\"}")]
+        [InlineData("{\"command\":\"requests\",\"after\":-1}")]
+        [InlineData("{\"command\":\"requests\",\"after\":1.5}")]
+        [InlineData("{\"command\":\"clear\",\"typo\":1}")]
+        [InlineData("{\"command\":\"state\",\"set\":\"\"}")]
+        public async Task Control_Errors_Should_Be_Replies_That_Keep_The_Connection_Open(string badCommand)
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+
+            var run = CliApp.RunAsync(new[] { "run", file, "--control", "0", "--quiet" }, output, new LineWriter(), stop.Token);
+            var controlLine = await output.WaitForLineAsync(l => l.StartsWith("Control on 127.0.0.1:")).WaitAsync(Limit);
+
+            using (var control = await ControlClient.ConnectAsync(PortOf(controlLine)))
+            {
+                var reply = await control.SendAsync(badCommand);
+                Assert.Equal(false, reply["ok"].AsBoolean());
+                Assert.False(string.IsNullOrEmpty(reply["error"].AsString()));
+                Assert.Equal(true, (await control.SendAsync("{\"command\":\"state\"}"))["ok"].AsBoolean());
+            }
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Control_Should_Refuse_The_State_With_Per_Connection_State()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", FlakyConfig.Replace("\"port\": 4001", "\"port\": 0"));
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+
+            var run = CliApp.RunAsync(new[] { "run", file, "--control", "0", "--quiet" }, output, new LineWriter(), stop.Token);
+            var controlLine = await output.WaitForLineAsync(l => l.StartsWith("Control on 127.0.0.1:")).WaitAsync(Limit);
+
+            using (var control = await ControlClient.ConnectAsync(PortOf(controlLine)))
+            {
+                foreach (var command in new[] { "{\"command\":\"state\"}", "{\"command\":\"state\",\"set\":\"x\"}" })
+                {
+                    var reply = await control.SendAsync(command);
+                    Assert.Equal(false, reply["ok"].AsBoolean());
+                    Assert.Contains("per-connection state", reply["error"].AsString());
+                }
+            }
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Control_Should_Keep_Only_The_Newest_Entries_With_Keep_But_Count_All()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+
+            var run = CliApp.RunAsync(new[] { "run", file, "--control", "0", "--keep", "1", "--quiet" }, output, new LineWriter(), stop.Token);
+            var listening = await output.WaitForLineAsync(l => l.StartsWith("Listening on tcp 127.0.0.1:")).WaitAsync(Limit);
+            var controlLine = await output.WaitForLineAsync(l => l.StartsWith("Control on 127.0.0.1:")).WaitAsync(Limit);
+            Assert.Equal("PONG", await ExchangeAsync(PortOf(listening), "PING"));
+            Assert.Null(await ExchangeAsync(PortOf(listening), "OTHER"));
+
+            using (var control = await ControlClient.ConnectAsync(PortOf(controlLine)))
+            {
+                var all = await control.SendAsync("{\"command\":\"requests\"}");
+                Assert.Equal(1, all["requests"].Count);
+                Assert.Equal(2, all["requests"][0]["seq"].AsNumber());
+                Assert.Equal(2, all["last"].AsNumber());
+            }
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
+        public async Task Run_Should_Reject_A_Control_Port_That_Is_The_Port_Of_The_Mock()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            var probe = new TcpListener(IPAddress.Loopback, 0);
+            probe.Start();
+            var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            probe.Stop();
+            var output = new LineWriter();
+            var error = new LineWriter();
+
+            var code = await CliApp.RunAsync(new[] { "run", file, "--port", port.ToString(), "--control", port.ToString() }, output, error, CancellationToken.None).WaitAsync(Limit);
+
+            Assert.Equal(2, code);
+            Assert.Contains($"--control must not be the port of the mock server ({port}).", error.Text);
+            Assert.Equal(string.Empty, output.Text);
+        }
+
+        [Fact]
+        public async Task Run_Should_Fail_With_Exit_Code_1_When_The_Control_Port_Is_In_Use()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            using var busy = new MockServer(new TcpServer(IPAddress.Loopback, 0));
+            busy.Start();
+            var error = new LineWriter();
+
+            var code = await CliApp.RunAsync(new[] { "run", file, "--control", busy.Port.ToString(), "--quiet" }, new LineWriter(), error, CancellationToken.None).WaitAsync(Limit);
+
+            Assert.Equal(1, code);
+            Assert.Contains($"Cannot start the control endpoint on 127.0.0.1:{busy.Port}:", error.Text);
         }
 
         [Fact]
@@ -492,10 +716,14 @@ namespace Rony.Cli.Tests
             // replay
             using var stopReplay = new CancellationTokenSource();
             var replayOutput = new LineWriter();
-            var replay = CliApp.RunAsync(new[] { "replay", recordingFile, "--delimiter", "\\n", "--quiet" }, replayOutput, new LineWriter(), stopReplay.Token);
+            var replay = CliApp.RunAsync(new[] { "replay", recordingFile, "--delimiter", "\\n", "--control", "0", "--quiet" }, replayOutput, new LineWriter(), stopReplay.Token);
             var listening = await replayOutput.WaitForLineAsync(l => l.StartsWith("Listening on tcp 127.0.0.1:")).WaitAsync(Limit);
 
+            var controlLine = await replayOutput.WaitForLineAsync(l => l.StartsWith("Control on 127.0.0.1:")).WaitAsync(Limit);
+
             Assert.Equal("PONG", await ExchangeAsync(PortOf(listening), "PING"));
+            using (var control = await ControlClient.ConnectAsync(PortOf(controlLine)))
+                Assert.Equal("PING", (await control.SendAsync("{\"command\":\"requests\"}"))["requests"][0]["text"].AsString());
             stopReplay.Cancel();
             Assert.Equal(0, await replay.WaitAsync(Limit));
         }
@@ -511,6 +739,8 @@ namespace Rony.Cli.Tests
         [InlineData("run", "a.json", "--keep", "-1")]
         [InlineData("replay", "a.json", "--keep", "many")]
         [InlineData("replay", "a.json", "--port", "70000")]
+        [InlineData("run", "a.json", "--control", "70000")]
+        [InlineData("replay", "a.json", "--control", "abc")]
         [InlineData("replay", "a.json", "--address", "localhost")]
         [InlineData("replay", "a.json", "--delimiter", "x", "--stx-etx")]
         [InlineData("replay", "a.json", "--length-prefix", "3")]

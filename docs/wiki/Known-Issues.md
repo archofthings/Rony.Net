@@ -12,6 +12,8 @@ so you don't have to find them yourself. For problems with a known answer, see [
   traffic it receives; set `Mock.MaxReceivedRequests` and `MaxConnectionRecords` (the standalone tool does by default). See
   [Verifying Requests](Verifying-Requests#limiting-and-journaling-requests). With `StateScope.Connection` on UDP, one small
   entry per distinct client address is kept for the whole run (TCP entries are removed with the dropped connection record).
+- **The `rony` control endpoint reads and sets only the server-wide state.** With `"stateScope": "connection"` the state
+  commands reply with an error; see [Standalone Server](Standalone-Server#control-endpoint).
 - **No limit on buffered data unless you set one.** A client that never completes a message makes the server buffer what it
   sends. Set `MaxBufferedBytes` on the listener when the client is not your own code. Servers from a configuration file
   default to 16 MiB. See [Connections and Framing](Connections-and-Framing).

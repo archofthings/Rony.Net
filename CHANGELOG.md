@@ -17,6 +17,8 @@ No breaking changes.
 - `rony run` and `rony replay` take `--journal <file>`: every received request is appended to the file as one line of JSON, so a
   test in any language can check what the mock received; `--keep <N>` (default 10000, `0` is unlimited) sets how many
   requests and connection records the server keeps in memory.
+- `rony run` and `rony replay` take `--control <N>`: a control endpoint on `127.0.0.1` (no authentication) that answers one JSON
+  command per line, so a test in any language can read the received requests, clear them, and read or set the scenario state.
 - `RequestHandler.MaxReceivedRequests` and `MockServer.MaxConnectionRecords` cap the kept received requests and connection
   records (default `0`: unlimited, as before); the oldest are dropped, open connections are always kept.
 - `MockServer.RequestReceived` is raised for every received request before its response is sent, and
