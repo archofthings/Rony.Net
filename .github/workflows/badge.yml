@@ -1,0 +1,68 @@
+name: Downloads badge
+
+# Adds up the nuget.org downloads of all Rony.Net packages once a day and writes the result to the "badges" branch,
+# where the README badge (a shields.io endpoint badge) reads it.
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/badge.yml' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: badge
+  cancel-in-progress: false
+
+jobs:
+  downloads:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add up the downloads
+        run: |
+          set -euo pipefail
+          packages="Rony.Net Rony.Net.Xunit Rony.Net.Xunit.v3 Rony.Net.NUnit Rony.Net.MSTest Rony.Net.Cli"
+
+          # nuget.org has several search regions and they are not updated at the same moment: take the highest count.
+          services=$(curl -fsS --retry 3 https://api.nuget.org/v3/index.json \
+            | jq -r '.resources[] | select(."@type" == "SearchQueryService") | ."@id"')
+          [ -n "$services" ] || { echo "No search service found in the nuget.org index." >&2; exit 1; }
+
+          total=0
+          for package in $packages; do
+            best=""
+            for service in $services; do
+              count=$(curl -fsS --retry 3 "$service?q=packageid:$package&prerelease=true&semVerLevel=2.0.0" \
+                | jq -r --arg id "$package" '[.data[] | select((.id | ascii_downcase) == ($id | ascii_downcase)) | .totalDownloads] | first // empty') || count=""
+              if [ -n "$count" ] && { [ -z "$best" ] || [ "$count" -gt "$best" ]; }; then best=$count; fi
+            done
+            # A package that no region knows would make the total wrong: fail and keep yesterday's badge.
+            [ -n "$best" ] || { echo "No download count for $package." >&2; exit 1; }
+            echo "$package: $best"
+            total=$((total + best))
+          done
+
+          if [ "$total" -ge 1000000 ]; then message=$(awk -v n="$total" 'BEGIN { printf "%.1fM", n / 1000000 }')
+          elif [ "$total" -ge 1000 ]; then message=$(awk -v n="$total" 'BEGIN { printf "%.1fk", n / 1000 }')
+          else message=$total; fi
+          echo "Total: $total ($message)"
+
+          mkdir badge
+          jq -n --arg message "$message" '{ schemaVersion: 1, label: "downloads", message: $message, color: "blue" }' > badge/downloads.json
+
+      - name: Publish to the badges branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd badge
+          git init --quiet --initial-branch=badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads.json
+          git commit --quiet -m "Update the downloads badge"
+          # One commit, replaced every run: the branch holds only the current value.
+          git push --quiet --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges

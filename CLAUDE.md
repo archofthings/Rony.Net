@@ -11,6 +11,8 @@
   test and sample projects target `net8.0`.
 - CI (`.github/workflows/ci.yml`): `dotnet build` and `dotnet test` in Release on Ubuntu and Windows, .NET 8 SDK; a
   `docker` job builds the image from the `Dockerfile`, runs the wiki's Docker example in it and checks the reply.
+- `.github/workflows/badge.yml` adds up the nuget.org downloads of all packages once a day and writes them to the
+  `badges` branch for the README badge. A new package must be added to its package list.
 - Local environment: any SDK from .NET 8 up. If only a newer runtime is installed, tests need
   `DOTNET_ROLL_FORWARD=Major`; `.claude/settings.json` sets it for every session. Check a fresh checkout with the
   `setup-dev` skill (`.claude/skills/setup-dev/scripts/setup_dev.sh`).
