@@ -195,6 +195,70 @@ namespace Rony.Cli.Tests
             Assert.Equal(false, JsonData.Parse(lines[2])["matched"].AsBoolean());
         }
 
+        private static string WatchConfig(string reply) =>
+            "{ \"version\": 1, \"server\": { \"port\": 0, \"framing\": { \"type\": \"delimiter\", \"delimiter\": \"\\n\" } }, " +
+            "\"rules\": [ { \"request\": \"PING\", \"reply\": \"" + reply + "\" } ] }";
+
+        [Fact]
+        public async Task Run_Watch_Should_Reload_A_Changed_File_Keep_The_Rules_Of_A_Broken_One_And_Recover()
+        {
+            var interval = ConfigWatcher.DefaultInterval;
+            ConfigWatcher.DefaultInterval = TimeSpan.FromMilliseconds(20);
+            try
+            {
+                using var directory = new TempDirectory();
+                var file = directory.Write("mock.json", WatchConfig("old"));
+                using var stop = new CancellationTokenSource();
+                var output = new LineWriter();
+                var error = new LineWriter();
+
+                var run = CliApp.RunAsync(new[] { "run", file, "--watch", "--quiet" }, output, error, stop.Token);
+                var listening = await output.WaitForLineAsync(l => l.StartsWith("Listening on tcp 127.0.0.1:")).WaitAsync(Limit);
+                using var client = new TcpClient();
+                await client.ConnectAsync("127.0.0.1", PortOf(listening));
+                using var stream = client.GetStream();
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                async Task<string> AskAsync()
+                {
+                    await stream.WriteAsync(Encoding.UTF8.GetBytes("PING\n"));
+                    return await reader.ReadLineAsync().WaitAsync(Limit);
+                }
+
+                Assert.Equal("old", await AskAsync());
+
+                Task NextReloadAsync()
+                {
+                    var seen = output.Lines.Count(l => l == "Reloaded " + file);
+                    var count = 0;
+                    return output.WaitForLineAsync(l => l == "Reloaded " + file && ++count > seen).WaitAsync(Limit);
+                }
+
+                var reloaded = NextReloadAsync();
+                File.WriteAllText(file, WatchConfig("new"));
+                await reloaded;
+                Assert.Equal("new", await AskAsync());
+
+                const string broken = "{not json";
+                var message = Assert.Throws<FormatException>(() => MockServer.ValidateJson(broken)).Message;
+                var rejected = error.WaitForLineAsync(l => l == $"{file}: {message}; keeping the previous rules.");
+                File.WriteAllText(file, broken);
+                await rejected.WaitAsync(Limit);
+                Assert.Equal("new", await AskAsync());
+
+                reloaded = NextReloadAsync();
+                File.WriteAllText(file, WatchConfig("again"));
+                await reloaded;
+                Assert.Equal("again", await AskAsync());
+
+                stop.Cancel();
+                Assert.Equal(0, await run.WaitAsync(Limit));
+            }
+            finally
+            {
+                ConfigWatcher.DefaultInterval = interval;
+            }
+        }
+
         private sealed class ControlClient : IDisposable
         {
             private readonly TcpClient _client = new TcpClient();
@@ -736,6 +800,7 @@ namespace Rony.Cli.Tests
         [InlineData("run", "a.json", "--unknown")]
         [InlineData("run", "a.json", "--quiet=yes")]
         [InlineData("replay", "a.json", "--port")]
+        [InlineData("replay", "a.json", "--watch")]
         [InlineData("run", "a.json", "--keep", "-1")]
         [InlineData("replay", "a.json", "--keep", "many")]
         [InlineData("replay", "a.json", "--port", "70000")]

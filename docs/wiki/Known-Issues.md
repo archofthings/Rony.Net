@@ -60,6 +60,7 @@ so you don't have to find them yourself. For problems with a known answer, see [
 ## Standalone server (`rony`)
 - **For development and test networks only.** No limit on connections, idle time or handshake time, and `rony record`
   keeps its whole recording in memory until it stops (`run` and `replay` keep only the last 10000 requests, see `--keep`). See [Limits and security](Standalone-Server#limits-and-security).
+- **`rony run --watch` reloads the rules only.** A change to the `server` section (address, port, transport, framing, TLS) needs a restart.
 - **`rony record` does not check the target before it starts.** An unreachable target shows up as a logged error per
   connection.
 - **A recording stores messages in the order they arrived.** A client that sends before the server's greeting arrives gets

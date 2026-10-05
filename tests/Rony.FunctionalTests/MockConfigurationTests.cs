@@ -94,6 +94,23 @@ namespace Rony.FunctionalTests
         }
 
         [Fact]
+        public async Task ReloadJson_Should_Change_The_Reply_On_An_Open_Connection()
+        {
+            using var server = MockServer.FromJson("""
+                { "version": 1, "server": { "framing": { "type": "delimiter", "delimiter": "\n" } },
+                  "rules": [ { "request": "PING", "reply": "old" } ] }
+                """);
+            server.Start();
+            using var client = await LineClient.ConnectAsync(server.Port);
+            Assert.Equal("old", await client.ExchangeAsync("PING"));
+
+            server.ReloadJson("""{ "version": 1, "rules": [ { "request": "PING", "reply": "new" } ] }""");
+
+            Assert.Equal("new", await client.ExchangeAsync("PING"));
+            Assert.Single(server.Connections);
+        }
+
+        [Fact]
         public async Task Tcp_Configuration_Should_Greet_Match_Move_Through_States_And_Disconnect()
         {
             //Arrange

@@ -17,6 +17,36 @@ namespace Rony.Tests.Handler
         private static string Reply(MockServer server, string request) => server.Mock.Match(request).GetString();
 
         [Fact]
+        public void ReloadJson_Should_Replace_The_Rules_And_Keep_Requests_And_State()
+        {
+            using var server = FromText("{ 'version': 1, 'rules': [ { 'request': 'OLD', 'reply': 'old' } ] }");
+            server.Mock.Send("CODE").Receive("code");
+            server.Mock.State = "busy";
+            Assert.Equal("old", Reply(server, "OLD"));
+
+            server.ReloadJson(Json("{ 'version': 1, 'rules': [ { 'request': 'NEW', 'reply': 'new' } ] }"));
+
+            Assert.Equal("new", Reply(server, "NEW"));
+            Assert.Equal("", Reply(server, "OLD"));
+            Assert.Equal("", Reply(server, "CODE"));
+            Assert.Equal(4, server.Mock.ReceivedRequests.Count);
+            Assert.Equal("busy", server.Mock.State);
+        }
+
+        [Fact]
+        public void ReloadJson_Should_Throw_Like_ValidateJson_And_Keep_The_Old_Rules()
+        {
+            using var server = FromText("{ 'version': 1, 'rules': [ { 'request': 'OLD', 'reply': 'old' } ] }");
+            var invalid = Json("{ 'version': 1, 'rules': [ { 'request': 'A' } ] }");
+            var expected = Assert.Throws<FormatException>(() => MockServer.ValidateJson(invalid));
+
+            var actual = Assert.Throws<FormatException>(() => server.ReloadJson(invalid));
+
+            Assert.Equal(expected.Message, actual.Message);
+            Assert.Equal("old", Reply(server, "OLD"));
+        }
+
+        [Fact]
         public void FromJson_Should_Create_An_Unstarted_Server_From_The_Minimal_File()
         {
             using var server = MockServer.FromJson("{ \"version\": 1 }");

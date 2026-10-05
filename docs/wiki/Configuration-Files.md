@@ -17,6 +17,7 @@ server.Start();
 | `MockServer.FromJson(json, baseDirectory)` | The same, resolving relative paths against `baseDirectory` (`null` means the current directory). |
 | `MockServer.FromFile(path, overrides)`, `MockServer.FromJson(json, baseDirectory, overrides)` | The same with a [`ConfigurationOverrides`](#overrides-and-validation) that replaces the address and port. |
 | `MockServer.ValidateFile(path)`, `MockServer.ValidateJson(json, baseDirectory = null)` | Check the file like the methods above do, without creating a listener. |
+| `server.ReloadFile(path)`, `server.ReloadJson(json, baseDirectory = null)` | Replace the rules of a [running server](#reloading). |
 
 The server is created but not started. A null argument throws `ArgumentNullException`; anything wrong with the content
 throws a `FormatException` (see [Errors](#errors)). The file format described here is **version 1**.
@@ -210,6 +211,25 @@ generated socket path:
 ```csharp
 var path = ((UnixSocketServer)server.Listener).Path;
 ```
+
+## Reloading
+`server.ReloadFile(path)` (or `ReloadJson(json, baseDirectory = null)`) replaces the rules of a running server with those of a
+configuration, without stopping it:
+```csharp
+using var server = MockServer.FromFile("mock.json");
+server.Start();
+// ... the file is edited ...
+server.ReloadFile("mock.json");   // new rules; connections, received requests and the scenario state are kept
+```
+The configuration is checked completely first, with the same exceptions as `ValidateFile`; when it is invalid the exception is
+thrown and the old rules stay. Otherwise `stateScope`, `failOnUnmatched`, `onConnect`, `onUnmatched` and `rules` take the place of
+everything configured before, rules added in code included, in one step: a request is matched either against all old or
+all new rules. Open connections, the listener, received requests, the scenario state (a state no new rule uses only matches rules
+without a state) and `Log` are kept; sequences start again from their first response, and a response already chosen is still sent.
+The `server` section is checked but **not applied**: address, port, transport, framing and TLS stay as they are (restart for those).
+Received requests are kept, so with `failOnUnmatched` earlier unmatched requests still count until `ClearReceivedRequests()`; a changed
+`stateScope` keeps the states of both scopes as they were (connections start at `initial` when switching to per-connection state).
+It works on any server, started or not, and logs `rules reloaded (<n> rules)`. `rony run --watch` calls it when the file changes.
 
 ## Not available in files
 Version 1 describes servers with fixed responses. These need code (or are not available): response functions and
