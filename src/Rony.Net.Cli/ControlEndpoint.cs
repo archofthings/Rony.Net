@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 namespace Rony.Cli
 {
     /// <summary>
-    /// The <c>--control</c> endpoint: a second mock server on 127.0.0.1 that answers one JSON command per line with one JSON reply per
+    /// The <c>--control</c> endpoint: a second mock server (on 127.0.0.1 unless <c>--control-address</c> says otherwise) that answers one JSON command per line with one JSON reply per
     /// line, so a test in any language can read the requests the tool received, clear them, and read or set the scenario state.
     /// </summary>
     internal sealed class ControlEndpoint : IDisposable
@@ -34,12 +34,13 @@ namespace Rony.Cli
         private long _last;
 
         /// <summary>Prepares the endpoint for <paramref name="target"/>; <paramref name="keep"/> caps the kept entries (0 is unlimited).</summary>
-        public ControlEndpoint(MockServer target, int keep, int port)
+        public ControlEndpoint(MockServer target, int keep, IPAddress address, int port)
         {
             _target = target;
             _keep = keep;
             _port = port;
-            _server = new MockServer(new TcpServer(IPAddress.Loopback, port)
+            Address = address;
+            _server = new MockServer(new TcpServer(address, port)
             {
                 Framing = MessageFraming.Delimiter("\n"),
                 MaxBufferedBytes = 1024 * 1024
@@ -50,10 +51,13 @@ namespace Rony.Cli
             _target.RequestReceived += OnRequest;
         }
 
+        /// <summary>The address the endpoint listens on.</summary>
+        public IPAddress Address { get; }
+
         /// <summary>The port the endpoint listens on (valid after <see cref="StartAsync"/>).</summary>
         public int Port => _server.Port;
 
-        /// <summary>Starts listening on 127.0.0.1.</summary>
+        /// <summary>Starts listening on <see cref="Address"/>.</summary>
         public async Task StartAsync()
         {
             try
@@ -62,7 +66,7 @@ namespace Rony.Cli
             }
             catch (SocketException exception)
             {
-                throw new IOException($"Cannot start the control endpoint on 127.0.0.1:{_port}: {exception.Message}", exception);
+                throw new IOException($"Cannot start the control endpoint on {Address}:{_port}: {exception.Message}", exception);
             }
         }
 

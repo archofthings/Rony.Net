@@ -52,6 +52,9 @@ Run on a branch named `fix/release-X.Y.Z-version` or as the last step of the fea
    version, that the changelog has its heading, that `docs/releases/X.Y.Z.md` exists, and that the tag does not
    exist yet.
 2. `gh pr checks` or `gh run list --branch main --limit 1`: CI on `main` is green.
+   `gh secret list`: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` exist (the `image` job of `release.yml` pushes the
+   Docker image to ghcr.io and Docker Hub and fails without them; NuGet is already published by then, so a failed
+   `image` job is re-run with `gh run rerun <id> --failed` once the cause is fixed).
 3. Give the commands, to be run in the main checkout (not a worktree):
 
    ```bash
@@ -66,6 +69,8 @@ Run on a branch named `fix/release-X.Y.Z-version` or as the last step of the fea
    release was published without it, write the file and, only when the user asks, update the release with
    `gh release edit vX.Y.Z --notes-file <file with the description and the generated list>`. nuget.org lists a new version only after validation, often 10–30 minutes later;
    check `https://api.nuget.org/v3-flatcontainer/<lowercase id>/index.json` for each of the six packages.
+   The `image` job must be green too. After the first image release the package `ghcr.io/archofthings/rony` is
+   private: tell the user to make it public once in its package settings on GitHub.
 5. If the release run failed, read its log (`gh run view <id> --log-failed`) and fix the cause on a branch. A tag
    that points at the wrong commit is deleted and pushed again by the user only; say so and give the commands.
 
