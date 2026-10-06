@@ -24,7 +24,7 @@ configuration file (or `--address`) says otherwise. Options are written `--name 
 
 ## rony run
 ```console
-rony run mock.json [--port <N>] [--address <ip>] [--journal <file>] [--keep <N>] [--control <N>] [--watch] [--quiet]
+rony run mock.json [--port <N>] [--address <ip>] [--journal <file>] [--keep <N>] [--control <N>] [--control-address <ip>] [--watch] [--quiet]
 ```
 Loads the file with `MockServer.FromFile`, starts the server, prints where it listens and then every log line
 (prefixed with the time) until you press Ctrl+C or send SIGTERM; then it stops the server and exits with 0. A second Ctrl+C (or SIGTERM) while it
@@ -38,6 +38,7 @@ A file that is missing or invalid exits with 2 and the message of the [error](Co
 | `--journal <file>` | Append every received request to the file, one JSON object per line: see [Journal](#journal). |
 | `--keep <N>` | How many received requests and connection records the server keeps in memory (default 10000; `0` is unlimited). |
 | `--control <N>` | Start the [control endpoint](#control-endpoint) on `127.0.0.1:<N>` (`0` lets the system pick one). |
+| `--control-address <ip>` | The address of the control endpoint (default `127.0.0.1`); needs `--control`. It has no authentication: see [Control endpoint](#control-endpoint). |
 | `--watch` | Reload the rules when the file changes: see [Reloading](#reloading-the-file). |
 | `--quiet` | Do not print the log lines. |
 
@@ -100,7 +101,7 @@ credentials and tokens: review them before committing or sharing them. On Linux 
 rony replay login.json --delimiter "\n"
 ```
 Serves a recording as a mock server, like `server.Replay(Recording.Load(...))`, and prints `Listening on tcp 127.0.0.1:41209`.
-Options: `--port <N>`, `--address <ip>`, `--tls` (a generated self-signed certificate), `--journal <file>`, `--keep <N>` and `--control <N>` (as for
+Options: `--port <N>`, `--address <ip>`, `--tls` (a generated self-signed certificate), `--journal <file>`, `--keep <N>`, `--control <N>` and `--control-address <ip>` (as for
 `run`), `--quiet` and the framing options.
 Use the same framing as when recording. An invalid recording exits with 2.
 
@@ -134,8 +135,11 @@ ask what the mock received, forget that, and read or set the scenario state, fro
 Listening on tcp 127.0.0.1:41209
 Control on 127.0.0.1:41210
 ```
-The endpoint listens on `127.0.0.1` only, whatever `--address` says, and has no authentication, so every program on the machine
-can use it; in a container it is reachable only from inside the container. It starts before the tool prints anything and
+The endpoint listens on `127.0.0.1` by default, whatever `--address` says, and has no authentication, so every program on the machine
+can use it. `--control-address <ip>` binds it to another address (for example `0.0.0.0` to reach it from outside a container, see
+[the control endpoint in a container](#the-control-endpoint-in-a-container)); the line then shows that address, and for an address that is not a
+loopback address the tool first prints `Warning: the control endpoint on <address> has no authentication; anyone who can reach it can read the received requests and change the state.`
+on the error output. `--control-address` without `--control` exits with 2. It starts before the tool prints anything and
 stops before the mock server does. `--control` must differ from the port of the mock server (a TCP or TLS server; exit 2). A control port that cannot be bound exits with 1 and the mock server is stopped too.
 
 The protocol is plain TCP, UTF-8: one JSON object per line is a command, one JSON object per line is the reply. The connection
@@ -223,12 +227,11 @@ artifact; everybody starts it the same way.
 - With the .NET runtime on the machine: `dotnet tool install --global Rony.Net.Cli`, then `rony run mocks/shop.json`. To pin the
   version for the whole repository, use a local tool: `dotnet new tool-manifest`, `dotnet tool install Rony.Net.Cli`, commit
   `.config/dotnet-tools.json`, and everybody runs `dotnet tool restore` once and `dotnet rony run mocks/shop.json`.
-- Without any .NET on the machine, use [Docker](#docker): build the image once, then
-  `docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config" rony run /config/shop.json`. For this, the file must
+- Without any .NET on the machine, use the published [Docker](#docker) image:
+  `docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config:ro" ghcr.io/archofthings/rony run /config/shop.json`. For this, the file must
   set `"address": "0.0.0.0"` (see [In a container](#in-a-container-next-to-the-system-under-test)); without an address the server is unreachable from outside the container.
 
-There is no published image yet (see [Known Issues](Known-Issues#standalone-server-rony)): build it from the `Dockerfile` of the
-Rony.Net repository, for example `docker build -t rony https://github.com/archofthings/Rony.Net.git`.
+The image is published from version 1.5.0 (see [Docker](#docker)).
 
 ### Record a real server once, replay it offline
 You have access to the real service only now (a VPN, a lab device, a test environment). Record a session with your application,
@@ -298,17 +301,17 @@ For tests written in .NET, do not start the tool: use the library, which gives y
 assertions (see [Getting Started](Getting-Started) and [Configuration Files](Configuration-Files)).
 
 ### In a container next to the system under test
-Build the image once from the `Dockerfile` (see [Docker](#docker)). The server in the file must listen on all interfaces, or
+Use the published image (see [Docker](#docker)). The server in the file must listen on all interfaces, or
 the other containers cannot reach it: `mocks/shop.json` with `"address": "0.0.0.0"` (or pass `--address 0.0.0.0` to `run`).
 ```console
-docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config" rony run /config/shop.json
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config:ro" ghcr.io/archofthings/rony run /config/shop.json
 ```
 In PowerShell write the volume as `-v "${PWD}/mocks:/config"` (`"$PWD:/config"` is read as a drive-qualified variable).
 With Docker Compose, the application reaches the mock by the name of its service and the port needs no publishing:
 ```yaml
 services:
   shop-mock:
-    image: rony                      # docker build -t rony <checkout of Rony.Net>
+    image: ghcr.io/archofthings/rony
     command: ["run", "/config/shop.json"]
     volumes:
       - ./mocks:/config:ro
@@ -323,7 +326,7 @@ services:
 retry its first connection. Add `ports: ["127.0.0.1:4000:4000"]` to the mock to reach it from the host too. Stop it with
 `docker compose down` (SIGTERM).
 
-The Docker and Docker Compose instructions have not been run by the authors of this page (Docker is not part of the test setup of the repository); check them once in your environment.
+The continuous integration of the repository runs this Compose setup (with a second service that sends `PING` and expects `PONG`) and the `docker run` commands of this page on every change.
 
 ### A stateful or failing server
 To see how a client copes with a server that needs a login, answers "busy" a few times, answers slowly and drops the connection,
@@ -415,13 +418,14 @@ server.Should().HaveReceived("GET price:42", Times.Once());
 Rules added in code are possible too, see [Configuration Files](Configuration-Files#using-the-server-from-code).
 
 ## Docker
-The repository has a `Dockerfile` for the tool (an SDK image builds it, the small .NET runtime image runs it as the
-non-root user of the image):
+From version 1.5.0 the tool is published as a Docker image, for `linux/amd64` and `linux/arm64`, on GitHub Container Registry
+(`ghcr.io/archofthings/rony`) and Docker Hub (`mojihub/rony`, the alternative). The tags are the version (`1.5.0`), `1.5`, `1` and `latest`;
+a pre-release has only its exact version. The image runs the tool as the non-root user of the image:
 ```console
-docker build -t rony .
-docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" rony             # runs /config/mock.json
-docker run --rm -v "$PWD:/config" rony validate /config/mock.json
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" ghcr.io/archofthings/rony             # runs /config/mock.json
+docker run --rm -v "$PWD:/config" ghcr.io/archofthings/rony validate /config/mock.json
 ```
+To build it yourself, run `docker build -t rony .` in a checkout of the repository (the `Dockerfile` is at its root).
 The default command is `run /config/mock.json`; mount the folder with your files at `/config`. The server must listen on
 all interfaces inside the container, because the default `127.0.0.1` cannot be reached from outside it:
 ```json
@@ -430,6 +434,16 @@ all interfaces inside the container, because the default `127.0.0.1` cannot be r
 The image exposes no port by itself because the port comes from the file: publish it with `-p 127.0.0.1:<host port>:<port in the file>`,
 which keeps it on the host's loopback. Drop the `127.0.0.1:` part (`-p 4000:4000`) only when other machines should reach it, and
 see [Limits and security](#limits-and-security) first. A fixed port is needed here, not `0`. Stop the container with `docker stop` (SIGTERM) or Ctrl+C.
+
+### The control endpoint in a container
+The [control endpoint](#control-endpoint) listens on `127.0.0.1` inside the container by default, which the host cannot reach. Bind it to
+all interfaces of the container and publish its port to the host's loopback only:
+```console
+docker run --rm -p 127.0.0.1:4000:4000 -p 127.0.0.1:4001:4001 -v "$PWD:/config" ghcr.io/archofthings/rony \
+  run /config/mock.json --control 4001 --control-address 0.0.0.0
+```
+The tool prints the warning that the endpoint has no authentication. Keep `127.0.0.1:` in the `-p` option: without it anyone who can reach the
+host can read the received requests and change the state.
 
 To record inside a container, pass `--address 0.0.0.0` so the proxy is reachable from outside, and mount a writable folder
 for `--out`. The tool checks before it starts that `--out` can be written (exit 2 otherwise) and saves through a new temporary
@@ -447,8 +461,8 @@ The tool is for development and test networks, not for hostile ones.
 - The log contains the full request and response bodies unless you pass `--quiet`.
 - With `--tls`, or `tls` and `requireClientCertificate` in a file, any client certificate is accepted.
 - `rony record` on a non-loopback address is an open relay to the target.
-- The `--control` endpoint is loopback only and has no authentication: any local program can read the received requests (and
-  with them credentials) and change the state.
+- The `--control` endpoint is loopback only unless you pass `--control-address`, and has no authentication: any program that
+  can reach it can read the received requests (and with them credentials) and change the state. On another address the tool prints a warning.
 
 ## What the tool cannot do
 It can only do what a configuration file or a recording can express. Response functions and predicates, truncated, corrupted,

@@ -65,8 +65,8 @@ so you don't have to find them yourself. For problems with a known answer, see [
   connection.
 - **A recording stores messages in the order they arrived.** A client that sends before the server's greeting arrives gets
   the greeting recorded as the reply to its first request; record with the client as it normally behaves.
-- **There is no published Docker image.** The repository has a `Dockerfile` to build one. In a container the configuration
-  must listen on `0.0.0.0`.
+- **In a container the configuration must listen on `0.0.0.0`** (or run with `--address 0.0.0.0`); the default `127.0.0.1`
+  cannot be reached from outside the container.
 - See [Standalone Server](Standalone-Server).
 
 Found something that is not on this page? Please [open an issue](https://github.com/archofthings/Rony.Net/issues).

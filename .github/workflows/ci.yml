@@ -88,3 +88,68 @@ jobs:
           docker stop rony
           docker logs rony
           [ "$(docker inspect --format '{{.State.ExitCode}}' rony)" = "0" ]
+
+      - name: The control endpoint is reachable in a container
+        run: |
+          docker run -d --name rony-control -p 127.0.0.1:4000:4000 -p 127.0.0.1:4001:4001 -v "$PWD/mock:/config:ro" rony \
+            run /config/mock.json --control 4001 --control-address 0.0.0.0
+          for attempt in $(seq 1 30); do
+            docker logs rony-control 2>&1 | grep -q "Control on" && break
+            sleep 1
+          done
+          docker logs rony-control
+          docker logs rony-control 2>&1 | grep -q "Warning: the control endpoint on 0.0.0.0 has no authentication"
+          docker logs rony-control 2>&1 | grep -q "Control on 0.0.0.0:4001"
+
+          exec 3<>/dev/tcp/127.0.0.1/4000
+          printf 'PING' >&3
+          read -t 10 -r -n 4 reply <&3
+          exec 3>&-
+          [ "$reply" = "PONG" ]
+
+          exec 4<>/dev/tcp/127.0.0.1/4001
+          printf '{"command":"requests"}\n' >&4
+          read -t 10 -r control_reply <&4
+          exec 4>&-
+          echo "control reply: $control_reply"
+          echo "$control_reply" | grep -q '"ok":true'
+          echo "$control_reply" | grep -q '"text":"PING"'
+          docker stop rony-control
+
+      - name: The Docker Compose example of the wiki works
+        run: |
+          set -euo pipefail
+          cat > compose.yaml <<'YAML'
+          services:
+            mock:
+              image: rony
+              command: ["run", "/config/mock.json"]
+              volumes:
+                - ./mock:/config:ro
+            client:
+              image: busybox
+              depends_on: [mock]
+              command:
+                - sh
+                - -c
+                - |
+                  for attempt in $$(seq 1 20); do
+                    reply=$$( (printf PING; sleep 2) | nc -w 5 mock 4000 || true)
+                    [ "$$reply" = "PONG" ] && break
+                    sleep 1
+                  done
+                  echo "reply: $$reply"
+                  [ "$$reply" = "PONG" ]
+          YAML
+          status=0
+          docker compose up --exit-code-from client --abort-on-container-exit || status=$?
+          docker compose logs
+          docker compose down
+          exit "$status"
+
+      - name: The image builds for linux/amd64 and linux/arm64 without emulation
+        run: |
+          set -euo pipefail
+          # A separate builder (docker-container driver); the loaded image above came from the default builder.
+          docker buildx create --name multi --use
+          docker buildx build --builder multi --platform linux/amd64,linux/arm64 .

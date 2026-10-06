@@ -98,6 +98,16 @@ namespace Rony.Cli
             return port;
         }
 
+        /// <summary>The address of the control endpoint (<c>--control-address</c>); 127.0.0.1 by default. It needs <c>--control</c>.</summary>
+        public IPAddress ControlAddress()
+        {
+            if (!_values.TryGetValue("control-address", out var text)) return IPAddress.Loopback;
+            if (!IPAddress.TryParse(text, out var address))
+                throw new UsageException($"--control-address must be an IP address, not \"{text}\".");
+            if (!_values.ContainsKey("control")) throw new UsageException("--control-address needs --control.");
+            return address;
+        }
+
         /// <summary>How many received requests and connection records the server keeps (<c>--keep</c>); 10000 by default, 0 is unlimited.</summary>
         public int Keep()
         {

@@ -4,6 +4,11 @@ name: Release
 # Uses NuGet Trusted Publishing: no long-lived API key is stored. It needs
 #   - a Trusted Publishing policy on nuget.org for archofthings/Rony.Net and this file (release.yml)
 #   - a repository secret named NUGET_USER holding the nuget.org profile name (not the email address)
+# The image job (after the NuGet publish) pushes the Docker image of the rony tool for linux/amd64 and linux/arm64 to
+# ghcr.io/archofthings/rony and Docker Hub mojihub/rony. It needs
+#   - the repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a Docker Hub access token with write access)
+#   - once, after the first push: the package ghcr.io/archofthings/rony made public in its package settings on GitHub
+#     (a package created by a workflow is private at first)
 on:
   push:
     tags: [ 'v*' ]
@@ -69,3 +74,99 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg artifacts/*.snupkg --title "$GITHUB_REF_NAME" --notes-file "docs/releases/$VERSION.md" --generate-notes --verify-tag
+
+  # Builds the Dockerfile of the repository, tests the image, then pushes it for two platforms to both registries.
+  image:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # push to ghcr.io
+    env:
+      GHCR_IMAGE: ghcr.io/archofthings/rony
+      DOCKERHUB_IMAGE: mojihub/rony
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the Docker Hub secrets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "Set the repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN" >&2
+            exit 1
+          fi
+
+      - name: Build the image for this runner and test it
+        run: |
+          set -euo pipefail
+          docker buildx build --load -t rony:test .
+          mkdir mock
+          cat > mock/mock.json <<'JSON'
+          { "version": 1, "server": { "address": "0.0.0.0", "port": 4000 }, "rules": [ { "request": "PING", "reply": "PONG" } ] }
+          JSON
+          docker run --rm -v "$PWD/mock:/config:ro" rony:test validate /config/mock.json
+          docker run -d --name rony -p 127.0.0.1:4000:4000 -v "$PWD/mock:/config:ro" rony:test
+          for attempt in $(seq 1 30); do
+            docker logs rony 2>&1 | grep -q "Listening on" && break
+            sleep 1
+          done
+          docker logs rony
+          docker logs rony 2>&1 | grep -q "Listening on tcp 0.0.0.0:4000"
+          exec 3<>/dev/tcp/127.0.0.1/4000
+          printf 'PING' >&3
+          read -t 10 -r -n 4 reply <&3
+          exec 3>&-
+          echo "reply: $reply"
+          [ "$reply" = "PONG" ]
+          docker stop rony
+
+      - name: Log in to ghcr.io and Docker Hub
+        env:
+          GITHUB_ACTOR_NAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR_NAME" --password-stdin
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: Build and push the image for linux/amd64 and linux/arm64
+        run: |
+          set -euo pipefail
+          version=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          if [ -z "$version" ]; then
+            echo "No <Version> found in Directory.Build.props" >&2
+            exit 1
+          fi
+
+          # A stable version gets X.Y.Z, X.Y, X and latest; a pre-release (it contains a dash) only its exact version
+          tags=("$version")
+          case "$version" in
+            *-*) ;;
+            *)
+              tags+=("${version%.*}" "${version%%.*}" "latest")
+              ;;
+          esac
+
+          tag_args=()
+          for tag in "${tags[@]}"; do
+            tag_args+=(--tag "$GHCR_IMAGE:$tag" --tag "$DOCKERHUB_IMAGE:$tag")
+          done
+          echo "Tags: ${tags[*]}"
+
+          docker buildx create --use
+          docker buildx build --platform linux/amd64,linux/arm64 --push \
+            "${tag_args[@]}" \
+            --label "org.opencontainers.image.source=https://github.com/archofthings/Rony.Net" \
+            --label "org.opencontainers.image.version=$version" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.licenses=MIT" \
+            --label "org.opencontainers.image.title=rony" \
+            --label "org.opencontainers.image.description=The rony command-line tool of Rony.Net: a TCP, TLS and UDP mock server from a JSON file" \
+            .
+
+          docker buildx imagetools inspect "$GHCR_IMAGE:$version"
+          docker buildx imagetools inspect "$DOCKERHUB_IMAGE:$version"

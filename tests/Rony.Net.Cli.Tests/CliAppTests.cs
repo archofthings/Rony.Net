@@ -342,6 +342,26 @@ namespace Rony.Cli.Tests
         }
 
         [Fact]
+        public async Task Run_Should_Warn_And_Bind_The_Control_Endpoint_To_The_Control_Address()
+        {
+            using var directory = new TempDirectory();
+            var file = directory.Write("mock.json", WikiConfig);
+            using var stop = new CancellationTokenSource();
+            var output = new LineWriter();
+            var error = new LineWriter();
+
+            var run = CliApp.RunAsync(new[] { "run", file, "--control", "0", "--control-address", "0.0.0.0", "--quiet" }, output, error, stop.Token);
+            var controlLine = await output.WaitForLineAsync(l => l.StartsWith("Control on 0.0.0.0:")).WaitAsync(Limit);
+
+            Assert.Contains("Warning: the control endpoint on 0.0.0.0 has no authentication; anyone who can reach it can read the received requests and change the state.", error.Lines);
+            using (var control = await ControlClient.ConnectAsync(PortOf(controlLine)))
+                Assert.Equal(true, (await control.SendAsync("{\"command\":\"state\"}"))["ok"].AsBoolean());
+
+            stop.Cancel();
+            Assert.Equal(0, await run.WaitAsync(Limit));
+        }
+
+        [Fact]
         public async Task Run_Should_Let_The_Control_Endpoint_Read_And_Set_The_State()
         {
             using var directory = new TempDirectory();
@@ -806,6 +826,8 @@ namespace Rony.Cli.Tests
         [InlineData("replay", "a.json", "--port", "70000")]
         [InlineData("run", "a.json", "--control", "70000")]
         [InlineData("replay", "a.json", "--control", "abc")]
+        [InlineData("run", "a.json", "--control-address", "0.0.0.0")]
+        [InlineData("run", "a.json", "--control", "0", "--control-address", "localhost")]
         [InlineData("replay", "a.json", "--address", "localhost")]
         [InlineData("replay", "a.json", "--delimiter", "x", "--stx-etx")]
         [InlineData("replay", "a.json", "--length-prefix", "3")]
