@@ -189,6 +189,18 @@ namespace Rony.Tests.Handler
         }
 
         [Theory]
+        [InlineData("{ 'version': 1 }", 16 * 1024 * 1024)]
+        [InlineData("{ 'version': 1, 'server': { 'transport': 'unix' } }", 16 * 1024 * 1024)]
+        [InlineData("{ 'version': 1, 'server': { 'maxBufferedBytes': 0 } }", 0)]
+        [InlineData("{ 'version': 1, 'server': { 'maxBufferedBytes': 4096 } }", 4096)]
+        public void MaxBufferedBytes_Should_Default_To_16_MiB_For_A_Server_From_A_Configuration(string json, int expected)
+        {
+            using var server = FromText(json);
+
+            Assert.Equal(expected, Assert.IsAssignableFrom<Rony.Listeners.TcpServerBase>(server.Listener).MaxBufferedBytes);
+        }
+
+        [Theory]
         [InlineData("{ 'version': 1, 'server': { 'transport': 'unix' } }", "127.0.0.1", null)]
         [InlineData("{ 'version': 1, 'server': { 'transport': 'unix' } }", null, 0)]
         [InlineData("{ 'version': 1, 'server': { 'address': '::', 'dualMode': true } }", "127.0.0.1", null)]
