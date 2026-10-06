@@ -32,6 +32,7 @@ Works with .NET Core 3.x, .NET 5 and every later version (the package targets `n
 It works with any test framework: xUnit, NUnit, MSTest or none at all. Optional packages
 (`Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`) remove the setup code; see [Test Framework Integration](Test-Framework-Integration).
 To run a mock server without writing code, install the `rony` tool (`Rony.Net.Cli`): see [Standalone Server](Standalone-Server).
+To start the tool in a Docker container from a test, use `Rony.Net.Testcontainers`: see [Testcontainers](Standalone-Server#from-a-net-test-with-testcontainers).
 
 ## Documentation
 
@@ -53,7 +54,7 @@ To run a mock server without writing code, install the `rony` tool (`Rony.Net.Cl
 | [Stateful Scenarios](Stateful-Scenarios) | Rules that depend on what happened before (`InState`, `GoTo`) |
 | [Record and Replay](Record-and-Replay) | Record a real server with `RecordingProxy`, replay it with `server.Replay(...)` |
 | [Configuration Files](Configuration-Files) | Describe the server and its rules in a JSON file, load it with `MockServer.FromFile(...)` |
-| [Standalone Server](Standalone-Server) | The `rony` command-line tool and a Dockerfile to build an image: run, record and replay without code. Scenarios for development, teams without .NET, CI and Docker Compose |
+| [Standalone Server](Standalone-Server) | The `rony` command-line tool and a Dockerfile to build an image: run, record and replay without code. Scenarios for development, teams without .NET, CI and Docker Compose; the `Rony.Net.Testcontainers` module |
 
 | Check your client | |
 |---|---|

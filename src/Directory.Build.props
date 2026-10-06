@@ -3,7 +3,7 @@
   <!-- MSBuild reads only the nearest Directory.Build.props, so pull in the root one (the one <Version> of all packages) first -->
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!-- Package metadata shared by Rony.Net, Rony.Net.Xunit, Rony.Net.Xunit.v3, Rony.Net.NUnit and Rony.Net.MSTest -->
+  <!-- Package metadata shared by Rony.Net, Rony.Net.Xunit, Rony.Net.Xunit.v3, Rony.Net.NUnit, Rony.Net.MSTest and Rony.Net.Testcontainers -->
   <PropertyGroup>
     <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>

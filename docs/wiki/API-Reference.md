@@ -284,6 +284,17 @@ See [Test Framework Integration](Test-Framework-Integration).
 `Rony.Net.Cli` (`dotnet tool install --global Rony.Net.Cli`) is the `rony` tool with the commands `run`, `validate`, `record` and `replay`. It has no public .NET API;
 see [Standalone Server](Standalone-Server).
 
+## Testcontainers module
+`Rony.Net.Testcontainers` (namespace `Rony.Net.Testcontainers`, depends on `Testcontainers` 4.15.0 or later); see [Standalone Server](Standalone-Server#from-a-net-test-with-testcontainers).
+- `RonyBuilder : ContainerBuilder<RonyBuilder, RonyContainer, RonyConfiguration>`: constants `RonyImage` (`"ghcr.io/archofthings/rony"`, default tag is the version of the package),
+  `RonyPort` (4000) and `ControlPort` (4001); `WithConfigurationFile(string path)` (reads the file now, `ArgumentNullException` for `null`, `FileNotFoundException`) and
+  `WithConfiguration(string json)` (`ArgumentNullException` for `null`); the last call wins and the text is copied to `/config/mock.json`; `Build()` throws `ArgumentException`
+  without a configuration. `WithImage`, `WithCommand`, `WithResourceMapping`, `WithEnvironment` and the rest come from Testcontainers.
+- `RonyContainer : DockerContainer`: `Port` (host port of the mock), `ControlEndpointPort` (host port of the control endpoint), `Hostname` (base class),
+  `GetReceivedRequestsAsync(CancellationToken)` (`IReadOnlyList<ReceivedRequest>`, oldest first), `ClearReceivedRequestsAsync(CancellationToken)`, `GetStateAsync(CancellationToken)` and
+  `SetStateAsync(string state, CancellationToken)` (`ArgumentException` for `null` or empty). An error reply of the endpoint is an `InvalidOperationException`.
+- `RonyConfiguration : ContainerConfiguration`: carries the configuration through the builder's `Clone` and `Merge`.
+
 ## `Rony.Models.Message`
 A request as delivered by a listener: `Body`, `BodyString`, `Sender`, `RemoteEndPoint`.
 

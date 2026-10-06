@@ -68,7 +68,7 @@ Run on a branch named `fix/release-X.Y.Z-version` or as the last step of the fea
    `gh release view vX.Y.Z`: the body must start with the description from `docs/releases/X.Y.Z.md`. If a
    release was published without it, write the file and, only when the user asks, update the release with
    `gh release edit vX.Y.Z --notes-file <file with the description and the generated list>`. nuget.org lists a new version only after validation, often 10–30 minutes later;
-   check `https://api.nuget.org/v3-flatcontainer/<lowercase id>/index.json` for each of the six packages.
+   check `https://api.nuget.org/v3-flatcontainer/<lowercase id>/index.json` for each of the seven packages.
    The `image` job must be green too. After the first image release the package `ghcr.io/archofthings/rony` is
    private: tell the user to make it public once in its package settings on GitHub.
 5. If the release run failed, read its log (`gh run view <id> --log-failed`) and fix the cause on a branch. A tag

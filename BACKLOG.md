@@ -12,7 +12,7 @@ Related items are grouped so that each version has one theme. The version number
 
 | Version | Theme | Items |
 |---|---|---|
-| 1.5.0 | The tool: verify, operate, deploy | 34, I10 (17, 18, 19, 20, I7, I8 and I9 are done, see `CHANGELOG.md`) |
+| 1.5.0 | The tool: verify, operate, deploy | I10 (17, 18, 19, 20, 34, I7, I8 and I9 are done, see `CHANGELOG.md`) |
 | 1.6.0 | Files and proxying: say more in a file, mock only a part | 21, 22, 23, 24, 25, 29, 32 |
 | 1.7.0 | Network conditions: resilience testing | 30, 31 |
 | 1.8.0 | Binary, long-lived and well-known protocols | 26, 27, 28, 33 |
@@ -30,8 +30,6 @@ Mockly) in October 2026; they are the features those tools have for raw TCP that
 Today a test that is not written in .NET can talk to `rony run` but cannot ask what it received, and a long run grows
 without limit.
 
-- **34. A Testcontainers module** (`Rony.Net.Testcontainers`): starts the published image of item 20 from a test, waits
-  until it listens and gives the mapped port, for stacks that run their dependencies as containers.
 - **I10. Tests:** the 16 MiB default of `server.maxBufferedBytes` is only tested through the parsing of the property.
 
 ## 1.6.0: files and proxying

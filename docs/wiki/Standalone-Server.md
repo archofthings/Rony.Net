@@ -450,6 +450,42 @@ for `--out`. The tool checks before it starts that `--out` can be written (exit 
 file with a random name next to `--out` (`<out>.<random>.tmp`, created exclusively and readable by its owner only on Linux and macOS), which is
 then moved over `--out`, so a failed save never destroys an existing file and a file or symlink that already exists is never followed.
 
+## From a .NET test with Testcontainers
+The package `Rony.Net.Testcontainers` is a [Testcontainers for .NET](https://dotnet.testcontainers.org) module: a test starts the `rony` image from a
+configuration file, with no Docker commands. It needs Docker (or a compatible engine) where the test runs, Testcontainers 4.15.0 or later (the package brings it), and the image, which exists from version 1.5.0.
+```console
+dotnet add package Rony.Net.Testcontainers
+```
+```csharp
+await using var rony = new RonyBuilder()
+    .WithConfigurationFile("mocks/shop.json")
+    .Build();
+await rony.StartAsync();
+
+using var client = new TcpClient(rony.Hostname, rony.Port);
+// ... the system under test talks to rony.Hostname:rony.Port ...
+var requests = await rony.GetReceivedRequestsAsync();
+await rony.SetStateAsync("outage");
+```
+What the module does:
+- **Image.** `ghcr.io/archofthings/rony:<version of the package>`, so package and tool match. `WithImage("mojihub/rony:1.5.0")` or any other image replaces it.
+- **Configuration.** `WithConfigurationFile(path)` reads the file when it is called and `WithConfiguration(json)` takes the text; the last call wins. It is copied into
+  the container as `/config/mock.json` (not bind-mounted, so remote Docker hosts work too). `Build()` without a configuration throws an `ArgumentException`.
+- **Command.** `run /config/mock.json --address 0.0.0.0 --port 4000 --control 4001 --control-address 0.0.0.0`: the address and port of the file are replaced, so any file works unchanged.
+- **Ports.** 4000 (the mock) and 4001 (the [control endpoint](#control-endpoint)) are published on random host ports: use `rony.Port` and `rony.ControlEndpointPort`, and `rony.Hostname` as the host.
+- **Wait.** `StartAsync` returns when the tool has printed `Control on `, after `Listening on`, so both are up.
+- **Control helpers.** `GetReceivedRequestsAsync()` returns the kept requests, oldest first, as `ReceivedRequest` (`Body`, `Timestamp`, `Matched`, `ConnectionId`, `RemoteEndPoint`);
+  `ClearReceivedRequestsAsync()` forgets them; `GetStateAsync()` and `SetStateAsync(state)` read and set the scenario state. Each call opens its own connection, takes a
+  `CancellationToken`, and may run concurrently. An error reply of the endpoint is an `InvalidOperationException`.
+
+Limits:
+- A `unix` configuration is not supported: the container exits with the tool's error.
+- A `udp` configuration needs its own port binding, for example `.WithPortBinding("4000/udp", true)`; `Port` is the TCP mapping.
+- Files that the configuration names, such as a TLS certificate, are not copied: add each with `WithResourceMapping(...)` at the path the configuration names.
+- The control endpoint has no authentication; it is published on the host's random ports only for the life of the container.
+
+The example is the test `TestcontainersSamples` in `samples/Rony.Samples`.
+
 ## Limits and security
 The tool is for development and test networks, not for hostile ones.
 - It listens on loopback unless the file or `--address` says otherwise.

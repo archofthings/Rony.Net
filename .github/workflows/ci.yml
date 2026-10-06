@@ -55,6 +55,22 @@ jobs:
       - name: Build the image
         run: docker build -t rony .
 
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      # The Testcontainers module starts the image "rony" built above. It uses random host ports, so the containers that
+      # the later steps publish on 4000 and 4001 do not clash with it. A skipped or missing test must not look green.
+      - name: The Testcontainers module starts the image and talks to its control endpoint
+        env:
+          RONY_TEST_IMAGE: rony
+        run: |
+          set -euo pipefail
+          dotnet test tests/Rony.Net.Testcontainers.Tests --configuration Release --logger "console;verbosity=normal" | tee testcontainers.log
+          dotnet test samples/Rony.Samples --configuration Release --filter "FullyQualifiedName~TestcontainersSamples" --logger "console;verbosity=normal" | tee samples.log
+          grep -q "Passed Rony.Net.Testcontainers.Tests.RonyContainerTests.The_container_serves_the_configuration_and_answers_the_control_commands" testcontainers.log
+          grep -q "Passed Rony.Samples.TestcontainersSamples.A_container_started_from_a_configuration_file" samples.log
+
       - name: Write the configuration of the wiki's Docker example
         run: |
           mkdir mock
