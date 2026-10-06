@@ -8,7 +8,7 @@ No breaking changes.
 
 ### Added
 - The `rony` tool is published as a Docker image for `linux/amd64` and `linux/arm64` on `ghcr.io/archofthings/rony` and Docker Hub
-  `archofthings/rony`, with the tags `1.5.0`, `1.5`, `1` and `latest` (a pre-release only its exact version).
+  `mojihub/rony`, with the tags `1.5.0`, `1.5`, `1` and `latest` (a pre-release only its exact version).
 - `rony run` and `rony replay` take `--control-address <ip>` (default `127.0.0.1`) for the address of the control endpoint, so it can
   be reached from outside a container; a non-loopback address prints a warning that the endpoint has no authentication.
 - `rony run <config.json> --watch` reloads the rules when the file changes (polling every half second, so it also works for a

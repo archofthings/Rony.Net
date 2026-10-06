@@ -5,7 +5,7 @@ name: Release
 #   - a Trusted Publishing policy on nuget.org for archofthings/Rony.Net and this file (release.yml)
 #   - a repository secret named NUGET_USER holding the nuget.org profile name (not the email address)
 # The image job (after the NuGet publish) pushes the Docker image of the rony tool for linux/amd64 and linux/arm64 to
-# ghcr.io/archofthings/rony and Docker Hub archofthings/rony. It needs
+# ghcr.io/archofthings/rony and Docker Hub mojihub/rony. It needs
 #   - the repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a Docker Hub access token with write access)
 #   - once, after the first push: the package ghcr.io/archofthings/rony made public in its package settings on GitHub
 #     (a package created by a workflow is private at first)
@@ -84,7 +84,7 @@ jobs:
       packages: write   # push to ghcr.io
     env:
       GHCR_IMAGE: ghcr.io/archofthings/rony
-      DOCKERHUB_IMAGE: archofthings/rony
+      DOCKERHUB_IMAGE: mojihub/rony
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

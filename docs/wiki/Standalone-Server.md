@@ -419,7 +419,7 @@ Rules added in code are possible too, see [Configuration Files](Configuration-Fi
 
 ## Docker
 From version 1.5.0 the tool is published as a Docker image, for `linux/amd64` and `linux/arm64`, on GitHub Container Registry
-(`ghcr.io/archofthings/rony`) and Docker Hub (`archofthings/rony`, the alternative). The tags are the version (`1.5.0`), `1.5`, `1` and `latest`;
+(`ghcr.io/archofthings/rony`) and Docker Hub (`mojihub/rony`, the alternative). The tags are the version (`1.5.0`), `1.5`, `1` and `latest`;
 a pre-release has only its exact version. The image runs the tool as the non-root user of the image:
 ```console
 docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" ghcr.io/archofthings/rony             # runs /config/mock.json

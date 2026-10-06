@@ -167,7 +167,7 @@ relevant tests.
   `Directory.Build.props` equals the tag and `docs/releases/<version>.md` exists: that file is the release
   description (written in `/release bump`, shown to me before the commit) and becomes the GitHub release body.
 - After the NuGet publish, the `image` job of `release.yml` builds the `Dockerfile` for `linux/amd64` and
-  `linux/arm64` and pushes it to `ghcr.io/archofthings/rony` and Docker Hub `archofthings/rony` (tags `X.Y.Z`, `X.Y`,
+  `linux/arm64` and pushes it to `ghcr.io/archofthings/rony` and Docker Hub `mojihub/rony` (tags `X.Y.Z`, `X.Y`,
   `X`, `latest`). It needs the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. Docker is not installed
   on the local machine: image changes are proven by the `docker` job of CI on the pull request.
 - The nuget.org Trusted Publishing policy uses the glob `Rony.Net*` (`Rony.Net.*` would not match `Rony.Net`

@@ -200,7 +200,7 @@ rony run mock.json --watch                           # reload the rules whenever
 rony validate mock.json                              # check a configuration file, for example in CI
 rony record --target api.test:5000 --out login.json  # record a real server through a proxy
 rony replay login.json                               # serve the recording
-docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" ghcr.io/archofthings/rony   # the same as a Docker image (linux/amd64 and arm64; also on Docker Hub as archofthings/rony)
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" ghcr.io/archofthings/rony   # the same as a Docker image (linux/amd64 and arm64; also on Docker Hub as mojihub/rony)
 ```
 Details and walk-throughs (development, CI, Docker Compose, TLS, record and replay): [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
 

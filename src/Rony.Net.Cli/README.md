@@ -1,7 +1,7 @@
 # Rony.Net.Cli
 
 The `rony` command-line tool of [Rony.Net](https://github.com/archofthings/Rony.Net): run a TCP, TLS, UDP or Unix socket
-mock server from a JSON file, without writing any code. It is also published as a Docker image, `ghcr.io/archofthings/rony` (Docker Hub: `archofthings/rony`).
+mock server from a JSON file, without writing any code. It is also published as a Docker image, `ghcr.io/archofthings/rony` (Docker Hub: `mojihub/rony`).
 
 ```console
 dotnet tool install --global Rony.Net.Cli

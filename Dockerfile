@@ -1,5 +1,5 @@
 # The rony command-line tool (Rony.Net.Cli) as an image, published for linux/amd64 and linux/arm64 as
-#   ghcr.io/archofthings/rony   and   archofthings/rony   (Docker Hub)
+#   ghcr.io/archofthings/rony   and   mojihub/rony   (Docker Hub)
 # Build it yourself:
 #   docker build -t rony .
 #   docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" rony            # runs /config/mock.json
