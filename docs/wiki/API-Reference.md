@@ -1,6 +1,6 @@
 # API Reference
 
-Every public type in Rony.Net 1.4. The package includes XML documentation, so IntelliSense shows the same descriptions in your editor.
+Every public type in Rony.Net 1.5. The package includes XML documentation, so IntelliSense shows the same descriptions in your editor.
 
 ## `Rony.Net.MockServer`
 The mock server. Wraps a listener and answers requests with the responses configured on `Mock`.
@@ -12,7 +12,7 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `void Stop()` | Stops listening, closes connections and cancels delayed responses. Repeated calls do nothing. |
 | `void Dispose()` | Stops the server and releases the listener |
 | `Task StartAsync(CancellationToken cancellationToken = default)` | Starts listening; completes once the server is listening. A cancelled token cancels the task and the server is not started. |
-| `void RefuseConnections()` | New clients get "connection refused"; connections the server has accepted keep working (a client not accepted yet may be reset). Throws `InvalidOperationException` when not started, `NotSupportedException` without `IFaultInjectionListener` |
+| `void RefuseConnections()` | New clients get "connection refused"; connections the server has accepted keep working (the clients already waiting are accepted first; one that connects at that very moment may be reset). Throws `InvalidOperationException` when not started, `NotSupportedException` without `IFaultInjectionListener` |
 | `void AcceptConnections()` | Listens again on the same port; does nothing when not refusing. Throws `SocketException` if the port cannot be bound again |
 | `Task StopAsync()` | Like `Stop()`, then waits until the server's background work has ended; afterwards no callback of yours runs until the next start. Do not await it from inside a callback. |
 | `ValueTask DisposeAsync()` | `StopAsync()`, then the same cleanup as `Dispose()` (`await using`) |
@@ -46,8 +46,8 @@ The mock server. Wraps a listener and answers requests with the responses config
 | `event EventHandler<ClientConnection> ConnectionOpened` | A client connected |
 | `event EventHandler<ClientConnection> ConnectionClosed` | A connection closed, by either side |
 | `Task<int> BroadcastAsync(string or byte[] message)` | Pushes a message to every open connection; returns how many it reached |
-| `Task<ClientConnection> WaitForConnectionAsync(TimeSpan? timeout)` | Waits for the first connection |
-| `Task<IReadOnlyList<ClientConnection>> WaitForConnectionsAsync(int count, TimeSpan? timeout)` | Waits until `count` connections were accepted |
+| `Task<ClientConnection> WaitForConnectionAsync(TimeSpan? timeout)` | Waits for the first connection; completes after the `ConnectionOpened` handlers have returned |
+| `Task<IReadOnlyList<ClientConnection>> WaitForConnectionsAsync(int count, TimeSpan? timeout)` | Waits until `count` connections were accepted; completes after the `ConnectionOpened` handlers have returned |
 | `Task WaitForAllConnectionsClosedAsync(TimeSpan? timeout, CancellationToken)` | Waits until no accepted connection is open (TCP only) |
 | `void VerifyConnections(Times times)` | How many connections were accepted |
 
@@ -293,7 +293,7 @@ see [Standalone Server](Standalone-Server).
 - `RonyContainer : DockerContainer`: `Port` (host port of the mock), `ControlEndpointPort` (host port of the control endpoint), `Hostname` (base class),
   `GetReceivedRequestsAsync(CancellationToken)` (`IReadOnlyList<ReceivedRequest>`, oldest first), `ClearReceivedRequestsAsync(CancellationToken)`, `GetStateAsync(CancellationToken)` and
   `SetStateAsync(string state, CancellationToken)` (`ArgumentException` for `null` or empty). An error reply of the endpoint is an `InvalidOperationException`.
-- `RonyConfiguration : ContainerConfiguration`: carries the configuration through the builder's `Clone` and `Merge`.
+- `RonyConfiguration : ContainerConfiguration`: carries the configuration through the builder's `Clone` and `Merge`. `string ConfigurationJson` is the configuration text (`null` when none was set).
 
 ## `Rony.Models.Message`
 A request as delivered by a listener: `Body`, `BodyString`, `Sender`, `RemoteEndPoint`.
@@ -307,8 +307,8 @@ UTF-8 extension methods: `string.GetBytes()` and `byte[].GetString()`.
 |---|---|
 | `MockVerificationException` | `Verify...(...)`, `VerifyInOrder(...)`, `VerifyAllRequestsMatched()`, `VerifyConnections(...)`, `Should()` assertions; waits with `FailOnUnmatched` |
 | `TimeoutException` | `WaitForRequestAsync(...)`, `WaitForRequestsAsync(...)`, `WaitForConnection(s)Async(...)`, `WaitForCloseAsync(...)`, `RecordingProxy.WaitForConnectionsClosedAsync(...)` |
-| `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter; `MockServer.Replay(...)` when a recorded request or greeting is already configured |
-| `InvalidOperationException` | `Receive(...)` without `Send(...)`; `ReceiveMatch(...)` / `ThenMatch(...)` on a rule that was not started with `Send(Regex)`; a response too long for its length prefix; pushing to a closed connection |
+| `ArgumentException` | Configuring the same exact request twice in the same state, or `OnConnect()`/`OnUnmatched()` twice; an empty delimiter; `MockServer.Replay(...)` when a recorded request or greeting is already configured; `ConfigurationOverrides` for a `unix` configuration or an IPv4 address with `server.dualMode`; `RonyBuilder.Build()` without a configuration |
+| `InvalidOperationException` | `Receive(...)` without `Send(...)`; `ReceiveMatch(...)` / `ThenMatch(...)` on a rule that was not started with `Send(Regex)`; a response too long for its length prefix; pushing to a closed connection; an error reply of the control endpoint (`RonyContainer`) |
 | `NotSupportedException` | Connection members on a listener without connections, such as `UdpServer` |
-| `FormatException` | `Recording.Parse(...)` / `Recording.Load(...)` with an invalid recording; `JsonData.Parse(...)` with invalid JSON |
-| `ArgumentOutOfRangeException` | A negative delay or count; a length prefix other than 1, 2 or 4 |
+| `FormatException` | `Recording.Parse(...)` / `Recording.Load(...)` with an invalid recording; `JsonData.Parse(...)` with invalid JSON; `MockServer.FromJson/FromFile`, `ValidateJson/ValidateFile` and `ReloadJson/ReloadFile` with an invalid configuration |
+| `ArgumentOutOfRangeException` | A negative delay or count; a length prefix other than 1, 2 or 4; a negative `MaxReceivedRequests` / `MaxConnectionRecords`; `ConfigurationOverrides.Port` outside 0 to 65535 |

@@ -226,8 +226,7 @@ send nothing. The [log](Logging-and-Diagnostics) shows what was really sent, for
 
 ## Refusing connections
 `server.RefuseConnections()` closes the listening socket: a client that tries to connect gets "connection refused".
-Connections the server has already accepted keep working; a client that has only just connected may not be accepted yet
-and is then reset, so wait with `WaitForConnectionAsync()` before refusing. `server.AcceptConnections()` listens again on the same port. While connections are refused the port is free, so another process could take it; then `AcceptConnections()` throws a `SocketException`.
+Connections the server has already accepted keep working. The server first accepts the clients that are already waiting, so only a client whose connect completes at that very moment may be reset instead of refused; wait with `WaitForConnectionAsync()` for the clients you expect before refusing. `server.AcceptConnections()` listens again on the same port. While connections are refused the port is free, so another process could take it; then `AcceptConnections()` throws a `SocketException`.
 
 ```csharp
 using var server = new MockServer(new TcpServer(0));

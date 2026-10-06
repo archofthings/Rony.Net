@@ -98,7 +98,7 @@ Assert.Equal("PONG", await client.SendAndReceiveAsync("PING"));
 - `StopAsync()` does what `Stop()` does, then waits until the server's background work has ended: the listen loop,
   every request, delayed response and greeting in flight, and connections that were still being opened.
   After it completes, the server calls no more callbacks of yours (`Log`, `Receive(...)` functions, matcher
-  predicates, connection event handlers) until it is started again. It is safe to call repeatedly, on a server that was
+  predicates, connection and `RequestReceived` event handlers) until it is started again. It is safe to call repeatedly, on a server that was
   never started, and together with `Stop()`.
 - `DisposeAsync()` is `StopAsync()` followed by `Dispose()`.
 

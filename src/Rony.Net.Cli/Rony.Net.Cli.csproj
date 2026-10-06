@@ -9,10 +9,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>rony</ToolCommandName>
     <PackageId>Rony.Net.Cli</PackageId>
-    <Description>The rony command-line tool for Rony.Net: run a TCP, TLS, UDP or Unix socket mock server from a JSON file, validate it, record the traffic to a real server through a proxy and replay a recording. The repository has a Dockerfile to build an image.</Description>
+    <Description>The rony command-line tool for Rony.Net: run a TCP, TLS, UDP or Unix socket mock server from a JSON file, validate it, record the traffic to a real server through a proxy and replay a recording. Also published as the Docker image ghcr.io/archofthings/rony.</Description>
     <PackageProjectUrl>https://github.com/archofthings/Rony.Net/wiki/Standalone-Server</PackageProjectUrl>
     <PackageTags>mock;mock-server;tcp;udp;socket;testing;cli;dotnet-tool;rony</PackageTags>
-    <PackageReleaseNotes>First release, together with Rony.Net 1.4.0. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>run --port/--address/--watch, --journal and --keep, a control endpoint (--control, --control-address), a published Docker image, and fixes for record and for Unix socket paths. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

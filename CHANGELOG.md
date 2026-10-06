@@ -12,8 +12,6 @@ No breaking changes.
   port of the mock plus `GetReceivedRequestsAsync`, `ClearReceivedRequestsAsync`, `GetStateAsync` and `SetStateAsync` over the control endpoint. It needs Testcontainers 4.15.0 or later.
 - The `rony` tool is published as a Docker image for `linux/amd64` and `linux/arm64` on `ghcr.io/archofthings/rony` and Docker Hub
   `mojihub/rony`, with the tags `1.5.0`, `1.5`, `1` and `latest` (a pre-release only its exact version).
-- `rony run` and `rony replay` take `--control-address <ip>` (default `127.0.0.1`) for the address of the control endpoint, so it can
-  be reached from outside a container; a non-loopback address prints a warning that the endpoint has no authentication.
 - `rony run <config.json> --watch` reloads the rules when the file changes (polling every half second, so it also works for a
   bind-mounted file); a file with a mistake is reported and the old rules stay.
 - `MockServer.ReloadFile(path)` and `ReloadJson(json)` replace the rules of a running server with those of a configuration
@@ -23,19 +21,27 @@ No breaking changes.
 - `MockServer.FromFile(path, overrides)` and `MockServer.FromJson(json, baseDirectory, overrides)` take a new
   `ConfigurationOverrides` (`Address`, `Port`) that replaces the address and port of the configuration.
 - `MockServer.ValidateFile(path)` and `MockServer.ValidateJson(json)` check a configuration without creating a listener, so
-  nothing is bound; `rony validate` uses them and no longer binds the port of a `udp` configuration (the exit code 1 "UDP port
-  is in use" result is gone).
+  nothing is bound; `rony validate` uses them.
 - `rony run` and `rony replay` take `--journal <file>`: every received request is appended to the file as one line of JSON, so a
-  test in any language can check what the mock received; `--keep <N>` (default 10000, `0` is unlimited) sets how many
-  requests and connection records the server keeps in memory.
-- `rony run` and `rony replay` take `--control <N>`: a control endpoint on `127.0.0.1` (no authentication) that answers one JSON
-  command per line, so a test in any language can read the received requests, clear them, and read or set the scenario state.
+  test in any language can check what the mock received; `--keep <N>` sets how many requests and connection records the
+  server keeps in memory.
+- `rony run` and `rony replay` take `--control <N>`: a control endpoint (no authentication) that answers one JSON command per
+  line, so a test in any language can read the received requests, clear them, and read or set the scenario state. It listens on
+  `127.0.0.1` unless `--control-address <ip>` says otherwise (for example to reach it from outside a container); a non-loopback
+  address prints a warning that the endpoint has no authentication.
 - `RequestHandler.MaxReceivedRequests` and `MockServer.MaxConnectionRecords` cap the kept received requests and connection
   records (default `0`: unlimited, as before); the oldest are dropped, open connections are always kept.
 - `MockServer.RequestReceived` is raised for every received request before its response is sent, and
   `ReceivedRequest.ToJson()` returns it as one line of JSON.
-- `MockServer.Listener` returns the listener of a server; `rony run` can now run a `unix` configuration without `server.path`
-  and prints the generated socket path.
+- `MockServer.Listener` returns the listener of a server.
+
+### Changed
+- `rony run` and `rony replay` now keep only the last 10000 received requests and connection records in memory (before:
+  all of them); `--keep 0` restores the old behaviour. The library default is unchanged (unlimited).
+- `rony validate` no longer opens a socket: a `udp` configuration whose port is in use now validates with exit code 0
+  (before: exit code 1).
+- `rony run` now runs a `unix` configuration without `server.path` (before: an error) and prints the generated socket path.
+- The README downloads badge shows the downloads of all packages.
 
 ### Fixed
 - `WaitForConnectionAsync()` and `WaitForConnectionsAsync()` now complete only after the `ConnectionOpened` handlers have

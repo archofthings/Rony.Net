@@ -5,7 +5,7 @@
     <Description>A TCP, TCP + SSL/TLS and UDP mock server for .NET tests. Configure request/response pairs and stateful scenarios, push messages to clients, simulate delays and failures, and verify what your client sent.</Description>
     <PackageProjectUrl>https://github.com/archofthings/Rony.Net</PackageProjectUrl>
     <PackageTags>mock;mock-server;tcp;udp;ssl;tls;socket;testing;unit-testing;integration-testing;functional-testing;xunit;nunit;mstest</PackageTags>
-    <PackageReleaseNotes>TLS extras (TestCertificate, mutual TLS, connection.Tls and its assertions), IPv6, dual-stack and Unix domain sockets (DualMode, UnixSocketServer), configuration files (MockServer.FromFile, FromJson) and MaxBufferedBytes. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>Reloading the rules of a running server (ReloadFile, ReloadJson), configuration overrides and validation without a socket (ConfigurationOverrides, ValidateFile), limits for kept requests and connection records, the RequestReceived event and ReceivedRequest.ToJson, and fixes for connection waits and Log callbacks. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
 
     <!-- IntelliSense documentation for package users; not every member has a doc comment yet -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>

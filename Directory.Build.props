@@ -3,7 +3,7 @@
   <!-- The one version of all packages (Rony.Net, Rony.Net.Xunit, Rony.Net.Xunit.v3, Rony.Net.NUnit, Rony.Net.MSTest, Rony.Net.Testcontainers, Rony.Net.Cli).
        The release workflow publishes only when it equals the pushed tag (v + this version). -->
   <PropertyGroup>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
   </PropertyGroup>
 
 </Project>
