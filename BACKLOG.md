@@ -1,7 +1,7 @@
 # Backlog
 
-Proposed work for Rony.Net after 1.4.0. Nothing here is started or promised. The numbers are the ones used in the
-1.1 planning, so they have gaps (1–5, 12 and 14 shipped in 1.1.0; 6, 7, 8 and 16 in 1.2.0; 9 and 13 in 1.3.0; 10, 11 and 15 in 1.4.0; see `CHANGELOG.md`).
+Proposed work for Rony.Net after 1.5.0. Nothing here is started or promised. The numbers are the ones used in the
+1.1 planning, so they have gaps (1–5, 12 and 14 shipped in 1.1.0; 6, 7, 8 and 16 in 1.2.0; 9 and 13 in 1.3.0; 10, 11 and 15 in 1.4.0; 17 to 20, 34 and the improvements I2 to I10 in 1.5.0; see `CHANGELOG.md`).
 
 To start an item: `/new-feature <item>` gives the checklist. When an item ships, remove it here and describe it in
 `CHANGELOG.md`. An improvement that is fixed is also removed from `docs/wiki/Known-Issues.md`.
@@ -16,7 +16,7 @@ Related items are grouped so that each version has one theme. The version number
 | 1.7.0 | Network conditions: resilience testing | 30, 31 |
 | 1.8.0 | Binary, long-lived and well-known protocols | 26, 27, 28, 33 |
 
-Everything planned as 1.4.1 and 1.5.0 is done and waits for the 1.5.0 release (see `CHANGELOG.md`). 1.6.0, 1.7.0 and 1.8.0 do not depend on each other and can swap, except that item 31 builds on
+1.6.0, 1.7.0 and 1.8.0 do not depend on each other and can swap, except that item 31 builds on
 the pass-through of item 23; within 1.6.0, item 21 comes before 22 and 24 because they add to the file format it
 extends, and 23 before 29.
 
