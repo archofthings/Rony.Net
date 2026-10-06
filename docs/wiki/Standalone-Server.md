@@ -3,7 +3,8 @@
 The `rony` command-line tool runs the mock servers of Rony.Net without any .NET test code: start the server described by a
 [configuration file](Configuration-Files), record a conversation with a real server and replay it. Use it to give a
 front-end team, a script, a CI job or a Docker Compose setup a fake TCP, TLS, UDP or Unix socket service. [Scenarios](#scenarios)
-below show the common uses step by step.
+below show the common uses step by step. It can also journal every received request, answer questions about them on a control
+port, reload its rules when the file changes, and run as a Docker image or from a .NET test with Testcontainers.
 
 ## Install
 ```console
@@ -12,15 +13,15 @@ rony --version
 ```
 It needs the .NET 8 runtime or a newer one. `rony --help` and `rony <command> --help` list the options.
 
+Messages go to the error output, results and log lines to the standard output. The tool listens on `127.0.0.1` unless the
+configuration file (or `--address`) says otherwise. Options are written `--name value` or `--name=value`.
+
 ## Exit codes
 | Code | Meaning |
 |---|---|
 | 0 | Success (for the long-running commands: stopped with Ctrl+C or SIGTERM) |
-| 1 | Runtime failure, for example the port is already in use |
-| 2 | Usage error (unknown command or option, missing value), an invalid or missing input file, or a Unix socket path that is too long or already exists |
-
-Messages go to the error output, results and log lines to the standard output. The tool listens on `127.0.0.1` unless the
-configuration file (or `--address`) says otherwise. Options are written `--name value` or `--name=value`.
+| 1 | Runtime failure, for example the port (or the control port) is already in use |
+| 2 | Usage error (unknown command or option, missing value), an invalid or missing input file, an `--out` or `--journal` file that cannot be written, an existing `--out` without `--force`, or a Unix socket path that is too long or already exists |
 
 ## rony run
 ```console
@@ -88,7 +89,8 @@ credentials and tokens: review them before committing or sharing them. On Linux 
 | Option | Description |
 |---|---|
 | `--target <host:port>` | The real server. Required. |
-| `--out <file.json>` | Where to save the recording. Required. An existing file is not overwritten (exit 2) unless `--force` is given. |
+| `--out <file.json>` | Where to save the recording. Required. An existing file is not overwritten (exit 2) without `--force`. |
+| `--force` | Overwrite `--out` if it exists. |
 | `--port <N>`, `--address <ip>` | Where the proxy listens; default a free port on `127.0.0.1`. |
 | `--tls` | Clients connect to the proxy with TLS, using a generated self-signed certificate (clients must accept it). |
 | `--target-tls` | The proxy connects to the target with TLS and validates its certificate normally. |
@@ -139,7 +141,7 @@ The endpoint listens on `127.0.0.1` by default, whatever `--address` says, and h
 can use it. `--control-address <ip>` binds it to another address (for example `0.0.0.0` to reach it from outside a container, see
 [the control endpoint in a container](#the-control-endpoint-in-a-container)); the line then shows that address, and for an address that is not a
 loopback address the tool first prints `Warning: the control endpoint on <address> has no authentication; anyone who can reach it can read the received requests and change the state.`
-on the error output. `--control-address` without `--control` exits with 2. It starts before the tool prints anything and
+on the error output. `--control-address` without `--control` exits with 2. The endpoint starts before the tool prints anything and
 stops before the mock server does. `--control` must differ from the port of the mock server (a TCP or TLS server; exit 2). A control port that cannot be bound exits with 1 and the mock server is stopped too.
 
 The protocol is plain TCP, UTF-8: one JSON object per line is a command, one JSON object per line is the reply. The connection
@@ -158,7 +160,8 @@ An entry is the [journal](#journal) line of the request with `seq` as its first 
 request since the tool started, also across `clear`; `last` is the number of the newest request ever received (0 when there
 is none), so `"after": <last>` returns only what arrives later. At most `--keep` entries are kept (`0` is unlimited). The state
 commands use the server-wide state; with `"stateScope": "connection"` they reply with an error. Unknown commands, unknown
-properties, invalid JSON and an `after` that is not a non-negative whole number are error replies.
+properties, invalid JSON, an `after` that is not a non-negative whole number and a `set` that is not a non-empty string are
+error replies.
 
 ```text
 $ printf '%s\n' '{"command":"requests"}' '{"command":"state","set":"authenticated"}' | nc 127.0.0.1 41210
@@ -218,8 +221,8 @@ The first terminal shows what happened to every connection and request, so you a
 11:16:58.971 [Rony 11:16:58.971] #1 sent "19.99"
 11:16:58.972 [Rony 11:16:58.972] #1 received "GET color" (matched /^GET (\S+)$/)
 ```
-Edit the file and start the tool again to change an answer (the file is read once at start). The exact request wins over the
-pattern; see [Request Matching](Request-Matching) for the order.
+To change an answer, edit the file and start the tool again, or start it with `--watch` and the rules are reloaded when you
+save (see [Reloading](#reloading-the-file)). The exact request wins over the pattern; see [Request Matching](Request-Matching) for the order.
 
 ### A mock for a team that does not use .NET
 The mock is a file, so the team needs the tool, not .NET knowledge. Commit `mocks/shop.json` to the repository as the shared
@@ -228,10 +231,9 @@ artifact; everybody starts it the same way.
   version for the whole repository, use a local tool: `dotnet new tool-manifest`, `dotnet tool install Rony.Net.Cli`, commit
   `.config/dotnet-tools.json`, and everybody runs `dotnet tool restore` once and `dotnet rony run mocks/shop.json`.
 - Without any .NET on the machine, use the published [Docker](#docker) image:
-  `docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config:ro" ghcr.io/archofthings/rony run /config/shop.json`. For this, the file must
-  set `"address": "0.0.0.0"` (see [In a container](#in-a-container-next-to-the-system-under-test)); without an address the server is unreachable from outside the container.
-
-The image is published from version 1.5.0 (see [Docker](#docker)).
+  `docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD/mocks:/config:ro" ghcr.io/archofthings/rony run /config/shop.json`. For this the server
+  must listen on `0.0.0.0`: set `"address": "0.0.0.0"` in the file or add `--address 0.0.0.0` after `run /config/shop.json` (see
+  [In a container](#in-a-container-next-to-the-system-under-test)); on the default `127.0.0.1` it is unreachable from outside the container.
 
 ### Record a real server once, replay it offline
 You have access to the real service only now (a VPN, a lab device, a test environment). Record a session with your application,
@@ -406,7 +408,8 @@ Docker publishes UDP ports with `-p 5000:5000/udp`. Recording and replay are for
 The same file can start the standalone server for the other team and be the server of a .NET test, so the two never disagree.
 Use `"port": 0` in a file that is shared this way (the file of the first scenario with `"port": 0`): a test then gets a free
 port of its own (`server.Port`) and several tests can run at once, while the tool prints the port it got. A container needs a
-fixed port and `"address": "0.0.0.0"`, so it gets a second file.
+fixed port and all interfaces: start it there with `run /config/shop.json --port 4000 --address 0.0.0.0`, so the same file
+serves the tool, the container and the tests.
 ```csharp
 using var server = MockServer.FromFile("mocks/shop.json");   // the file that `rony run mocks/shop.json` serves, with "port": 0
 server.Start();
@@ -427,13 +430,19 @@ docker run --rm -v "$PWD:/config" ghcr.io/archofthings/rony validate /config/moc
 ```
 To build it yourself, run `docker build -t rony .` in a checkout of the repository (the `Dockerfile` is at its root).
 The default command is `run /config/mock.json`; mount the folder with your files at `/config`. The server must listen on
-all interfaces inside the container, because the default `127.0.0.1` cannot be reached from outside it:
+all interfaces inside the container, because the default `127.0.0.1` cannot be reached from outside it. Either the file says
+so, or you pass `run /config/mock.json --address 0.0.0.0`:
 ```json
 { "version": 1, "server": { "address": "0.0.0.0", "port": 4000 }, "rules": [ { "request": "PING", "reply": "PONG" } ] }
 ```
-The image exposes no port by itself because the port comes from the file: publish it with `-p 127.0.0.1:<host port>:<port in the file>`,
+The image exposes no port by itself because the port comes from the file (or `--port`): publish it with `-p 127.0.0.1:<host port>:<port in the file>`,
 which keeps it on the host's loopback. Drop the `127.0.0.1:` part (`-p 4000:4000`) only when other machines should reach it, and
 see [Limits and security](#limits-and-security) first. A fixed port is needed here, not `0`. Stop the container with `docker stop` (SIGTERM) or Ctrl+C.
+
+To record inside a container, pass `--address 0.0.0.0` so the proxy is reachable from outside, and mount a writable folder
+for `--out`. The tool checks before it starts that `--out` can be written (exit 2 otherwise) and saves through a new temporary
+file with a random name next to `--out` (`<out>.<random>.tmp`, created exclusively and readable by its owner only on Linux and macOS), which is
+then moved over `--out`, so a failed save never destroys an existing file and a file or symlink that already exists is never followed.
 
 ### The control endpoint in a container
 The [control endpoint](#control-endpoint) listens on `127.0.0.1` inside the container by default, which the host cannot reach. Bind it to
@@ -444,11 +453,6 @@ docker run --rm -p 127.0.0.1:4000:4000 -p 127.0.0.1:4001:4001 -v "$PWD:/config" 
 ```
 The tool prints the warning that the endpoint has no authentication. Keep `127.0.0.1:` in the `-p` option: without it anyone who can reach the
 host can read the received requests and change the state.
-
-To record inside a container, pass `--address 0.0.0.0` so the proxy is reachable from outside, and mount a writable folder
-for `--out`. The tool checks before it starts that `--out` can be written (exit 2 otherwise) and saves through a new temporary
-file with a random name next to `--out` (`<out>.<random>.tmp`, created exclusively and readable by its owner only on Linux and macOS), which is
-then moved over `--out`, so a failed save never destroys an existing file and a file or symlink that already exists is never followed.
 
 ## From a .NET test with Testcontainers
 The package `Rony.Net.Testcontainers` is a [Testcontainers for .NET](https://dotnet.testcontainers.org) module: a test starts the `rony` image from a
@@ -482,7 +486,7 @@ Limits:
 - A `unix` configuration is not supported: the container exits with the tool's error.
 - A `udp` configuration needs its own port binding, for example `.WithPortBinding("4000/udp", true)`; `Port` is the TCP mapping.
 - Files that the configuration names, such as a TLS certificate, are not copied: add each with `WithResourceMapping(...)` at the path the configuration names.
-- The control endpoint has no authentication; it is published on the host's random ports only for the life of the container.
+- The control endpoint has no authentication. Like every Testcontainers port it is published on a random port of the Docker host for the life of the container: anyone who can reach that port can read the received requests and change the state.
 
 The example is the test `TestcontainersSamples` in `samples/Rony.Samples`.
 

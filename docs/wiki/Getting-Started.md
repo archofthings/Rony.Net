@@ -11,7 +11,7 @@ Or in the Package Manager Console: `Install-Package Rony.Net`.
 using Rony;            // GetBytes() / GetString() UTF-8 helpers
 using Rony.Listeners;  // TcpServer, TcpServerSsl, UdpServer, MessageFraming
 using Rony.Net;        // MockServer, Times, MockVerificationException
-using Rony.Models;     // ReceivedRequest (only if you name the type)
+using Rony.Models;     // ReceivedRequest, ConfigurationOverrides (only if you name the type)
 ```
 
 ## Your first test

@@ -15,6 +15,8 @@ rony record --target api.test:5000 --out login.json --delimiter "\n"   # record 
 rony replay login.json --delimiter "\n"                                # serve the recording as a mock
 ```
 
+Other options: `--quiet` (no log lines), `--force` (overwrite `--out`), `--target-insecure` (accept any certificate of the target), and the framings `--delimiter <text>`, `--length-prefix <1|2|4>`, `--stx-etx` for `record` and `replay`. `rony <command> --help` lists them all.
+
 Typical uses (walk-throughs in the wiki):
 - **Stand in for a service during development:** write a JSON file, `rony run mock.json`, point your application at the printed port and try it with `nc`.
 - **Record once, replay offline:** `rony record` while your application talks to the real server (Ctrl+C saves), then `rony replay` the file; add `--tls` / `--target-tls` for TLS services.

@@ -34,6 +34,7 @@ With the [test framework packages](Test-Framework-Integration), the log goes to 
 | Greetings and pushed messages | `#1 sent greeting "220 ready"`, `#1 pushed "NOTIFY"` |
 | No response configured | `#1 no response configured: closing the connection` |
 | Errors | `error: the response function for #1 threw FormatException: ...` |
+| Reloaded rules | `rules reloaded (3 rules)` |
 | Failed connections | `connection from 127.0.0.1:50125 failed: AuthenticationException: ...` |
 
 Binary payloads are shown as hex, for example `0x02 0x01 0x03`. Details a client controls (its server name, the subject of its
@@ -49,7 +50,7 @@ The server never lets one bad request take it down, so some mistakes don't show 
 - **A `SendMatching(...)` predicate throws.** It counts as "doesn't match", and the log shows the exception.
 - **A TLS handshake fails**, for example because the client doesn't trust the certificate or uses a protocol
   the server doesn't allow. The log shows the `AuthenticationException`.
-- **A connection event handler throws.**
+- **A connection or `RequestReceived` event handler throws.**
 
 ```csharp
 server.Mock.Send("PRICE ACME").Receive(text => decimal.Parse(text.Split(' ')[2]).ToString());   // bug: no [2]

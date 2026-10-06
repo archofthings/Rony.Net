@@ -193,7 +193,7 @@ server.Should().HaveReceivedInOrder("PING", "EXTRA");
 ```
 
 ## Overrides and validation
-One file can serve on different ports: `ConfigurationOverrides` replaces `server.address` and `server.port` (a value that is `null`
+One file can serve on different ports: `ConfigurationOverrides` (in `Rony.Models`; `UnixSocketServer` is in `Rony.Listeners`) replaces `server.address` and `server.port` (a value that is `null`
 keeps the one of the file; `rony run --port/--address` use it). It works for `tcp`, `tls` and `udp`; a `udp` server binds the
 overridden values when it is created. Overrides for a `unix` configuration, or an IPv4 address when the file sets `server.dualMode`,
 throw an `ArgumentException`; a mistake in the file itself is reported first, as a `FormatException`.
