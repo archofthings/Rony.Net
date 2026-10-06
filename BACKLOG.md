@@ -12,25 +12,16 @@ Related items are grouped so that each version has one theme. The version number
 
 | Version | Theme | Items |
 |---|---|---|
-| 1.5.0 | The tool: verify, operate, deploy | I10 (17, 18, 19, 20, 34, I7, I8 and I9 are done, see `CHANGELOG.md`) |
 | 1.6.0 | Files and proxying: say more in a file, mock only a part | 21, 22, 23, 24, 25, 29, 32 |
 | 1.7.0 | Network conditions: resilience testing | 30, 31 |
 | 1.8.0 | Binary, long-lived and well-known protocols | 26, 27, 28, 33 |
 
-Order inside the plan: 1.5.0 first (closes the biggest gap between the library and the tool); the fixes planned as
-1.4.1 are done (see `CHANGELOG.md`). 1.6.0, 1.7.0 and 1.8.0 do not depend on each other and can swap, except that item 31 builds on
+Everything planned as 1.4.1 and 1.5.0 is done and waits for the 1.5.0 release (see `CHANGELOG.md`). 1.6.0, 1.7.0 and 1.8.0 do not depend on each other and can swap, except that item 31 builds on
 the pass-through of item 23; within 1.6.0, item 21 comes before 22 and 24 because they add to the file format it
 extends, and 23 before 29.
 
 Items 29 to 34 come from a look at what comparable tools offer (mountebank, Toxiproxy, MockServer's TCP chaos profile,
 Mockly) in October 2026; they are the features those tools have for raw TCP that Rony.Net lacks.
-
-## 1.5.0: the tool can be verified, operated and deployed
-
-Today a test that is not written in .NET can talk to `rony run` but cannot ask what it received, and a long run grows
-without limit.
-
-- **I10. Tests:** the 16 MiB default of `server.maxBufferedBytes` is only tested through the parsing of the property.
 
 ## 1.6.0: files and proxying
 
