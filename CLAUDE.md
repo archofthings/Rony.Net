@@ -3,7 +3,7 @@
 ## Project
 - Repo: `archofthings/Rony.Net` (remote `origin`), default branch `main`.
 - Packages on nuget.org: `Rony.Net` (core), `Rony.Net.Xunit`, `Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`,
-  `Rony.Net.Cli` (the `rony` dotnet tool, `net8.0` only). All share
+  `Rony.Net.Cli` (the `rony` dotnet tool, `net8.0` only), `Rony.Net.Testcontainers` (from 1.5.0). All share
   the one `<Version>` in `Directory.Build.props`; a project file never sets its own.
 - `global.json` asks for the .NET 8 SDK or any newer one.
 - Open work: `BACKLOG.md` (proposed features and follow-ups; update it when an item is finished or added).
@@ -48,6 +48,7 @@ Go straight to the right file and its test. Paths are relative to `src/Rony/`; u
 | `TestCertificate.cs`, `Interfaces/ITlsListener.cs`, `Models/TlsConnectionInfo.cs` | Self-signed test certificates; TLS details per connection (`connection.Tls`), mutual TLS lives in `TcpServerSsl.cs` | `TestCertificateTests.cs`, functional `TlsExtrasTests.cs` |
 | `Handlers/MockConfiguration.cs` | `MockServer.FromJson` / `FromFile`: JSON configuration file (format version 1) turned into a listener and rules | `Handler/MockConfigurationTests.cs`, functional `MockConfigurationTests.cs` |
 | `../Rony.Net.{Xunit,NUnit,MSTest}/` | `MockServerTest` base class and `LogTo(...)` / `LogToTestContext()` per framework | `tests/Rony.Net.*.Tests/` |
+| `../Rony.Net.Testcontainers/` | `RonyBuilder` / `RonyContainer`: starts the `rony` image from a test and talks to its control endpoint. Depends on one exact minimum of `Testcontainers` (its builder API changes between minor versions), the version the tests use | `tests/Rony.Net.Testcontainers.Tests/` (the container test runs only in the CI `docker` job, with `RONY_TEST_IMAGE`) |
 | `../Rony.Net.Cli/` | The `rony` tool: `run`, `validate`, `record`, `replay`; hand-written argument parsing, no dependencies. Root `Dockerfile` runs it | `tests/Rony.Net.Cli.Tests/` |
 
 Documentation:

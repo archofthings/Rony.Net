@@ -2,7 +2,7 @@
 
 ## Supported versions
 Security fixes are released for the latest minor version of the packages (`Rony.Net`, `Rony.Net.Xunit`,
-`Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest` and `Rony.Net.Cli`). Older versions are not patched: update to
+`Rony.Net.Xunit.v3`, `Rony.Net.NUnit`, `Rony.Net.MSTest`, `Rony.Net.Testcontainers` and `Rony.Net.Cli`). Older versions are not patched: update to
 the latest release.
 
 ## Reporting a vulnerability

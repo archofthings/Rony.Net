@@ -7,6 +7,9 @@ Full documentation: [Rony.Net wiki](https://github.com/archofthings/Rony.Net/wik
 No breaking changes.
 
 ### Added
+- New package `Rony.Net.Testcontainers`, a [Testcontainers for .NET](https://dotnet.testcontainers.org) module: `RonyBuilder` starts the
+  `rony` Docker image from a configuration file (`WithConfigurationFile`, `WithConfiguration`) and `RonyContainer` gives the host and
+  port of the mock plus `GetReceivedRequestsAsync`, `ClearReceivedRequestsAsync`, `GetStateAsync` and `SetStateAsync` over the control endpoint. It needs Testcontainers 4.15.0 or later.
 - The `rony` tool is published as a Docker image for `linux/amd64` and `linux/arm64` on `ghcr.io/archofthings/rony` and Docker Hub
   `mojihub/rony`, with the tags `1.5.0`, `1.5`, `1` and `latest` (a pre-release only its exact version).
 - `rony run` and `rony replay` take `--control-address <ip>` (default `127.0.0.1`) for the address of the control endpoint, so it can

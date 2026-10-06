@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>Rony.Net.Testcontainers</PackageId>
+    <Description>Testcontainers module for Rony.Net: starts the rony tool in a Docker container from a configuration file and reads the received requests and the scenario state through its control endpoint.</Description>
+    <PackageProjectUrl>https://github.com/archofthings/Rony.Net/wiki/Standalone-Server#from-a-net-test-with-testcontainers</PackageProjectUrl>
+    <PackageTags>mock;mock-server;tcp;testing;testcontainers;docker;rony</PackageTags>
+    <PackageReleaseNotes>New in Rony.Net 1.5.0. See https://github.com/archofthings/Rony.Net/blob/main/CHANGELOG.md</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One version on purpose: Testcontainers changes the signatures of its builder API between minor versions (a module compiled
+         against 4.0.0 fails with MissingMethodException on 4.7.0 and later), so this module is compiled against, and tested with,
+         4.15.0. NuGet gives users that version or a newer one. -->
+    <PackageReference Include="Testcontainers" Version="4.15.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rony\Rony.csproj" />
+    <InternalsVisibleTo Include="Rony.Net.Testcontainers.Tests" />
+  </ItemGroup>
+
+</Project>

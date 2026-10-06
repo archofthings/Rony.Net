@@ -24,7 +24,7 @@ jobs:
       - name: Add up the downloads
         run: |
           set -euo pipefail
-          packages="Rony.Net Rony.Net.Xunit Rony.Net.Xunit.v3 Rony.Net.NUnit Rony.Net.MSTest Rony.Net.Cli"
+          packages="Rony.Net Rony.Net.Xunit Rony.Net.Xunit.v3 Rony.Net.NUnit Rony.Net.MSTest Rony.Net.Cli Rony.Net.Testcontainers"
 
           # nuget.org has several search regions and they are not updated at the same moment: take the highest count.
           services=$(curl -fsS --retry 3 https://api.nuget.org/v3/index.json \
@@ -35,12 +35,18 @@ jobs:
           for package in $packages; do
             best=""
             for service in $services; do
-              count=$(curl -fsS --retry 3 "$service?q=packageid:$package&prerelease=true&semVerLevel=2.0.0" \
-                | jq -r --arg id "$package" '[.data[] | select((.id | ascii_downcase) == ($id | ascii_downcase)) | .totalDownloads] | first // empty') || count=""
+              # A failed request (network or HTTP error) fails the run: the total would be wrong.
+              response=$(curl -fsS --retry 3 "$service?q=packageid:$package&prerelease=true&semVerLevel=2.0.0") \
+                || { echo "The nuget.org search failed for $package." >&2; exit 1; }
+              count=$(echo "$response" \
+                | jq -r --arg id "$package" '[.data[] | select((.id | ascii_downcase) == ($id | ascii_downcase)) | .totalDownloads] | first // empty')
               if [ -n "$count" ] && { [ -z "$best" ] || [ "$count" -gt "$best" ]; }; then best=$count; fi
             done
-            # A package that no region knows would make the total wrong: fail and keep yesterday's badge.
-            [ -n "$best" ] || { echo "No download count for $package." >&2; exit 1; }
+            # A package that nuget.org does not know at all (not published yet) counts as 0.
+            if [ -z "$best" ]; then
+              echo "$package is not on nuget.org yet: counted as 0."
+              best=0
+            fi
             echo "$package: $best"
             total=$((total + best))
           done
