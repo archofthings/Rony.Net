@@ -1,6 +1,7 @@
 # Standalone Server
 
-The `rony` command-line tool runs the mock servers of Rony.Net without any .NET test code: start the server described by a
+The `rony` command-line tool runs the mock servers of Rony.Net without any .NET test code, **for clients and tests written in any
+language**: start the server described by a
 [configuration file](Configuration-Files), record a conversation with a real server and replay it. Use it to give a
 front-end team, a script, a CI job or a Docker Compose setup a fake TCP, TLS, UDP or Unix socket service. [Scenarios](#scenarios)
 below show the common uses step by step. It can also journal every received request, answer questions about them on a control
@@ -11,7 +12,7 @@ port, reload its rules when the file changes, and run as a Docker image or from 
 dotnet tool install --global Rony.Net.Cli
 rony --version
 ```
-It needs the .NET 8 runtime or a newer one. `rony --help` and `rony <command> --help` list the options.
+It needs the .NET 8 runtime or a newer one; the [Docker](#docker) image needs no .NET at all. `rony --help` and `rony <command> --help` list the options.
 
 Messages go to the error output, results and log lines to the standard output. The tool listens on `127.0.0.1` unless the
 configuration file (or `--address`) says otherwise. Options are written `--name value` or `--name=value`.
