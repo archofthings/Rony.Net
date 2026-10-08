@@ -1,7 +1,8 @@
 name: Downloads badge
 
 # Adds up the nuget.org downloads of all Rony.Net packages once a day and writes the result to the "badges" branch,
-# where the README badge (a shields.io endpoint badge) reads it.
+# where the README badge (a shields.io endpoint badge) reads it. Per package it takes the highest count of the
+# search API and the package page.
 on:
   schedule:
     - cron: '17 5 * * *'
@@ -42,6 +43,13 @@ jobs:
                 | jq -r --arg id "$package" '[.data[] | select((.id | ascii_downcase) == ($id | ascii_downcase)) | .totalDownloads] | first // empty')
               if [ -n "$count" ] && { [ -z "$best" ] || [ "$count" -gt "$best" ]; }; then best=$count; fi
             done
+            # The search index is days behind the package page (and shows 0 for a new package for a while). The page
+            # has no API, so its version table is read as a bonus: when that fails, the search count stands.
+            page=$(curl -fsS --retry 3 "https://www.nuget.org/packages/$package" || true)
+            count=$(echo "$page" | awk '/id="version-history"/,/<\/table>/' | tr -d ' ,\r' \
+              | awk '/<td>/ { getline; if ($0 ~ /^[0-9]+$/) sum += $0 } END { print sum + 0 }')
+            echo "$package: search ${best:-none}, package page $count"
+            if [ "$count" -gt "${best:-0}" ]; then best=$count; fi
             # A package that nuget.org does not know at all (not published yet) counts as 0.
             if [ -z "$best" ]; then
               echo "$package is not on nuget.org yet: counted as 0."
