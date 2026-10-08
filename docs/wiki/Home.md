@@ -1,9 +1,11 @@
 # Rony.Net
 
-**Rony.Net** is a mock server for testing .NET code that talks over the network.
-Start a real TCP, TCP + SSL/TLS, UDP or Unix socket server inside your test, tell it how to answer, point your client at it,
+**Rony.Net** is a mock server for testing code that talks over the network: **a library inside your .NET tests, or a
+standalone server (command-line tool and Docker image) for clients written in any language.**
+Start a real TCP, TCP + SSL/TLS, UDP or Unix socket server, tell it how to answer, point your client at it,
 and then check what your client sent.
 
+In a .NET test:
 ```csharp
 using var server = new MockServer(new TcpServer(0));   // 0 = any free port
 server.Mock.Send("PING").Receive("PONG");
@@ -14,6 +16,12 @@ server.Start();
 server.Should().HaveReceived("PING", Times.Once());
 ```
 
+**For any other language** (Python, Java, Go, Node.js, C++, ...) the same server runs from a JSON file, with no .NET on the machine:
+```console
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" ghcr.io/archofthings/rony   # serves mock.json of the current folder; the file listens on 0.0.0.0:4000
+```
+Your test connects to port 4000, then asks the control endpoint (or reads the journal file) what the mock received: see [Standalone Server](Standalone-Server).
+
 ## Why use it
 - **Real sockets.** Your client code runs unchanged: no interfaces to extract, no fake streams.
 - **Any protocol.** Text or binary, one request per connection or many, delimited or length-prefixed messages.
@@ -22,6 +30,8 @@ server.Should().HaveReceived("PING", Times.Once());
 - **Assertions on the client.** Check which requests were sent, how often and in which order, how it used its
   connections, or wait until a request arrives. Fluent assertions included.
 - **Easy debugging.** A log of everything the server saw and did, written to your test output.
+- **Any language.** The standalone `rony` tool and its Docker image serve a JSON file, so tests in Python, Java, Go, Node.js or
+  anything else that opens a socket can use the same mock.
 - **Test-friendly.** Free ports for parallel tests, thread-safe configuration, clear failure messages.
 
 ## Install
@@ -54,7 +64,7 @@ To start the tool in a Docker container from a test, use `Rony.Net.Testcontainer
 | [Stateful Scenarios](Stateful-Scenarios) | Rules that depend on what happened before (`InState`, `GoTo`) |
 | [Record and Replay](Record-and-Replay) | Record a real server with `RecordingProxy`, replay it with `server.Replay(...)` |
 | [Configuration Files](Configuration-Files) | Describe the server and its rules in a JSON file, load it with `MockServer.FromFile(...)` |
-| [Standalone Server](Standalone-Server) | The `rony` command-line tool and its Docker image (`ghcr.io/archofthings/rony`): run, record and replay without code, with a journal and a control endpoint to check what the mock received. Scenarios for development, teams without .NET, CI and Docker Compose; the `Rony.Net.Testcontainers` module |
+| [Standalone Server](Standalone-Server) | The `rony` command-line tool and its Docker image (`ghcr.io/archofthings/rony`): run, record and replay without code, from any language, with a journal and a control endpoint to check what the mock received. Scenarios for development, teams without .NET, CI and Docker Compose; the `Rony.Net.Testcontainers` module |
 
 | Check your client | |
 |---|---|

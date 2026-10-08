@@ -7,10 +7,12 @@
 [![Docs](https://img.shields.io/badge/docs-wiki-blue?logo=github)](https://github.com/archofthings/Rony.Net/wiki)
 [![License: MIT](https://img.shields.io/github/license/archofthings/Rony.Net.svg)](https://github.com/archofthings/Rony.Net/blob/main/LICENSE)
 
-A mock server for testing .NET code that talks over the network.
-Start a real **TCP**, **TCP + SSL/TLS**, **UDP** or **Unix socket** server inside your test, tell it how to answer, point your client
+A mock server for testing code that talks over the network: **a library inside your .NET tests, or a standalone server
+(command-line tool and Docker image) for clients written in any language.**
+Start a real **TCP**, **TCP + SSL/TLS**, **UDP** or **Unix socket** server, tell it how to answer, point your client
 at it, and then check what your client sent.
 
+In a .NET test:
 ```csharp
 using var server = new MockServer(new TcpServer(0));   // 0 = any free port
 server.Mock.Send("PING").Receive("PONG");
@@ -20,6 +22,12 @@ server.Start();
 
 server.Should().HaveReceived("PING", Times.Once());
 ```
+
+**For any other language** (Python, Java, Go, Node.js, C++, ...) the same server runs from a JSON file, with no .NET on the machine:
+```console
+docker run --rm -p 127.0.0.1:4000:4000 -v "$PWD:/config" ghcr.io/archofthings/rony   # serves mock.json of the current folder; the file listens on 0.0.0.0:4000
+```
+Your test connects to port 4000, then asks the control endpoint (or reads the journal file) what the mock received: [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server).
 
 📖 **Full documentation, with an example for every feature, is in the [wiki](https://github.com/archofthings/Rony.Net/wiki).**
 
@@ -35,9 +43,9 @@ server.Should().HaveReceived("PING", Times.Once());
 - **Assertions on your client.** Fluent `server.Should()` and `connection.Should()` assertions with `Times`, order, strict or fail-fast mode, connection checks, TLS details (protocol, server name, client certificate), and waiting for requests and connections without sleeps; a `RequestReceived` event, `ToJson()` for a journal and caps on the kept requests and connection records. → [Verifying Requests](https://github.com/archofthings/Rony.Net/wiki/Verifying-Requests), [Waiting for Requests](https://github.com/archofthings/Rony.Net/wiki/Waiting-for-Requests)
 - **Record and replay.** Record the conversation with a real server through a proxy, save it as an editable JSON file and replay it as a mock server. → [Record and Replay](https://github.com/archofthings/Rony.Net/wiki/Record-and-Replay)
 - **Configuration files.** Describe the server and its rules in a JSON file and load it with one call, with optional address and port overrides, validation without a socket and reloading the rules of a running server. → [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files)
-- **Standalone server.** The `rony` command-line tool (also published as the Docker image `ghcr.io/archofthings/rony`) runs a configuration file, records a real server and replays the recording, with an optional journal of every received request, a control port to query the requests and the state, reloading on file changes (`--watch`), a Testcontainers module (`Rony.Net.Testcontainers`) to start it from a .NET test, and no .NET test code: a stand-in for a dependency during development, a mock for teams and CI jobs that do not use .NET. → [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
+- **Standalone server, for any language.** The `rony` command-line tool (also published as the Docker image `ghcr.io/archofthings/rony`) runs a configuration file, records a real server and replays the recording, with an optional journal of every received request, a control port to query the requests and the state, reloading on file changes (`--watch`), a Testcontainers module (`Rony.Net.Testcontainers`) to start it from a .NET test, and no .NET test code: a stand-in for a dependency during development, a mock for tests, teams and CI jobs in any language. → [Standalone Server](https://github.com/archofthings/Rony.Net/wiki/Standalone-Server)
 - **Easy debugging.** A log of every connection, request, matched rule, response and error. → [Logging and Diagnostics](https://github.com/archofthings/Rony.Net/wiki/Logging-and-Diagnostics)
-- **Works everywhere.** .NET Core 3.x and every later .NET, with xUnit v2 or v3, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
+- **Works everywhere.** As a library: .NET Core 3.x and every later .NET, with xUnit v2 or v3, NUnit or MSTest (with optional base classes), on Windows, Linux and macOS. As a standalone server: any language that can open a socket. → [Test Framework Integration](https://github.com/archofthings/Rony.Net/wiki/Test-Framework-Integration)
 
 ## Install
 ```console
@@ -191,7 +199,7 @@ server.ReloadFile("mock.json");                        // new rules for the runn
 Details: [Configuration Files](https://github.com/archofthings/Rony.Net/wiki/Configuration-Files)
 
 ## Standalone server
-Use the mock outside of .NET tests: as a stand-in for a service during local development, for a team or a CI job that does not use .NET, or in a container.
+Use the mock outside of .NET tests, **from any language**: as a stand-in for a service during local development, for tests, a team or a CI job that does not use .NET, or in a container. The Docker image needs no .NET on the machine.
 ```console
 dotnet tool install --global Rony.Net.Cli
 rony run mock.json [--port 0] [--address 0.0.0.0]    # serve a configuration file (Ctrl+C stops it)
