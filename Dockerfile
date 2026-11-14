@@ -17,7 +17,7 @@ COPY src/Rony/ src/Rony/
 COPY src/Rony.Net.Cli/ src/Rony.Net.Cli/
 RUN dotnet publish src/Rony.Net.Cli -c Release -f net8.0 -p:UseAppHost=false -o /app
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0
+FROM mcr.microsoft.com/dotnet/runtime:11.0
 COPY --from=build /app /app
 # the non-root user of the image
 USER $APP_UID
