@@ -8,7 +8,7 @@
 # produces architecture-neutral files (framework-dependent, no native host); the final stage only copies them.
 # Inside the container the configuration file must listen on "address": "0.0.0.0".
 
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 # global.json and the Directory.Build.props files are needed for the build
 COPY global.json Directory.Build.props README.md ./
